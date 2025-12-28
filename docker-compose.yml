@@ -1,0 +1,55 @@
+version: '3.8'
+
+services:
+  tc-faction-crimes:
+    build:
+      context: ./TC_faction_crimes
+      dockerfile: Dockerfile
+    container_name: tc-faction-crimes-pipeline
+    restart: unless-stopped
+    environment:
+      - TZ=America/Chicago
+    volumes:
+      - ./TC_faction_crimes/config/credentials.json:/app/config/credentials.json:ro
+      - ./TC_faction_crimes/config/TC_API_config.json:/app/config/TC_API_config.json:ro
+      - ./TC_faction_crimes/logs:/app/logs
+
+  tc-faction-members:
+    build:
+      context: ./TC_faction_members
+      dockerfile: Dockerfile
+    container_name: tc-faction-members-pipeline
+    restart: unless-stopped
+    environment:
+      - TZ=America/Chicago
+    volumes:
+      - ./TC_faction_members/config/credentials.json:/app/config/credentials.json:ro
+      - ./TC_faction_members/config/TC_API_config.json:/app/config/TC_API_config.json:ro
+      - ./TC_faction_members/logs:/app/logs
+
+  tc-items:
+    build:
+      context: ./TC_items
+      dockerfile: Dockerfile
+    container_name: tc-items-pipeline
+    restart: unless-stopped
+    environment:
+      - TZ=America/Chicago
+    volumes:
+      - ./TC_items/config/credentials.json:/app/config/credentials.json:ro
+      - ./TC_items/config/TC_API_config.json:/app/config/TC_API_config.json:ro
+      - ./TC_items/logs:/app/logs
+
+  tc-user-events:
+    build:
+      context: ./TC_user_events
+      dockerfile: Dockerfile
+    container_name: tc-user-events-pipeline
+    restart: unless-stopped
+    environment:
+      - TZ=America/Chicago
+    volumes:
+      - ./TC_user_events/config/credentials.json:/app/config/credentials.json:ro
+      - ./TC_user_events/config/TC_API_config.json:/app/config/TC_API_config.json:ro
+      - ./TC_user_events/logs:/app/logs
+

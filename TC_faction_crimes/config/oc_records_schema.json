@@ -1,0 +1,274 @@
+[
+  {
+    "name": "id",
+    "type": "INTEGER",
+    "mode": "REQUIRED",
+    "description": "Unique identifier for the OC crime"
+  },
+  {
+    "name": "previous_crime_id",
+    "type": "INTEGER",
+    "mode": "NULLABLE",
+    "description": "ID of the previous crime in the chain"
+  },
+  {
+    "name": "name",
+    "type": "STRING",
+    "mode": "NULLABLE",
+    "description": "Name of the organized crime"
+  },
+  {
+    "name": "difficulty",
+    "type": "INTEGER",
+    "mode": "NULLABLE",
+    "description": "Difficulty level of the crime (1-5)"
+  },
+  {
+    "name": "status",
+    "type": "STRING",
+    "mode": "NULLABLE",
+    "description": "Current status of the crime (e.g., Recruiting, Planning, Executing, Ready, Expired)"
+  },
+  {
+    "name": "created_at",
+    "type": "INTEGER",
+    "mode": "NULLABLE",
+    "description": "Unix timestamp when the crime was created"
+  },
+  {
+    "name": "planning_at",
+    "type": "INTEGER",
+    "mode": "NULLABLE",
+    "description": "Unix timestamp when the crime enters planning phase"
+  },
+  {
+    "name": "executed_at",
+    "type": "INTEGER",
+    "mode": "NULLABLE",
+    "description": "Unix timestamp when the crime was executed"
+  },
+  {
+    "name": "ready_at",
+    "type": "INTEGER",
+    "mode": "NULLABLE",
+    "description": "Unix timestamp when the crime is ready"
+  },
+  {
+    "name": "expired_at",
+    "type": "INTEGER",
+    "mode": "NULLABLE",
+    "description": "Unix timestamp when the crime expires"
+  },
+  {
+    "name": "slots",
+    "type": "RECORD",
+    "mode": "REPEATED",
+    "description": "Array of position slots for the crime",
+    "fields": [
+      {
+        "name": "position",
+        "type": "STRING",
+        "mode": "NULLABLE",
+        "description": "Name of the position (e.g., Car Thief, Techie)"
+      },
+      {
+        "name": "position_id",
+        "type": "STRING",
+        "mode": "NULLABLE",
+        "description": "ID of the position (e.g., P1, P2)"
+      },
+      {
+        "name": "position_number",
+        "type": "INTEGER",
+        "mode": "NULLABLE",
+        "description": "Position number"
+      },
+      {
+        "name": "item_requirement",
+        "type": "RECORD",
+        "mode": "NULLABLE",
+        "description": "Item requirement for this position",
+        "fields": [
+          {
+            "name": "id",
+            "type": "INTEGER",
+            "mode": "NULLABLE",
+            "description": "Item ID required"
+          },
+          {
+            "name": "is_reusable",
+            "type": "BOOLEAN",
+            "mode": "NULLABLE",
+            "description": "Whether the item is reusable"
+          },
+          {
+            "name": "is_available",
+            "type": "BOOLEAN",
+            "mode": "NULLABLE",
+            "description": "Whether the item is available"
+          }
+        ]
+      },
+      {
+        "name": "user",
+        "type": "RECORD",
+        "mode": "NULLABLE",
+        "description": "User assigned to this position (null if not filled)",
+        "fields": [
+          {
+            "name": "id",
+            "type": "INTEGER",
+            "mode": "NULLABLE",
+            "description": "User ID"
+          },
+          {
+            "name": "joined_at",
+            "type": "INTEGER",
+            "mode": "NULLABLE",
+            "description": "Unix timestamp when user joined the position"
+          },
+          {
+            "name": "progress",
+            "type": "FLOAT",
+            "mode": "NULLABLE",
+            "description": "Progress percentage (0-100)"
+          },
+          {
+            "name": "outcome",
+            "type": "STRING",
+            "mode": "NULLABLE",
+            "description": "Outcome status (e.g., Successful, null)"
+          },
+          {
+            "name": "outcome_duration",
+            "type": "INTEGER",
+            "mode": "NULLABLE",
+            "description": "Duration of the outcome in seconds"
+          },
+          {
+            "name": "item_outcome",
+            "type": "RECORD",
+            "mode": "NULLABLE",
+            "description": "Item outcome information",
+            "fields": [
+              {
+                "name": "owned_by",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Who owns the item (user or faction)"
+              },
+              {
+                "name": "item_id",
+                "type": "INTEGER",
+                "mode": "NULLABLE",
+                "description": "Item ID"
+              },
+              {
+                "name": "item_uid",
+                "type": "INTEGER",
+                "mode": "NULLABLE",
+                "description": "Unique item ID"
+              },
+              {
+                "name": "outcome",
+                "type": "STRING",
+                "mode": "NULLABLE",
+                "description": "Outcome status (e.g., used)"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "checkpoint_pass_rate",
+        "type": "INTEGER",
+        "mode": "NULLABLE",
+        "description": "Checkpoint pass rate percentage for this position"
+      }
+    ]
+  },
+  {
+    "name": "rewards",
+    "type": "RECORD",
+    "mode": "NULLABLE",
+    "description": "Rewards for completing the crime",
+    "fields": [
+      {
+        "name": "money",
+        "type": "INTEGER",
+        "mode": "NULLABLE",
+        "description": "Money reward"
+      },
+      {
+        "name": "items",
+        "type": "RECORD",
+        "mode": "REPEATED",
+        "description": "Array of items rewarded",
+        "fields": [
+          {
+            "name": "id",
+            "type": "INTEGER",
+            "mode": "NULLABLE",
+            "description": "Item ID"
+          },
+          {
+            "name": "quantity",
+            "type": "INTEGER",
+            "mode": "NULLABLE",
+            "description": "Quantity of the item"
+          }
+        ]
+      },
+      {
+        "name": "respect",
+        "type": "INTEGER",
+        "mode": "NULLABLE",
+        "description": "Respect reward"
+      },
+      {
+        "name": "scope",
+        "type": "INTEGER",
+        "mode": "NULLABLE",
+        "description": "Scope reward"
+      },
+      {
+        "name": "payout",
+        "type": "RECORD",
+        "mode": "NULLABLE",
+        "description": "Payout information",
+        "fields": [
+          {
+            "name": "type",
+            "type": "STRING",
+            "mode": "NULLABLE",
+            "description": "Payout type (e.g., balance)"
+          },
+          {
+            "name": "percentage",
+            "type": "INTEGER",
+            "mode": "NULLABLE",
+            "description": "Payout percentage"
+          },
+          {
+            "name": "paid_by",
+            "type": "INTEGER",
+            "mode": "NULLABLE",
+            "description": "User ID who paid"
+          },
+          {
+            "name": "paid_at",
+            "type": "INTEGER",
+            "mode": "NULLABLE",
+            "description": "Unix timestamp when paid"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "fetched_at",
+    "type": "TIMESTAMP",
+    "mode": "NULLABLE",
+    "description": "Timestamp when this record was fetched from the API"
+  }
+]
