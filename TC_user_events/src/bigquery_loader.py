@@ -629,6 +629,46 @@ class BigQueryLoader:
             logger.warning(f"Could not get record count for table {table_id}: {e}")
             return None
 
+    def get_latest_timestamp(
+        self,
+        table_id: str,
+        timestamp_field: str = "timestamp",
+    ) -> Optional[int]:
+        """
+        Get the latest timestamp from a BigQuery table.
+        
+        Args:
+            table_id: Full table ID
+            timestamp_field: Name of the timestamp field to query (default: "timestamp")
+            
+        Returns:
+            Latest timestamp as integer (Unix timestamp), or None if table doesn't exist or is empty
+        """
+        try:
+            # Query for the maximum timestamp
+            query = f"""
+            SELECT MAX({timestamp_field}) as latest_timestamp
+            FROM `{table_id}`
+            WHERE {timestamp_field} IS NOT NULL
+            """
+            
+            query_job = self.client.query(query)
+            results = query_job.result()
+            
+            for row in results:
+                if row.latest_timestamp is not None:
+                    # Convert to integer if it's a timestamp or float
+                    if isinstance(row.latest_timestamp, (int, float)):
+                        return int(row.latest_timestamp)
+                    # If it's a datetime/timestamp object, convert to Unix timestamp
+                    elif hasattr(row.latest_timestamp, 'timestamp'):
+                        return int(row.latest_timestamp.timestamp())
+            
+            return None
+        except Exception as e:
+            logger.debug(f"Could not get latest timestamp for table {table_id}: {e}")
+            return None
+
     def _detect_new_fields_in_records(
         self,
         records: List[Dict[str, Any]],

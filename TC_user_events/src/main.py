@@ -140,28 +140,34 @@ class Pipeline:
                 params = {}
 
             # Handle time windows if configured
-            # This is useful for incremental fetching to avoid re-fetching all historical data
+            # Query BigQuery for the latest timestamp we already have, then stop pagination when we hit it
             use_time_windows = endpoint.get("use_time_windows", False)
+            stop_before_timestamp = None
+            
             if use_time_windows:
-                # Calculate time window based on frequency
-                # For 15-minute frequency, fetch records from last 20 minutes (with buffer)
-                frequency_str = endpoint.get("frequency", "PT15M")
-                interval_seconds = parse_iso8601_duration(frequency_str)
-                # Add 50% buffer to ensure we don't miss records
-                window_seconds = int(interval_seconds * 1.5)
-                window_start = int(time.time()) - window_seconds
-                
-                # Add timestamp parameters if API supports them
-                # Note: Torn City API may use different parameter names
-                # Common names: from, from_timestamp, start, start_time
-                # For now, we'll add 'from' parameter as a common convention
-                params["from"] = window_start
-                logger.info(
-                    f"Using time window: fetching records from last {window_seconds} seconds "
-                    f"(from timestamp: {window_start})"
-                )
+                table_id = endpoint.get("table", "")
+                if table_id:
+                    # Get the latest timestamp from BigQuery
+                    latest_timestamp = self.bigquery_loader.get_latest_timestamp(table_id, timestamp_field="timestamp")
+                    if latest_timestamp:
+                        stop_before_timestamp = latest_timestamp
+                        logger.info(
+                            f"Using time window: latest timestamp in DB is {latest_timestamp}. "
+                            f"Will stop fetching when encountering records at or before this timestamp."
+                        )
+                    else:
+                        logger.info(
+                            "Time window enabled but no existing records found in table. "
+                            "Will fetch all records (first run)."
+                        )
+                else:
+                    logger.warning("Time window enabled but no table_id configured")
 
-            records = api_client.fetch_all(endpoint_path, params=params)
+            records = api_client.fetch_all(
+                endpoint_path, 
+                params=params,
+                stop_before_timestamp=stop_before_timestamp
+            )
             logger.info(f"Fetched {len(records)} records from API")
 
             # Get table info before processing

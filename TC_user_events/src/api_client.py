@@ -195,6 +195,7 @@ class TornCityAPIClient:
         self,
         endpoint: str,
         params: Optional[Dict[str, Any]] = None,
+        stop_before_timestamp: Optional[int] = None,
     ) -> Iterator[Dict[str, Any]]:
         """
         Fetch all pages of results using pagination.
@@ -203,10 +204,12 @@ class TornCityAPIClient:
         For timestamp-based (like /v2/user/events), uses 'to' parameter to paginate backwards.
         Handles APIs that loop back to the beginning by tracking seen record IDs.
         Continues fetching until duplicates are detected or no more records are returned.
+        Stops early when encountering records with timestamps at or before stop_before_timestamp.
 
         Args:
             endpoint: API endpoint path
             params: Additional query parameters
+            stop_before_timestamp: Stop fetching when encountering records with this timestamp or older
 
         Yields:
             Individual records from all pages
@@ -218,8 +221,13 @@ class TornCityAPIClient:
         # User events endpoint uses 'to' parameter for pagination
         use_timestamp_pagination = '/user/events' in endpoint or 'events' in endpoint
         
-        # Check if this endpoint uses timestamp-based pagination
-        use_timestamp_pagination = '/user/events' in endpoint or 'events' in endpoint
+        # Remove 'from' parameter if it exists (API doesn't support it)
+        params.pop('from', None)
+        
+        if stop_before_timestamp:
+            logger.info(
+                f"Time window enabled: will stop when records have timestamp <= {stop_before_timestamp}"
+            )
         
         offset = 0
         total_records = 0
@@ -305,8 +313,19 @@ class TornCityAPIClient:
                     # Track duplicates in this page
                     new_records = []
                     duplicate_count = 0
+                    records_too_old = 0  # Track records that are too old (already in DB)
                     
                     for record in records:
+                        # Check if record is older than our stop_before_timestamp (already in DB)
+                        # We use < (not <=) because records with the same timestamp might be new events
+                        # that happened at the same time, and deduplication will handle any duplicates
+                        if stop_before_timestamp and 'timestamp' in record:
+                            record_timestamp = record.get('timestamp')
+                            if isinstance(record_timestamp, (int, float)) and record_timestamp < stop_before_timestamp:
+                                records_too_old += 1
+                                # Skip records we already have (definitely old)
+                                continue
+                        
                         # Extract record ID (handle different possible ID field names)
                         # Note: For user events, "id" is the user event ID (not faction ID)
                         record_id = None
@@ -352,9 +371,19 @@ class TornCityAPIClient:
                     
                     logger.info(
                         f"Page: {records_in_page} total records, "
-                        f"{len(new_records)} new, {duplicate_count} duplicates. "
-                        f"Total unique records so far: {total_records}"
+                        f"{len(new_records)} new, {duplicate_count} duplicates"
+                        + (f", {records_too_old} already in DB (timestamp < {stop_before_timestamp})" if stop_before_timestamp else "")
+                        + f". Total unique records so far: {total_records}"
                     )
+                    
+                    # Stop if we're getting records we already have (all records in this page are too old)
+                    # We stop when all records are older than stop_before_timestamp
+                    if stop_before_timestamp and records_too_old > 0 and len(new_records) == 0:
+                        logger.info(
+                            f"Stopping pagination: all records in this page are already in DB "
+                            f"(timestamp < {stop_before_timestamp}). Total unique records fetched: {total_records}"
+                        )
+                        break
                     
                     # Check if entire page was duplicates (API has looped back)
                     if records_in_page > 0 and duplicate_count == records_in_page:
@@ -438,7 +467,10 @@ class TornCityAPIClient:
         )
 
     def fetch_all(
-        self, endpoint: str, params: Optional[Dict[str, Any]] = None
+        self, 
+        endpoint: str, 
+        params: Optional[Dict[str, Any]] = None,
+        stop_before_timestamp: Optional[int] = None
     ) -> List[Dict[str, Any]]:
         """
         Fetch all records from all pages as a list.
@@ -446,9 +478,10 @@ class TornCityAPIClient:
         Args:
             endpoint: API endpoint path
             params: Additional query parameters
+            stop_before_timestamp: Stop fetching when encountering records with this timestamp or older
 
         Returns:
             List of all records
         """
-        return list(self.fetch_all_pages(endpoint, params))
+        return list(self.fetch_all_pages(endpoint, params, stop_before_timestamp=stop_before_timestamp))
 
