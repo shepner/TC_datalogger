@@ -809,10 +809,10 @@ class BigQueryLoader:
                     fields_failed.append(field_name)
         
         if fields_to_add:
-                # Update the table schema
-                project_id, dataset_id, table_name = self._parse_table_id(table_id)
-                dataset_ref = bigquery.DatasetReference(project_id, dataset_id)
-                table_ref = bigquery.TableReference(dataset_ref, table_name)
+            # Update the table schema
+            project_id, dataset_id, table_name = self._parse_table_id(table_id)
+            dataset_ref = bigquery.DatasetReference(project_id, dataset_id)
+            table_ref = bigquery.TableReference(dataset_ref, table_name)
             
             try:
                 table = self.client.get_table(table_ref)
