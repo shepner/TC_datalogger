@@ -1,0 +1,4 @@
+# This directory should contain:
+# - credentials.json: GCP service account JSON file for BigQuery access
+# - config.json (optional): Override default project/dataset settings
+
