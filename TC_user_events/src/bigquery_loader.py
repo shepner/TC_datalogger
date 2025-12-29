@@ -300,7 +300,7 @@ class BigQueryLoader:
         """
         Ensure BigQuery table exists, creating it if necessary.
         
-        Only allows operations on pre-existing table "v2_faction_40832_crimes-new".
+        Only allows operations on pre-existing tables specified in allowed_pre_existing_tables.
         All other pre-existing tables will be skipped.
 
         Args:
@@ -315,18 +315,18 @@ class BigQueryLoader:
         """
         project_id, dataset_id, table_name = self._parse_table_id(table_id)
 
-        # Ensure dataset exists
-        dataset_ref = self.client.dataset(dataset_id)
+        # Ensure dataset exists - use the project_id from the table_id, not the client's default
+        dataset_ref = bigquery.DatasetReference(project_id, dataset_id)
         try:
             self.client.get_dataset(dataset_ref)
         except Exception:
-            logger.info(f"Creating dataset {dataset_id}")
+            logger.info(f"Creating dataset {project_id}.{dataset_id}")
             dataset = bigquery.Dataset(dataset_ref)
             dataset.location = "US"  # Default location
             self.client.create_dataset(dataset, exists_ok=True)
 
-        # Check if table exists
-        table_ref = self.client.dataset(dataset_id).table(table_name)
+        # Check if table exists - use the project_id from the table_id
+        table_ref = bigquery.TableReference(dataset_ref, table_name)
         try:
             table = self.client.get_table(table_ref)
             logger.debug(f"Table {table_id} already exists")
@@ -400,7 +400,8 @@ class BigQueryLoader:
         self.ensure_table_exists(table_id, schema)
 
         # Load data with write_disposition=WRITE_TRUNCATE
-        table_ref = self.client.dataset(dataset_id).table(table_name)
+        dataset_ref = bigquery.DatasetReference(project_id, dataset_id)
+        table_ref = bigquery.TableReference(dataset_ref, table_name)
         job_config = bigquery.LoadJobConfig(
             schema=schema,
             write_disposition=bigquery.WriteDisposition.WRITE_TRUNCATE,
@@ -431,7 +432,7 @@ class BigQueryLoader:
             table_id: Full table ID
             records: List of records to load
             schema: Table schema
-            deduplication_key: Field name to use for deduplication
+            deduplication_key: Field name to use for deduplication (e.g., "id" for user event ID)
 
         Returns:
             Dictionary with counts of inserted, updated, and total records processed
@@ -448,9 +449,8 @@ class BigQueryLoader:
         # Create staging table
         staging_table_name = f"{table_name}_staging"
         staging_table_id = f"{project_id}.{dataset_id}.{staging_table_name}"
-        staging_table_ref = self.client.dataset(dataset_id).table(
-            staging_table_name
-        )
+        dataset_ref = bigquery.DatasetReference(project_id, dataset_id)
+        staging_table_ref = bigquery.TableReference(dataset_ref, staging_table_name)
 
         try:
             # Create staging table if it doesn't exist
@@ -695,7 +695,8 @@ class BigQueryLoader:
             Dictionary mapping field names to whether they exist in the table
         """
         project_id, dataset_id, table_name = self._parse_table_id(table_id)
-        table_ref = self.client.dataset(dataset_id).table(table_name)
+        dataset_ref = bigquery.DatasetReference(project_id, dataset_id)
+        table_ref = bigquery.TableReference(dataset_ref, table_name)
         
         try:
             table = self.client.get_table(table_ref)
@@ -768,9 +769,10 @@ class BigQueryLoader:
                     fields_failed.append(field_name)
         
         if fields_to_add:
-            # Update the table schema
-            project_id, dataset_id, table_name = self._parse_table_id(table_id)
-            table_ref = self.client.dataset(dataset_id).table(table_name)
+                # Update the table schema
+                project_id, dataset_id, table_name = self._parse_table_id(table_id)
+                dataset_ref = bigquery.DatasetReference(project_id, dataset_id)
+                table_ref = bigquery.TableReference(dataset_ref, table_name)
             
             try:
                 table = self.client.get_table(table_ref)

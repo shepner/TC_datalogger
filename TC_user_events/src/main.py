@@ -128,7 +128,7 @@ class Pipeline:
             logger.info(f"Fetching data from {endpoint_url}")
 
             # Parse URL to get endpoint path
-            # URL format: https://api.torn.com/v2/faction/crimes?params
+            # URL format: https://api.torn.com/v2/user/events?params
             base_url = self.config.get_api_base_url()
             if "?" in endpoint_url:
                 endpoint_path = endpoint_url.split("?")[0].replace(base_url, "")
@@ -256,12 +256,14 @@ class Pipeline:
                 f"(mode: {storage_mode})"
             )
 
+            # Load to BigQuery
+            # Note: deduplication_key="id" uses the user event ID (not faction ID)
             result = self.bigquery_loader.load_data(
                 table_id=table_id,
                 records=processed_records,
                 schema=self.schema,
                 storage_mode=storage_mode,
-                deduplication_key="id",
+                deduplication_key="id",  # User event ID for deduplication
             )
 
             if result:

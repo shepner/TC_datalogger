@@ -110,6 +110,8 @@ class HealthChecker:
         last_successful_run = log_parser.get_last_successful_run()
         recent_errors = log_parser.get_recent_errors(limit=10)
         log_stats = log_parser.get_log_stats()
+        record_summary = log_parser.get_record_summary()
+        run_history = log_parser.get_run_history(limit=10)
 
         # Determine overall health status
         health_status = self._determine_health_status(
@@ -142,6 +144,36 @@ class HealthChecker:
                 ),
                 "line_count": log_stats["line_count"],
             },
+            "record_summary": {
+                "last_fetch_count": record_summary["last_fetch_count"],
+                "last_inserted": record_summary["last_inserted"],
+                "last_updated": record_summary["last_updated"],
+                "last_total_processed": record_summary["last_total_processed"],
+                "last_total_records": record_summary["last_total_records"],
+                "last_unique_ids": record_summary["last_unique_ids"],
+                "last_fetch_timestamp": (
+                    record_summary["last_fetch_timestamp"].isoformat()
+                    if record_summary["last_fetch_timestamp"]
+                    else None
+                ),
+                "last_stats_timestamp": (
+                    record_summary["last_stats_timestamp"].isoformat()
+                    if record_summary["last_stats_timestamp"]
+                    else None
+                ),
+            },
+            "run_history": [
+                {
+                    "run_timestamp": run["run_timestamp"].isoformat(),
+                    "fetch_count": run["fetch_count"],
+                    "inserted": run["inserted"],
+                    "updated": run["updated"],
+                    "total_processed": run["total_processed"],
+                    "total_records": run["total_records"],
+                    "unique_ids": run["unique_ids"],
+                }
+                for run in run_history
+            ],
             "health_status": health_status,
         }
 

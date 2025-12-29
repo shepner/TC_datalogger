@@ -3,8 +3,9 @@ FROM python:3.13-slim
 # Set working directory
 WORKDIR /app
 
-# Install system dependencies
+# Install system dependencies including docker CLI
 RUN apt-get update && apt-get install -y \
+    docker.io \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements and install Python dependencies

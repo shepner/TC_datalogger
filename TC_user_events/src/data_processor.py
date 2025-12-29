@@ -88,8 +88,9 @@ class DataProcessor:
             Processed record compatible with BigQuery schema
         """
         # Validate required field
+        # Note: The 'id' field represents the user's event ID (not a faction ID)
         if "id" not in record:
-            raise ValueError("Record missing required 'id' field")
+            raise ValueError("Record missing required 'id' field (user event ID)")
 
         # Create a copy of the record to avoid modifying the original
         processed = record.copy()

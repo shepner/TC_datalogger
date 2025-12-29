@@ -16,7 +16,14 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-app = Flask(__name__)
+# Set template and static folders relative to /app (where we run from)
+# Set template and static folders - Flask looks relative to where app is defined
+# Since app.py is in /app/src/, we need to go up one level to /app/
+import os
+base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+app = Flask(__name__, 
+            template_folder=os.path.join(base_dir, 'templates'),
+            static_folder=os.path.join(base_dir, 'static'))
 
 # Initialize health checker
 # Get base path from environment or use default

@@ -257,8 +257,7 @@ class TornCityAPIClient:
                 
                 # Torn City API v2 returns data in different keys:
                 # - "data" for generic endpoints
-                # - "crimes" for /v2/faction/crimes
-                # - "members" for /v2/faction/members
+                # - "events" for /v2/user/events
                 # - "items" for /v2/torn/items
                 # - etc.
                 records = None
@@ -309,9 +308,10 @@ class TornCityAPIClient:
                     
                     for record in records:
                         # Extract record ID (handle different possible ID field names)
+                        # Note: For user events, "id" is the user event ID (not faction ID)
                         record_id = None
                         if "id" in record:
-                            record_id = str(record["id"])
+                            record_id = str(record["id"])  # User event ID
                         elif "crime_id" in record:
                             record_id = str(record["crime_id"])
                         elif "record_id" in record:

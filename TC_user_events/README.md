@@ -87,10 +87,12 @@ This project implements a robust ETL pipeline that:
 
 This service uses **append mode**, which means:
 - Each run adds new records to the existing BigQuery table
-- Uses MERGE statement for deduplication based on `id` field
+- Uses MERGE statement for deduplication based on `id` field (user event ID)
 - Updates existing records if they already exist (upsert behavior)
 - Preserves historical data while keeping it current
 - Useful for event data that accumulates over time
+
+**Note**: The `id` field in this service represents the **user's event ID**, not a faction ID. This is different from other services (like TC Faction Crimes) where the `id` field represents faction-related data.
 
 ## Architecture
 
@@ -181,7 +183,7 @@ TC_user_events/
 2. **API Fetching**: Fetches all pages of data from Torn City API with automatic pagination
 3. **Data Processing**: Transforms API records into BigQuery-compatible format, adds `fetched_at` timestamp
 4. **Data Loading**: 
-   - **Append mode**: Uses MERGE statement for deduplication based on `id` field
+   - **Append mode**: Uses MERGE statement for deduplication based on `id` field (user event ID)
    - Updates existing records, inserts new ones
 5. **Schema Management**: Automatically detects new fields in API responses and adds them to BigQuery schema
 6. **Error Handling**: Retries with exponential backoff, logs all errors with context
