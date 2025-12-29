@@ -173,14 +173,35 @@ class Pipeline:
                 logger.warning(f"No records fetched for {endpoint_name} and no schema available")
                 return
 
-            # If we have records but no schema, generate schema from first record
+            # If we have records but no schema, generate schema from records
+            # Check multiple records to handle fields that may be null in first record
             if records and not self.schema:
-                logger.info("Generating schema from first API response")
+                logger.info("Generating schema from API response (checking multiple records for type inference)")
                 from google.cloud import bigquery
-                sample_record = records[0]
+                # Collect all field types across records to handle nulls
+                field_types = {}
+                for record in records[:100]:  # Check up to 100 records for type inference
+                    for field_name, field_value in record.items():
+                        if field_name not in field_types:
+                            field_types[field_name] = []
+                        if field_value is not None:
+                            field_types[field_name].append(type(field_value))
+                
                 schema_fields = []
+                sample_record = records[0]
+                
+                # Collect all values for each field across records for better type inference
+                field_all_values = {}
+                for record in records[:100]:
+                    for field_name in record.keys():
+                        if field_name not in field_all_values:
+                            field_all_values[field_name] = []
+                        field_all_values[field_name].append(record.get(field_name))
+                
+                # Process top-level fields
                 for field_name, field_value in sample_record.items():
-                    schema_field = self.bigquery_loader._create_schema_field_from_value(field_name, field_value)
+                    all_values = field_all_values.get(field_name, [])
+                    schema_field = self.bigquery_loader._create_schema_field_from_value(field_name, field_value, "NULLABLE", all_values)
                     schema_fields.append(schema_field)
                 # Add fetched_at field
                 from datetime import datetime

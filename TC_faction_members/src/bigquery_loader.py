@@ -153,7 +153,8 @@ class BigQueryLoader:
         self, 
         field_name: str, 
         value: Any,
-        mode: str = "NULLABLE"
+        mode: str = "NULLABLE",
+        all_values: list = None
     ) -> bigquery.SchemaField:
         """
         Create a BigQuery SchemaField from a field name and value.
@@ -162,26 +163,63 @@ class BigQueryLoader:
             field_name: Name of the field
             value: Sample value to infer type from
             mode: Field mode (NULLABLE, REQUIRED, REPEATED)
+            all_values: Optional list of all values for this field across records (for better type inference)
             
         Returns:
             SchemaField object
         """
+        # If we have multiple values, find the most complex type
+        if all_values:
+            # Find the most complex type (dict > list > primitive)
+            best_value = value
+            for v in all_values:
+                if isinstance(v, dict):
+                    best_value = v
+                    break
+                elif isinstance(v, list) and not isinstance(best_value, dict):
+                    best_value = v
+            value = best_value
+        
         field_type = self._infer_field_type(value)
         
         # Handle REPEATED fields
         if isinstance(value, list) and value:
             if isinstance(value[0], dict):
-                # REPEATED RECORD - for now, create a simple RECORD
-                # This is a limitation - we'd need sample data to infer nested structure
-                logger.warning(
-                    f"Field '{field_name}' is a REPEATED RECORD. "
-                    "Automatic schema update for nested structures is limited. "
-                    "Manual schema update may be required."
-                )
+                # REPEATED RECORD - recursively create nested fields from first item
+                nested_fields = []
+                # Collect all keys from all items in the list
+                all_item_keys = set(value[0].keys())
+                item_all_values = {}
+                if all_values:
+                    for v in all_values:
+                        if isinstance(v, list):
+                            for item in v:
+                                if isinstance(item, dict):
+                                    all_item_keys.update(item.keys())
+                                    for nested_key in item.keys():
+                                        if nested_key not in item_all_values:
+                                            item_all_values[nested_key] = []
+                                        item_all_values[nested_key].append(item.get(nested_key))
+                
+                # Create schema for all nested fields found
+                for nested_key in all_item_keys:
+                    nested_value = value[0].get(nested_key)
+                    nested_field_all_values = item_all_values.get(nested_key, [])
+                    if nested_value is None and nested_field_all_values:
+                        for v in nested_field_all_values:
+                            if v is not None:
+                                nested_value = v
+                                break
+                    if nested_value is None:
+                        nested_value = {}
+                    nested_field = self._create_schema_field_from_value(nested_key, nested_value, "NULLABLE", nested_field_all_values)
+                    nested_fields.append(nested_field)
+                
                 return bigquery.SchemaField(
-                    field_name, 
-                    "STRING",  # Fallback to STRING for complex nested structures
-                    mode="REPEATED"
+                    field_name,
+                    "RECORD",
+                    mode="REPEATED",
+                    fields=nested_fields
                 )
             else:
                 # REPEATED simple type
@@ -191,17 +229,51 @@ class BigQueryLoader:
                     mode="REPEATED"
                 )
         elif isinstance(value, dict):
-            # RECORD type - for now, we'll create a simple RECORD
-            # Full nested structure inference would require more complex logic
-            logger.warning(
-                f"Field '{field_name}' is a RECORD type. "
-                "Automatic schema update for nested structures is limited. "
-                "Manual schema update may be required."
-            )
+            # RECORD type - recursively create nested fields
+            # Handle case where value might be None - use empty dict as fallback
+            if value is None:
+                return bigquery.SchemaField(field_name, "STRING", mode=mode)
+            
+            nested_fields = []
+            # Collect all nested keys and values across all records
+            all_nested_keys = set(value.keys()) if value else set()
+            nested_all_values = {}
+            
+            if all_values:
+                for v in all_values:
+                    if isinstance(v, dict):
+                        all_nested_keys.update(v.keys())
+                        for nested_key in v.keys():
+                            if nested_key not in nested_all_values:
+                                nested_all_values[nested_key] = []
+                            nested_all_values[nested_key].append(v.get(nested_key))
+            
+            # Process all nested keys found across records
+            for nested_key in all_nested_keys:
+                # Get value from current record, or find from all_values
+                nested_value = value.get(nested_key) if value else None
+                nested_field_all_values = nested_all_values.get(nested_key, [])
+                
+                # If nested value is None, try to find a non-null value from all_values
+                if nested_value is None and nested_field_all_values:
+                    for v in nested_field_all_values:
+                        if v is not None:
+                            nested_value = v
+                            break
+                
+                # If still None after checking all_values, create as STRING (will be updated by schema evolution)
+                if nested_value is None:
+                    nested_field = bigquery.SchemaField(nested_key, "STRING", mode="NULLABLE")
+                else:
+                    # Determine mode for nested field - if it's a list, it should be REPEATED
+                    nested_mode = "REPEATED" if isinstance(nested_value, list) else "NULLABLE"
+                    nested_field = self._create_schema_field_from_value(nested_key, nested_value, nested_mode, nested_field_all_values)
+                nested_fields.append(nested_field)
             return bigquery.SchemaField(
                 field_name,
-                "STRING",  # Fallback - manual update needed for proper structure
-                mode="NULLABLE"
+                "RECORD",
+                mode=mode,
+                fields=nested_fields
             )
         else:
             return bigquery.SchemaField(field_name, field_type, mode=mode)

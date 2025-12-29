@@ -78,7 +78,7 @@ This project implements a robust ETL pipeline that:
 ### API Endpoint
 
 - **URL**: `https://api.torn.com/v2/user/events?striptags=true&limit=100`
-- **Table**: `torncity-2764614.torn_data.v2_torn_user_events-raw`
+- **Table**: `torncity-402423.torn_data.v2_torn_user_events-raw`
 - **Storage Mode**: `append` (incremental updates with deduplication)
 - **Frequency**: `PT15M` (15 minutes)
 - **GCP Project**: `torncity-2764614` (different from other services)
@@ -126,7 +126,7 @@ This service uses **append mode**, which means:
 ### Prerequisites
 - Python 3.13+
 - Docker
-- Google Cloud Project with BigQuery enabled (project: `torncity-2764614`)
+- Google Cloud Project with BigQuery enabled (project: `torncity-402423`)
 - Torn City API key with user events access
 - Service account credentials for BigQuery
 
@@ -207,9 +207,8 @@ docker exec -it tc-user-events-pipeline python -m src.main
 
 - **Credentials not found**: Ensure `config/credentials.json` exists and is mounted
 - **API key errors**: Check API keys in config file or environment variables
-- **BigQuery permission errors**: Verify service account has BigQuery Data Editor role for project `torncity-2764614`
+- **BigQuery permission errors**: Verify service account has BigQuery Data Editor role
 - **No data fetched**: Check API endpoint URLs and API key permissions
-- **Wrong GCP project**: Ensure credentials are for project `torncity-2764614` (not `torncity-402423`)
 
 ## Support
 

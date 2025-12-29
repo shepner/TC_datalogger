@@ -199,6 +199,8 @@ class TornCityAPIClient:
         """
         Fetch all pages of results using pagination.
         
+        Handles both offset-based and timestamp-based pagination.
+        For timestamp-based (like /v2/user/events), uses 'to' parameter to paginate backwards.
         Handles APIs that loop back to the beginning by tracking seen record IDs.
         Continues fetching until duplicates are detected or no more records are returned.
 
@@ -209,6 +211,16 @@ class TornCityAPIClient:
         Yields:
             Individual records from all pages
         """
+        if params is None:
+            params = {}
+        
+        # Check if this endpoint uses timestamp-based pagination
+        # User events endpoint uses 'to' parameter for pagination
+        use_timestamp_pagination = '/user/events' in endpoint or 'events' in endpoint
+        
+        # Check if this endpoint uses timestamp-based pagination
+        use_timestamp_pagination = '/user/events' in endpoint or 'events' in endpoint
+        
         offset = 0
         total_records = 0
         seen_ids = set()  # Track seen record IDs to detect loops
@@ -216,10 +228,27 @@ class TornCityAPIClient:
         consecutive_duplicate_pages = 0
         max_consecutive_empty = 3  # Stop after 3 empty pages
         max_consecutive_duplicates = 2  # Stop after 2 consecutive pages of all duplicates
+        current_to_timestamp = None  # For timestamp-based pagination
 
         while True:
-            logger.info(f"Fetching page at offset {offset}")
-            response = self.fetch_page(endpoint, offset=offset, params=params)
+            # Prepare params for this request
+            if params is None:
+                params = {}
+            params_copy = params.copy()
+            
+            if use_timestamp_pagination:
+                if current_to_timestamp:
+                    # Use the oldest timestamp from previous page to get next page
+                    params_copy['to'] = current_to_timestamp
+                    logger.info(f"Fetching page with to={current_to_timestamp}")
+                else:
+                    logger.info("Fetching first page (most recent events)")
+            else:
+                logger.info(f"Fetching page at offset {offset}")
+                if offset > 0:
+                    params_copy['offset'] = offset
+            
+            response = self.fetch_page(endpoint, offset=0, params=params_copy)
 
             # Handle different response structures
             if isinstance(response, dict):
@@ -300,13 +329,29 @@ class TornCityAPIClient:
                             logger.warning("Record missing ID field, treating as new")
                             new_records.append(record)
                     
+                    # For timestamp pagination, find the oldest timestamp from new records
+                    if use_timestamp_pagination and new_records:
+                        # Find minimum timestamp from new records
+                        min_timestamp = None
+                        for record in new_records:
+                            if 'timestamp' in record:
+                                ts = record['timestamp']
+                                if min_timestamp is None or ts < min_timestamp:
+                                    min_timestamp = ts
+                        
+                        if min_timestamp:
+                            # Use this as the 'to' parameter for next page
+                            # Subtract 1 to avoid getting the same record again
+                            current_to_timestamp = min_timestamp - 1
+                            logger.debug(f"Next page will use to={current_to_timestamp} (oldest timestamp: {min_timestamp})")
+                    
                     # Yield only new records
                     for record in new_records:
                         total_records += 1
                         yield record
                     
                     logger.info(
-                        f"Page at offset {offset}: {records_in_page} total records, "
+                        f"Page: {records_in_page} total records, "
                         f"{len(new_records)} new, {duplicate_count} duplicates. "
                         f"Total unique records so far: {total_records}"
                     )
@@ -367,9 +412,17 @@ class TornCityAPIClient:
                         )
                 
                 # Safety check: prevent infinite loops
-                if offset > 1000000:  # Arbitrary large limit
+                if not use_timestamp_pagination and offset > 1000000:  # Arbitrary large limit
                     logger.warning(
                         f"Offset exceeded safety limit (1000000). Stopping pagination. "
+                        f"Total unique records fetched: {total_records}"
+                    )
+                    break
+                
+                # For timestamp pagination, check if we've gone too far back
+                if use_timestamp_pagination and current_to_timestamp and current_to_timestamp < 0:
+                    logger.warning(
+                        f"Timestamp pagination reached invalid timestamp. Stopping pagination. "
                         f"Total unique records fetched: {total_records}"
                     )
                     break

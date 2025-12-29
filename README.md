@@ -116,9 +116,9 @@ python -m src.main
 
 ### TC_user_events
 - **Endpoint**: `/v2/user/events?striptags=true&limit=100`
-- **Table**: `torncity-2764614.torn_data.v2_torn_user_events-raw`
+- **Table**: `torncity-402423.torn_data.v2_torn_user_events-raw`
 - **Storage Mode**: `append` (incremental updates with deduplication)
-- **GCP Project**: `torncity-2764614` (different project!)
+- **GCP Project**: `torncity-402423`
 - **Documentation**: [TC_user_events/README.md](TC_user_events/README.md)
 
 ## Storage Modes
@@ -162,7 +162,7 @@ export TC_API_KEY_FACTION_40832=your_key_here
 Each service requires its own GCP service account credentials file:
 - Place credentials JSON file at `{service}/config/credentials.json`
 - Ensure service account has BigQuery Data Editor role
-- **Important**: `TC_user_events` uses a different GCP project (`torncity-2764614`)
+- **Note**: All services use the same GCP project (`torncity-402423`)
 
 ## Schema Auto-Generation
 
@@ -214,7 +214,7 @@ docker-compose restart tc-faction-members
 - **Credentials not found**: Ensure each service has `config/credentials.json`
 - **API key errors**: Check API keys in each service's config file
 - **BigQuery permission errors**: Verify service accounts have BigQuery Data Editor role
-- **Wrong GCP project**: Ensure `TC_user_events` uses project `torncity-2764614`
+- **Wrong GCP project**: Ensure all services use project `torncity-402423`
 
 ## Project Structure
 

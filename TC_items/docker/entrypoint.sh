@@ -12,7 +12,7 @@ cd /app
 python -m src.main >> /app/logs/cron.log 2>&1
 echo "Initial pipeline execution completed. Check /app/logs/cron.log for details."
 
-# Start cron in foreground for scheduled runs
-echo "Starting cron daemon for scheduled runs (every 15 minutes)..."
-cron -f
+# Start scheduler for continuous runs (uses --schedule flag)
+echo "Starting scheduler for continuous runs..."
+python -m src.main --schedule >> /app/logs/cron.log 2>&1
 

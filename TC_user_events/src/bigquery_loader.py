@@ -191,17 +191,18 @@ class BigQueryLoader:
                     mode="REPEATED"
                 )
         elif isinstance(value, dict):
-            # RECORD type - for now, we'll create a simple RECORD
-            # Full nested structure inference would require more complex logic
-            logger.warning(
-                f"Field '{field_name}' is a RECORD type. "
-                "Automatic schema update for nested structures is limited. "
-                "Manual schema update may be required."
-            )
+            # RECORD type - recursively create nested fields
+            nested_fields = []
+            for nested_key, nested_value in value.items():
+                # Determine mode for nested field
+                nested_mode = "REPEATED" if isinstance(nested_value, list) else "NULLABLE"
+                nested_field = self._create_schema_field_from_value(nested_key, nested_value, nested_mode)
+                nested_fields.append(nested_field)
             return bigquery.SchemaField(
                 field_name,
-                "STRING",  # Fallback - manual update needed for proper structure
-                mode="NULLABLE"
+                "RECORD",
+                mode=mode,
+                fields=nested_fields
             )
         else:
             return bigquery.SchemaField(field_name, field_type, mode=mode)

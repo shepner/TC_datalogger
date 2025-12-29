@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Torn City Data Logger - Health Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='dashboard.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Torn City Data Logger - Health Dashboard</h1>
+            <div class="header-controls">
+                <button id="refreshBtn" class="btn btn-primary">Refresh</button>
+                <span id="lastUpdate" class="last-update">Never updated</span>
+            </div>
+        </header>
+
+        <div id="loading" class="loading">Loading health data...</div>
+        <div id="error" class="error" style="display: none;"></div>
+
+        <div id="services" class="services-grid"></div>
+    </div>
+
+    <script src="{{ url_for('static', filename='dashboard.js') }}"></script>
+</body>
+</html>
+

@@ -173,13 +173,30 @@ class Pipeline:
                 logger.warning(f"No records fetched for {endpoint_name} and no schema available")
                 return
 
-            # If we have records but no schema, generate schema from first record
+            # If we have records but no schema, generate schema from records
+            # Check multiple records to handle fields that may be null in first record
             if records and not self.schema:
-                logger.info("Generating schema from first API response")
+                logger.info("Generating schema from API response (checking multiple records for type inference)")
                 from google.cloud import bigquery
-                sample_record = records[0]
+                # Collect all field types across records to handle nulls
+                field_types = {}
+                for record in records[:100]:  # Check up to 100 records for type inference
+                    for field_name, field_value in record.items():
+                        if field_name not in field_types:
+                            field_types[field_name] = []
+                        if field_value is not None:
+                            field_types[field_name].append(type(field_value))
+                
                 schema_fields = []
+                # Use first record as base, but prefer non-null values for type inference
+                sample_record = records[0]
                 for field_name, field_value in sample_record.items():
+                    # If field was null in first record, find a non-null value from other records
+                    if field_value is None and field_name in field_types:
+                        for record in records[1:]:
+                            if field_name in record and record[field_name] is not None:
+                                field_value = record[field_name]
+                                break
                     schema_field = self.bigquery_loader._create_schema_field_from_value(field_name, field_value)
                     schema_fields.append(schema_field)
                 # Add fetched_at field

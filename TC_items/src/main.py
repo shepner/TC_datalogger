@@ -173,15 +173,53 @@ class Pipeline:
                 logger.warning(f"No records fetched for {endpoint_name} and no schema available")
                 return
 
-            # If we have records but no schema, generate schema from first record
+            # If we have records but no schema, generate schema from records
+            # Check multiple records to handle fields that may be null in first record
             if records and not self.schema:
-                logger.info("Generating schema from first API response")
+                logger.info("Generating schema from API response (checking multiple records for type inference)")
                 from google.cloud import bigquery
-                sample_record = records[0]
+                
+                def find_non_null_value(field_name, field_path, records_list):
+                    """Recursively find a non-null value for a field across records."""
+                    for record in records_list:
+                        value = record
+                        for part in field_path:
+                            if isinstance(value, dict) and part in value:
+                                value = value[part]
+                            else:
+                                value = None
+                                break
+                        if value is not None:
+                            return value
+                    return None
+                
+                def get_field_value(record, field_path):
+                    """Get nested field value from record using path."""
+                    value = record
+                    for part in field_path:
+                        if isinstance(value, dict) and part in value:
+                            value = value[part]
+                        else:
+                            return None
+                    return value
+                
                 schema_fields = []
+                sample_record = records[0]
+                
+                # Collect all values for each field across records for better type inference
+                field_all_values = {}
+                for record in records[:100]:
+                    for field_name in record.keys():
+                        if field_name not in field_all_values:
+                            field_all_values[field_name] = []
+                        field_all_values[field_name].append(record.get(field_name))
+                
+                # Process top-level fields
                 for field_name, field_value in sample_record.items():
-                    schema_field = self.bigquery_loader._create_schema_field_from_value(field_name, field_value)
+                    all_values = field_all_values.get(field_name, [])
+                    schema_field = self.bigquery_loader._create_schema_field_from_value(field_name, field_value, "NULLABLE", all_values)
                     schema_fields.append(schema_field)
+                
                 # Add fetched_at field
                 from datetime import datetime
                 fetched_at_field = bigquery.SchemaField("fetched_at", "TIMESTAMP", mode="NULLABLE")
