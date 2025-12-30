@@ -299,22 +299,28 @@
             const members = new Map(); // key: member_name, value: {member_name, data: Map of "difficulty_oc_name_position_id" -> max checkpoint_pass_rate}
 
             filteredData.forEach(record => {
-                // Get difficulty - ensure it's a number
+                // Get difficulty - ensure it's a number, skip records with null/undefined
                 let difficulty = record.difficulty;
                 
-                // Handle null/undefined
+                // Skip records with null/undefined difficulty
                 if (difficulty === undefined || difficulty === null) {
-                    console.warn('Missing difficulty in record:', record);
-                    difficulty = null;
-                } else {
-                    // Convert to number if it's a string
-                    if (typeof difficulty === 'string') {
-                        difficulty = parseInt(difficulty, 10);
-                        if (isNaN(difficulty)) {
-                            console.warn('Invalid difficulty value:', record.difficulty, 'in record:', record);
-                            difficulty = null;
-                        }
+                    console.warn('Skipping record with missing difficulty:', record);
+                    return; // Skip this record
+                }
+                
+                // Convert to number if it's a string
+                if (typeof difficulty === 'string') {
+                    difficulty = parseInt(difficulty, 10);
+                    if (isNaN(difficulty)) {
+                        console.warn('Skipping record with invalid difficulty value:', record.difficulty, 'in record:', record);
+                        return; // Skip this record
                     }
+                }
+                
+                // Ensure it's a valid number (1-5)
+                if (typeof difficulty !== 'number' || difficulty < 1 || difficulty > 5) {
+                    console.warn('Skipping record with out-of-range difficulty:', difficulty, 'in record:', record);
+                    return; // Skip this record
                 }
                 
                 // Build column key for member data
@@ -359,10 +365,7 @@
             const headerRow1 = document.createElement('tr');
             headerRow1.innerHTML = '<th rowspan="2" style="padding: 8px; border: 1px solid #ddd; position: sticky; left: 0; background-color: #4CAF50; z-index: 11; text-align: left;">Member</th>';
             
-            const sortedDifficulties = Array.from(columnGroups.keys()).sort((a, b) => {
-                // Handle null/undefined values - put them at the end
-                if (a == null) return 1;
-                if (b == null) return -1;
+            const sortedDifficulties = Array.from(columnGroups.keys()).filter(d => d != null).sort((a, b) => {
                 return b - a; // Higher difficulty first
             });
             sortedDifficulties.forEach(difficulty => {
@@ -372,8 +375,7 @@
                     totalCols += ocGroup.size;
                 });
                 if (totalCols > 0) {
-                    const difficultyLabel = difficulty != null ? `Level ${difficulty}` : 'Level ?';
-                    headerRow1.innerHTML += `<th colspan="${totalCols}" style="padding: 8px; border: 1px solid #ddd; text-align: center; background-color: #4CAF50; color: white;">${difficultyLabel}</th>`;
+                    headerRow1.innerHTML += `<th colspan="${totalCols}" style="padding: 8px; border: 1px solid #ddd; text-align: center; background-color: #4CAF50; color: white;">Level ${difficulty}</th>`;
                 }
             });
             header.appendChild(headerRow1);
