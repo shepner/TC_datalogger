@@ -107,8 +107,14 @@
 
             <div id="performance-container" style="display: none; margin-top: 30px;">
                 <div style="margin-bottom: 15px;">
-                    <label for="oc_level_filter">OC Level Filter:</label>
-                    <select id="oc_level_filter" onchange="displayPerformance(performanceData)" style="margin-left: 10px; padding: 5px;">
+                    <label>
+                        <input type="radio" name="view_mode" value="pivot" checked onchange="toggleView()"> Pivot View
+                    </label>
+                    <label style="margin-left: 20px;">
+                        <input type="radio" name="view_mode" value="detail" onchange="toggleView()"> Detail View
+                    </label>
+                    <label for="oc_level_filter" style="margin-left: 20px;">OC Level Filter:</label>
+                    <select id="oc_level_filter" onchange="toggleView()" style="margin-left: 10px; padding: 5px;">
                         <option value="">All</option>
                         <option value="1">Level 1</option>
                         <option value="2">Level 2</option>
@@ -116,14 +122,22 @@
                         <option value="4">Level 4</option>
                         <option value="5">Level 5</option>
                     </select>
-                    
-                    <label for="member_filter" style="margin-left: 20px;">Member:</label>
-                    <select id="member_filter" onchange="displayPerformance(performanceData)" style="margin-left: 10px; padding: 5px;">
-                        <option value="">All Members</option>
-                    </select>
                 </div>
 
-                <div id="performance-content">
+                <!-- Pivot View -->
+                <div id="pivot-container">
+                    <div style="max-height: 70vh; overflow-y: auto; overflow-x: auto; border: 1px solid #ddd; margin-top: 20px;">
+                        <table id="pivot-table" style="width: 100%; border-collapse: collapse; font-size: 12px;">
+                            <thead id="pivot-header" style="position: sticky; top: 0; background-color: #4CAF50; color: white; z-index: 10;">
+                            </thead>
+                            <tbody id="pivot-body">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Detail View -->
+                <div id="detail-container" style="display: none;">
                     <div style="max-height: 70vh; overflow-y: auto; overflow-x: auto; border: 1px solid #ddd; margin-top: 20px;">
                         <table id="performance-table" style="width: 100%; border-collapse: collapse; font-size: 12px;">
                             <thead style="position: sticky; top: 0; background-color: #4CAF50; color: white; z-index: 10;">
@@ -220,41 +234,182 @@
 
         let performanceData = [];
         let currentSort = { column: null, direction: 'asc' };
+        let historyData = new Map(); // Store history for each member/OC/position combination
+
+        function toggleView() {
+            const viewMode = document.querySelector('input[name="view_mode"]:checked').value;
+            if (viewMode === 'pivot') {
+                document.getElementById('pivot-container').style.display = 'block';
+                document.getElementById('detail-container').style.display = 'none';
+                displayPivotView(performanceData);
+            } else {
+                document.getElementById('pivot-container').style.display = 'none';
+                document.getElementById('detail-container').style.display = 'block';
+                displayDetailView(performanceData);
+            }
+        }
 
         function displayPerformance(performance) {
             performanceData = performance || [];
             
-            // Populate member filter
-            const memberFilter = document.getElementById('member_filter');
-            const members = [...new Set(performanceData.map(r => r.member_name).filter(Boolean))].sort();
-            const currentValue = memberFilter.value;
-            memberFilter.innerHTML = '<option value="">All Members</option>';
-            members.forEach(member => {
-                const option = document.createElement('option');
-                option.value = member;
-                option.textContent = member;
-                if (member === currentValue) option.selected = true;
-                memberFilter.appendChild(option);
+            // Build history data map
+            historyData.clear();
+            performanceData.forEach(record => {
+                const key = `${record.member_id}_${record.oc_name}_${record.position_id}`;
+                if (!historyData.has(key)) {
+                    historyData.set(key, []);
+                }
+                historyData.get(key).push(record);
             });
             
-            // Apply filters
-            const ocLevelFilter = document.getElementById('oc_level_filter').value;
-            const memberFilterValue = document.getElementById('member_filter').value;
-            let filteredData = performanceData;
+            // Sort history by date (most recent first)
+            historyData.forEach((records, key) => {
+                records.sort((a, b) => {
+                    const dateA = a.executed_at ? new Date(a.executed_at).getTime() : 0;
+                    const dateB = b.executed_at ? new Date(b.executed_at).getTime() : 0;
+                    return dateB - dateA;
+                });
+            });
             
+            toggleView();
+            document.getElementById('performance-container').style.display = 'block';
+        }
+
+        function displayPivotView(data) {
+            const ocLevelFilter = document.getElementById('oc_level_filter').value;
+            let filteredData = data;
             if (ocLevelFilter) {
-                filteredData = filteredData.filter(r => r.oc_level == ocLevelFilter);
+                filteredData = data.filter(r => r.oc_level == ocLevelFilter);
             }
-            if (memberFilterValue) {
-                filteredData = filteredData.filter(r => r.member_name === memberFilterValue);
+
+            if (filteredData.length === 0) {
+                document.getElementById('pivot-body').innerHTML = '<tr><td colspan="100" style="padding: 20px; text-align: center;">No performance data found</td></tr>';
+                return;
+            }
+
+            // Build column structure: OC Name + Position (e.g., "Mob Mentality - Looter (0)")
+            const columns = new Map(); // key: "oc_name_position_id", value: {oc_name, position, position_id, oc_level}
+            const members = new Map(); // key: member_id, value: {member_id, member_name, data: Map of column_key -> most_recent_record}
+
+            filteredData.forEach(record => {
+                // Create column key
+                const columnKey = `${record.oc_name}_${record.position_id}`;
+                if (!columns.has(columnKey)) {
+                    columns.set(columnKey, {
+                        oc_name: record.oc_name,
+                        position: record.position,
+                        position_id: record.position_id,
+                        oc_level: record.oc_level
+                    });
+                }
+
+                // Create member entry
+                if (!members.has(record.member_id)) {
+                    members.set(record.member_id, {
+                        member_id: record.member_id,
+                        member_name: record.member_name,
+                        data: new Map()
+                    });
+                }
+
+                // Store most recent record for this member/column combination
+                const memberData = members.get(record.member_id);
+                if (!memberData.data.has(columnKey)) {
+                    memberData.data.set(columnKey, record);
+                } else {
+                    // Keep the most recent one
+                    const existing = memberData.data.get(columnKey);
+                    const existingDate = existing.executed_at ? new Date(existing.executed_at).getTime() : 0;
+                    const newDate = record.executed_at ? new Date(record.executed_at).getTime() : 0;
+                    if (newDate > existingDate) {
+                        memberData.data.set(columnKey, record);
+                    }
+                }
+            });
+
+            // Sort columns: by OC level (desc), then OC name, then position_id
+            const sortedColumns = Array.from(columns.entries()).sort((a, b) => {
+                const colA = a[1];
+                const colB = b[1];
+                if (colA.oc_level !== colB.oc_level) {
+                    return colB.oc_level - colA.oc_level; // Higher level first
+                }
+                if (colA.oc_name !== colB.oc_name) {
+                    return colA.oc_name.localeCompare(colB.oc_name);
+                }
+                return colA.position_id.localeCompare(colB.position_id);
+            });
+
+            // Build header
+            const header = document.getElementById('pivot-header');
+            header.innerHTML = '';
+            const headerRow = document.createElement('tr');
+            headerRow.innerHTML = '<th style="padding: 8px; border: 1px solid #ddd; position: sticky; left: 0; background-color: #4CAF50; z-index: 11; text-align: left;">Member</th>';
+            
+            sortedColumns.forEach(([columnKey, colInfo]) => {
+                const displayName = `${colInfo.position} (${colInfo.position_id.replace('P', '')})`;
+                headerRow.innerHTML += `<th style="padding: 8px; border: 1px solid #ddd; white-space: nowrap; text-align: center;" title="L${colInfo.oc_level} ${colInfo.oc_name}">${displayName}</th>`;
+            });
+            header.appendChild(headerRow);
+
+            // Build body
+            const tbody = document.getElementById('pivot-body');
+            tbody.innerHTML = '';
+
+            // Sort members by name
+            const sortedMembers = Array.from(members.values()).sort((a, b) => 
+                a.member_name.localeCompare(b.member_name)
+            );
+
+            sortedMembers.forEach(member => {
+                const row = document.createElement('tr');
+                row.innerHTML = `<td style="padding: 6px; border: 1px solid #ddd; position: sticky; left: 0; background-color: white; font-weight: bold;">${member.member_name} (${member.member_id})</td>`;
+                
+                sortedColumns.forEach(([columnKey, colInfo]) => {
+                    const record = member.data.get(columnKey);
+                    if (record) {
+                        const progress = record.progress || 0;
+                        const progressClass = progress >= 90 ? 'cell-green' : (progress >= 80 ? 'cell-yellow' : 'cell-red');
+                        const historyKey = `${member.member_id}_${colInfo.oc_name}_${colInfo.position_id}`;
+                        const hasHistory = historyData.has(historyKey) && historyData.get(historyKey).length > 1;
+                        
+                        row.innerHTML += `<td class="${progressClass}" style="padding: 6px; border: 1px solid #ddd; text-align: center;">
+                            <div style="font-weight: bold;">${progress.toFixed(0)}%</div>
+                            ${hasHistory ? '<div style="font-size: 10px; color: #4CAF50; cursor: pointer;" onclick="showHistory(\'' + historyKey + '\')" title="Click to view history">history</div>' : ''}
+                        </td>`;
+                    } else {
+                        row.innerHTML += '<td style="padding: 6px; border: 1px solid #ddd; text-align: center; color: #ccc;">—</td>';
+                    }
+                });
+                
+                tbody.appendChild(row);
+            });
+        }
+
+        function showHistory(historyKey) {
+            const records = historyData.get(historyKey);
+            if (!records || records.length === 0) return;
+
+            const historyText = records.map(r => {
+                const date = r.executed_at ? new Date(r.executed_at).toLocaleDateString() : 'Unknown';
+                return `${date}: ${(r.progress || 0).toFixed(0)}%`;
+            }).join('\n');
+
+            alert(`History for ${records[0].oc_name} - ${records[0].position}:\n\n${historyText}`);
+        }
+
+        function displayDetailView(data) {
+            const ocLevelFilter = document.getElementById('oc_level_filter').value;
+            let filteredData = data;
+            if (ocLevelFilter) {
+                filteredData = data.filter(r => r.oc_level == ocLevelFilter);
             }
 
             const tbody = document.getElementById('performance-body');
             tbody.innerHTML = '';
 
             if (filteredData.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="9">No performance data found</td></tr>';
-                document.getElementById('performance-container').style.display = 'block';
+                tbody.innerHTML = '<tr><td colspan="9" style="padding: 20px; text-align: center;">No performance data found</td></tr>';
                 return;
             }
 
@@ -273,7 +428,7 @@
                 records.sort((a, b) => {
                     const dateA = a.executed_at ? new Date(a.executed_at).getTime() : 0;
                     const dateB = b.executed_at ? new Date(b.executed_at).getTime() : 0;
-                    return dateB - dateA; // Most recent first
+                    return dateB - dateA;
                 });
             });
 
@@ -285,7 +440,6 @@
                 const outcome = record.outcome || '-';
                 const checkpointRate = record.checkpoint_pass_rate != null ? (record.checkpoint_pass_rate * 100).toFixed(1) + '%' : '-';
 
-                // Color coding for probability
                 let progressClass = '';
                 if (progress >= 90) progressClass = 'cell-green';
                 else if (progress >= 80) progressClass = 'cell-yellow';
@@ -307,7 +461,6 @@
             });
 
             attachSortHandlers();
-            document.getElementById('performance-container').style.display = 'block';
         }
 
         function sortTable(column) {
