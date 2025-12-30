@@ -326,9 +326,9 @@
                     }
                 }
                 
-                // Ensure it's a valid number (1-5)
-                if (typeof difficulty !== 'number' || difficulty < 1 || difficulty > 5) {
-                    console.warn('Skipping record with out-of-range difficulty:', difficulty, 'in record:', record);
+                // Ensure it's a valid number (1-6, or higher if needed)
+                if (typeof difficulty !== 'number' || difficulty < 1) {
+                    console.warn('Skipping record with invalid difficulty:', difficulty, 'in record:', record);
                     return; // Skip this record
                 }
                 
