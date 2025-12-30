@@ -383,6 +383,7 @@ class OCEmailGenerator:
                 crime.name AS crime_name,
                 crime.difficulty AS oc_level,
                 TIMESTAMP_SECONDS(SAFE_CAST(crime.executed_at AS INT64)) AS executed_at,
+                DATE(TIMESTAMP_SECONDS(SAFE_CAST(crime.executed_at AS INT64))) AS executed_date,
                 slot.position AS role,
                 slot.position_id,
                 slot.user.id AS member_id,
@@ -397,38 +398,107 @@ class OCEmailGenerator:
                 AND crime.executed_at IS NOT NULL
                 AND TIMESTAMP_SECONDS(SAFE_CAST(crime.executed_at AS INT64)) >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL @days_back DAY)
                 AND slot.user.progress IS NOT NULL
+            ),
+            member_role_performance AS (
+              SELECT
+                os.member_id,
+                COALESCE(m.name, CAST(os.member_id AS STRING)) AS member_name,
+                os.oc_level,
+                os.role,
+                os.position_id,
+                COUNT(*) AS total_attempts,
+                COUNTIF(os.outcome = 'Successful') AS successful_attempts,
+                ROUND(100.0 * COUNTIF(os.outcome = 'Successful') / COUNT(*), 1) AS success_rate,
+                ROUND(AVG(os.progress), 1) AS avg_progress,
+                MAX(os.progress) AS most_recent_progress,
+                MAX(os.executed_at) AS last_attempt_date,
+                MAX(os.executed_date) AS last_attempt_date_only,
+                ROUND(AVG(os.checkpoint_pass_rate), 1) AS avg_checkpoint_pass_rate
+              FROM
+                oc_slots AS os
+              LEFT JOIN
+                `torncity-402423.torn_data.v2_faction_40832_members-raw` AS m
+              ON
+                os.member_id = m.id
+              GROUP BY
+                os.member_id,
+                m.name,
+                os.oc_level,
+                os.role,
+                os.position_id
+              HAVING
+                COUNT(*) >= 1
+            ),
+            progress_over_time AS (
+              SELECT
+                os.member_id,
+                os.oc_level,
+                os.role,
+                os.position_id,
+                os.executed_date,
+                AVG(os.progress) AS avg_progress_for_date
+              FROM
+                oc_slots AS os
+              GROUP BY
+                os.member_id,
+                os.oc_level,
+                os.role,
+                os.position_id,
+                os.executed_date
+              HAVING
+                COUNT(*) >= 1
+            ),
+            rate_calculation AS (
+              SELECT
+                pot.member_id,
+                pot.oc_level,
+                pot.role,
+                pot.position_id,
+                CASE
+                  WHEN COUNT(DISTINCT pot.executed_date) >= 2 THEN
+                    ROUND(
+                      (MAX(pot.avg_progress_for_date) - MIN(pot.avg_progress_for_date)) /
+                      NULLIF(DATE_DIFF(MAX(pot.executed_date), MIN(pot.executed_date), DAY), 0) * 1.0,
+                      0
+                    ) * 100.0 / 100.0, 2
+                  ELSE 0
+                END AS rate_of_advancement
+              FROM
+                progress_over_time AS pot
+              GROUP BY
+                pot.member_id,
+                pot.oc_level,
+                pot.role,
+                pot.position_id
             )
             SELECT
-              os.member_id,
-              COALESCE(m.name, CAST(os.member_id AS STRING)) AS member_name,
-              os.oc_level,
-              os.role,
-              os.position_id,
-              COUNT(*) AS total_attempts,
-              COUNTIF(os.outcome = 'Successful') AS successful_attempts,
-              ROUND(100.0 * COUNTIF(os.outcome = 'Successful') / COUNT(*), 1) AS success_rate,
-              ROUND(AVG(os.progress), 1) AS avg_progress,
-              ROUND(AVG(os.checkpoint_pass_rate), 1) AS avg_checkpoint_pass_rate,
-              MAX(os.executed_at) AS last_attempt_date
+              mrp.member_id,
+              mrp.member_name,
+              mrp.oc_level,
+              mrp.role,
+              mrp.position_id,
+              mrp.total_attempts,
+              mrp.successful_attempts,
+              mrp.success_rate,
+              mrp.avg_progress,
+              mrp.most_recent_progress,
+              COALESCE(rc.rate_of_advancement, 0) AS rate_of_advancement,
+              mrp.avg_checkpoint_pass_rate,
+              mrp.last_attempt_date
             FROM
-              oc_slots AS os
+              member_role_performance AS mrp
             LEFT JOIN
-              `torncity-402423.torn_data.v2_faction_40832_members-raw` AS m
+              rate_calculation AS rc
             ON
-              os.member_id = m.id
-            GROUP BY
-              os.member_id,
-              m.name,
-              os.oc_level,
-              os.role,
-              os.position_id
-            HAVING
-              COUNT(*) >= 1
+              mrp.member_id = rc.member_id
+              AND mrp.oc_level = rc.oc_level
+              AND mrp.role = rc.role
+              AND mrp.position_id = rc.position_id
             ORDER BY
-              os.oc_level DESC,
-              os.role ASC,
-              success_rate DESC,
-              COALESCE(m.name, CAST(os.member_id AS STRING)) ASC
+              mrp.oc_level DESC,
+              mrp.role ASC,
+              mrp.success_rate DESC,
+              mrp.member_name ASC
             """
             query = query.replace("@days_back", str(days_back))
             return self.bq.execute_query(query)

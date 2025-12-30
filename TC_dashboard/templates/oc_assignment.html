@@ -106,25 +106,60 @@
             </div>
 
             <div id="performance-container" style="display: none;">
-                <div style="max-height: 70vh; overflow-y: auto; overflow-x: auto; border: 1px solid #ddd; margin-top: 20px;">
-                    <table id="performance-table" style="width: 100%; border-collapse: collapse; font-size: 12px;">
-                        <thead style="position: sticky; top: 0; background-color: #4CAF50; color: white; z-index: 10;">
-                            <tr>
-                                <th style="padding: 8px; border: 1px solid #ddd;">Member</th>
-                                <th style="padding: 8px; border: 1px solid #ddd;">OC Level</th>
-                                <th style="padding: 8px; border: 1px solid #ddd;">Role</th>
-                                <th style="padding: 8px; border: 1px solid #ddd;">Position</th>
-                                <th style="padding: 8px; border: 1px solid #ddd;">Attempts</th>
-                                <th style="padding: 8px; border: 1px solid #ddd;">Successful</th>
-                                <th style="padding: 8px; border: 1px solid #ddd;">Success Rate</th>
-                                <th style="padding: 8px; border: 1px solid #ddd;">Avg Progress</th>
-                                <th style="padding: 8px; border: 1px solid #ddd;">Avg Checkpoint</th>
-                                <th style="padding: 8px; border: 1px solid #ddd;">Last Attempt</th>
-                            </tr>
-                        </thead>
-                        <tbody id="performance-body">
-                        </tbody>
-                    </table>
+                <div style="margin-bottom: 15px;">
+                    <label>
+                        <input type="radio" name="view_mode" value="pivot" checked onchange="toggleView()"> Pivot View
+                    </label>
+                    <label style="margin-left: 20px;">
+                        <input type="radio" name="view_mode" value="detail" onchange="toggleView()"> Detail View
+                    </label>
+                    <label style="margin-left: 20px;">
+                        <input type="checkbox" id="filter_oc_level" onchange="toggleView()"> Filter by OC Level:
+                        <select id="oc_level_filter" onchange="toggleView()" style="margin-left: 5px;">
+                            <option value="">All Levels</option>
+                            <option value="5">Level 5</option>
+                            <option value="4">Level 4</option>
+                            <option value="3">Level 3</option>
+                            <option value="2">Level 2</option>
+                            <option value="1">Level 1</option>
+                        </select>
+                    </label>
+                </div>
+
+                <!-- Pivot View -->
+                <div id="pivot-container" style="display: none;">
+                    <div style="max-height: 70vh; overflow-y: auto; overflow-x: auto; border: 1px solid #ddd; margin-top: 20px;">
+                        <table id="pivot-table" style="width: 100%; border-collapse: collapse; font-size: 11px;">
+                            <thead id="pivot-header" style="position: sticky; top: 0; background-color: #4CAF50; color: white; z-index: 10;">
+                            </thead>
+                            <tbody id="pivot-body">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Detail View -->
+                <div id="detail-container" style="display: none;">
+                    <div style="max-height: 70vh; overflow-y: auto; overflow-x: auto; border: 1px solid #ddd; margin-top: 20px;">
+                        <table id="performance-table" style="width: 100%; border-collapse: collapse; font-size: 12px;">
+                            <thead style="position: sticky; top: 0; background-color: #4CAF50; color: white; z-index: 10;">
+                                <tr>
+                                    <th class="sortable" data-column="member_name" style="padding: 8px; border: 1px solid #ddd; cursor: pointer;">Member ↕</th>
+                                    <th class="sortable" data-column="oc_level" style="padding: 8px; border: 1px solid #ddd; cursor: pointer; text-align: center;">OC Level ↕</th>
+                                    <th class="sortable" data-column="role" style="padding: 8px; border: 1px solid #ddd; cursor: pointer;">Role ↕</th>
+                                    <th style="padding: 8px; border: 1px solid #ddd;">Position</th>
+                                    <th class="sortable" data-column="total_attempts" style="padding: 8px; border: 1px solid #ddd; cursor: pointer; text-align: center;">Attempts ↕</th>
+                                    <th class="sortable" data-column="success_rate" style="padding: 8px; border: 1px solid #ddd; cursor: pointer; text-align: center;">Success Rate ↕</th>
+                                    <th class="sortable" data-column="most_recent_progress" style="padding: 8px; border: 1px solid #ddd; cursor: pointer; text-align: center;">Recent Prob ↕</th>
+                                    <th class="sortable" data-column="rate_of_advancement" style="padding: 8px; border: 1px solid #ddd; cursor: pointer; text-align: center;">Rate of Adv ↕</th>
+                                    <th style="padding: 8px; border: 1px solid #ddd; text-align: center;">Avg Progress</th>
+                                    <th style="padding: 8px; border: 1px solid #ddd;">Last Attempt</th>
+                                </tr>
+                            </thead>
+                            <tbody id="performance-body">
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         </div>
@@ -200,33 +235,163 @@
             }
         }
 
-        function displayPerformance(performance) {
-            const tbody = document.getElementById('performance-body');
-            tbody.innerHTML = '';
+        let performanceData = [];
+        let currentSort = { column: null, direction: 'asc' };
 
-            if (performance.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="10">No performance data found</td></tr>';
-                document.getElementById('performance-container').style.display = 'block';
+        function toggleView() {
+            const viewMode = document.querySelector('input[name="view_mode"]:checked').value;
+            if (viewMode === 'pivot') {
+                document.getElementById('pivot-container').style.display = 'block';
+                document.getElementById('detail-container').style.display = 'none';
+                displayPivotView(performanceData);
+            } else {
+                document.getElementById('pivot-container').style.display = 'none';
+                document.getElementById('detail-container').style.display = 'block';
+                displayDetailView(performanceData);
+            }
+        }
+
+        function displayPerformance(performance) {
+            performanceData = performance;
+            toggleView();
+            document.getElementById('performance-container').style.display = 'block';
+        }
+
+        function displayPivotView(data) {
+            // Filter by OC level if selected
+            const ocLevelFilter = document.getElementById('oc_level_filter').value;
+            let filteredData = data;
+            if (ocLevelFilter) {
+                filteredData = data.filter(r => r.oc_level == ocLevelFilter);
+            }
+
+            if (filteredData.length === 0) {
+                document.getElementById('pivot-body').innerHTML = '<tr><td colspan="100">No performance data found</td></tr>';
                 return;
             }
 
-            performance.forEach(record => {
+            // Group by member and role, then pivot
+            const memberRoleMap = new Map();
+            const roles = new Set();
+            const ocLevels = new Set();
+
+            filteredData.forEach(record => {
+                const key = `${record.member_id}_${record.oc_level}_${record.role}`;
+                if (!memberRoleMap.has(key)) {
+                    memberRoleMap.set(key, {
+                        member_id: record.member_id,
+                        member_name: record.member_name,
+                        oc_level: record.oc_level,
+                        role: record.role,
+                        data: record
+                    });
+                }
+                roles.add(`${record.oc_level}-${record.role}`);
+                ocLevels.add(record.oc_level);
+            });
+
+            // Build header
+            const header = document.getElementById('pivot-header');
+            header.innerHTML = '';
+            const headerRow = document.createElement('tr');
+            headerRow.innerHTML = '<th style="padding: 8px; border: 1px solid #ddd; position: sticky; left: 0; background-color: #4CAF50; z-index: 11;">Member</th>';
+            
+            const sortedRoles = Array.from(roles).sort();
+            sortedRoles.forEach(roleKey => {
+                const [level, role] = roleKey.split('-');
+                headerRow.innerHTML += `<th class="sortable" data-role="${roleKey}" style="padding: 8px; border: 1px solid #ddd; cursor: pointer; white-space: nowrap;" title="Click to sort">L${level} ${role} ↕</th>`;
+            });
+            header.appendChild(headerRow);
+
+            // Build body - group by member
+            const members = new Map();
+            filteredData.forEach(record => {
+                if (!members.has(record.member_id)) {
+                    members.set(record.member_id, {
+                        member_id: record.member_id,
+                        member_name: record.member_name,
+                        roles: new Map()
+                    });
+                }
+                const roleKey = `${record.oc_level}-${record.role}`;
+                members.get(record.member_id).roles.set(roleKey, record);
+            });
+
+            const tbody = document.getElementById('pivot-body');
+            tbody.innerHTML = '';
+
+            Array.from(members.values()).sort((a, b) => a.member_name.localeCompare(b.member_name)).forEach(member => {
+                const row = document.createElement('tr');
+                row.innerHTML = `<td style="padding: 6px; border: 1px solid #ddd; position: sticky; left: 0; background-color: white; font-weight: bold;">${member.member_name}</td>`;
+                
+                sortedRoles.forEach(roleKey => {
+                    const record = member.roles.get(roleKey);
+                    if (record) {
+                        const recentProb = record.most_recent_progress || 0;
+                        const rate = record.rate_of_advancement || 0;
+                        const successRate = record.success_rate || 0;
+                        
+                        let cellClass = '';
+                        if (recentProb >= 90) cellClass = 'cell-green';
+                        else if (recentProb >= 80) cellClass = 'cell-yellow';
+                        else cellClass = 'cell-red';
+
+                        const rateDisplay = rate > 0 ? `+${rate.toFixed(2)}` : rate.toFixed(2);
+                        row.innerHTML += `<td class="${cellClass}" style="padding: 6px; border: 1px solid #ddd; text-align: center;" title="Recent: ${recentProb.toFixed(1)}%, Rate: ${rateDisplay}/day, Success: ${successRate.toFixed(1)}%">
+                            <div style="font-weight: bold;">${recentProb.toFixed(1)}%</div>
+                            <div style="font-size: 9px; color: #666;">${rateDisplay}/d</div>
+                        </td>`;
+                    } else {
+                        row.innerHTML += '<td style="padding: 6px; border: 1px solid #ddd; text-align: center; color: #ccc;">-</td>';
+                    }
+                });
+                
+                tbody.appendChild(row);
+            });
+        }
+
+        function displayDetailView(data) {
+            // Filter by OC level if selected
+            const ocLevelFilter = document.getElementById('oc_level_filter').value;
+            let filteredData = data;
+            if (ocLevelFilter) {
+                filteredData = data.filter(r => r.oc_level == ocLevelFilter);
+            }
+
+            const tbody = document.getElementById('performance-body');
+            tbody.innerHTML = '';
+
+            if (filteredData.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="10">No performance data found</td></tr>';
+                return;
+            }
+
+            filteredData.forEach(record => {
                 const row = document.createElement('tr');
                 const successRate = record.success_rate || 0;
                 const avgProgress = record.avg_progress || 0;
+                const recentProb = record.most_recent_progress || 0;
+                const rate = record.rate_of_advancement || 0;
                 const lastAttempt = record.last_attempt_date ? new Date(record.last_attempt_date) : null;
 
-                // Color coding for success rate
+                // Color coding
                 let successRateClass = '';
                 if (successRate >= 90) successRateClass = 'cell-green';
                 else if (successRate >= 80) successRateClass = 'cell-yellow';
                 else successRateClass = 'cell-red';
 
-                // Color coding for avg progress
                 let progressClass = '';
                 if (avgProgress >= 90) progressClass = 'cell-green';
                 else if (avgProgress >= 80) progressClass = 'cell-yellow';
                 else progressClass = 'cell-red';
+
+                let recentProbClass = '';
+                if (recentProb >= 90) recentProbClass = 'cell-green';
+                else if (recentProb >= 80) recentProbClass = 'cell-yellow';
+                else recentProbClass = 'cell-red';
+
+                const rateDisplay = rate > 0 ? `+${rate.toFixed(2)}` : rate.toFixed(2);
+                const rateClass = rate > 0 ? 'cell-green' : (rate < 0 ? 'cell-red' : '');
 
                 row.innerHTML = `
                     <td style="padding: 6px; border: 1px solid #ddd;">${record.member_name || 'Unknown'}</td>
@@ -234,17 +399,77 @@
                     <td style="padding: 6px; border: 1px solid #ddd;">${record.role || '-'}</td>
                     <td style="padding: 6px; border: 1px solid #ddd;">${record.position_id || '-'}</td>
                     <td style="padding: 6px; border: 1px solid #ddd; text-align: center;">${record.total_attempts || 0}</td>
-                    <td style="padding: 6px; border: 1px solid #ddd; text-align: center;">${record.successful_attempts || 0}</td>
                     <td class="${successRateClass}" style="padding: 6px; border: 1px solid #ddd; text-align: center; font-weight: bold;">${successRate.toFixed(1)}%</td>
+                    <td class="${recentProbClass}" style="padding: 6px; border: 1px solid #ddd; text-align: center; font-weight: bold;">${recentProb.toFixed(1)}%</td>
+                    <td class="${rateClass}" style="padding: 6px; border: 1px solid #ddd; text-align: center;">${rateDisplay}/day</td>
                     <td class="${progressClass}" style="padding: 6px; border: 1px solid #ddd; text-align: center;">${avgProgress.toFixed(1)}%</td>
-                    <td style="padding: 6px; border: 1px solid #ddd; text-align: center;">${record.avg_checkpoint_pass_rate ? record.avg_checkpoint_pass_rate.toFixed(1) + '%' : '-'}</td>
                     <td style="padding: 6px; border: 1px solid #ddd;">${lastAttempt ? lastAttempt.toLocaleDateString() : '-'}</td>
                 `;
 
                 tbody.appendChild(row);
             });
 
-            document.getElementById('performance-container').style.display = 'block';
+            attachSortHandlers();
+        }
+
+        function sortTable(column) {
+            if (currentSort.column === column) {
+                currentSort.direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
+            } else {
+                currentSort.column = column;
+                currentSort.direction = 'asc';
+            }
+
+            const ocLevelFilter = document.getElementById('oc_level_filter').value;
+            let filteredData = performanceData;
+            if (ocLevelFilter) {
+                filteredData = performanceData.filter(r => r.oc_level == ocLevelFilter);
+            }
+
+            filteredData.sort((a, b) => {
+                let aVal = a[column];
+                let bVal = b[column];
+
+                if (aVal == null && bVal == null) return 0;
+                if (aVal == null) return 1;
+                if (bVal == null) return -1;
+
+                if (typeof aVal === 'number' && typeof bVal === 'number') {
+                    return currentSort.direction === 'asc' ? aVal - bVal : bVal - aVal;
+                }
+
+                if (typeof aVal === 'string') {
+                    aVal = aVal.toLowerCase();
+                    bVal = bVal.toLowerCase();
+                }
+
+                let comparison = 0;
+                if (aVal < bVal) comparison = -1;
+                if (aVal > bVal) comparison = 1;
+
+                return currentSort.direction === 'asc' ? comparison : -comparison;
+            });
+
+            // Update header sort indicators
+            document.querySelectorAll('th.sortable').forEach(th => {
+                th.classList.remove('sort-asc', 'sort-desc');
+                if (th.dataset.column === column) {
+                    th.classList.add(`sort-${currentSort.direction}`);
+                    th.innerHTML = th.innerHTML.replace(/ [↑↓]/, '') + (currentSort.direction === 'asc' ? ' ↑' : ' ↓');
+                }
+            });
+
+            displayDetailView(filteredData);
+        }
+
+        function attachSortHandlers() {
+            document.querySelectorAll('th.sortable').forEach(th => {
+                const newTh = th.cloneNode(true);
+                th.parentNode.replaceChild(newTh, th);
+                newTh.addEventListener('click', () => {
+                    sortTable(newTh.dataset.column);
+                });
+            });
         }
 
         // Load performance data on page load
@@ -262,8 +487,18 @@
         .cell-red {
             background-color: #ffcdd2;
         }
-        #performance-table tbody tr:hover {
+        #performance-table tbody tr:hover,
+        #pivot-table tbody tr:hover {
             background-color: #f5f5f5;
+        }
+        th.sortable:hover {
+            background-color: #45a049;
+        }
+        th.sort-asc::after {
+            content: ' ↑';
+        }
+        th.sort-desc::after {
+            content: ' ↓';
         }
     </style>
 </body>
