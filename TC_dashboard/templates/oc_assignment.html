@@ -401,11 +401,11 @@
                             const checkpointRate = member.data.get(columnKey);
                             
                             if (checkpointRate !== undefined) {
-                                // Color coding based on checkpoint_pass_rate (0-100)
+                                // Color coding: red for < 80 or > 90, no color for 80-90 range
                                 let cellClass = '';
-                                if (checkpointRate >= 90) cellClass = 'cell-green';
-                                else if (checkpointRate >= 80) cellClass = 'cell-yellow';
-                                else cellClass = 'cell-red';
+                                if (checkpointRate < 80 || checkpointRate > 90) {
+                                    cellClass = 'cell-red';
+                                }
                                 
                                 row.innerHTML += `<td class="${cellClass}" style="padding: 6px; border: 1px solid #ddd; text-align: center; font-weight: bold;">${checkpointRate}</td>`;
                             } else {
