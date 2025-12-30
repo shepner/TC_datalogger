@@ -34,7 +34,7 @@ oc_slots AS (
     slot.position_id,
     slot.user.id AS member_id,
     slot.user.outcome AS outcome,
-    slot.user.checkpoint_pass_rate AS checkpoint_pass_rate
+    slot.checkpoint_pass_rate AS checkpoint_pass_rate
   FROM
     `torncity-402423.torn_data.v2_faction_40832_crimes-raw` AS crime,
     UNNEST(crime.slots) AS slot
