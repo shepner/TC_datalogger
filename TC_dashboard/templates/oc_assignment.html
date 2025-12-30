@@ -282,7 +282,7 @@
                 // Convert filter to number for comparison
                 const filterNum = parseInt(ocLevelFilter, 10);
                 filteredData = data.filter(r => {
-                    const diff = r.difficulty;
+                    const diff = r.difficulty !== undefined ? r.difficulty : r.oc_level;
                     // Handle both string and number types
                     if (typeof diff === 'string') {
                         return parseInt(diff, 10) === filterNum;
@@ -308,8 +308,8 @@
             const members = new Map(); // key: member_name, value: {member_name, data: Map of "difficulty_oc_name_position_id" -> max checkpoint_pass_rate}
 
             filteredData.forEach(record => {
-                // Get difficulty - ensure it's a number, skip records with null/undefined
-                let difficulty = record.difficulty;
+                // Get difficulty - check both 'difficulty' and 'oc_level' field names
+                let difficulty = record.difficulty !== undefined ? record.difficulty : record.oc_level;
                 
                 // Skip records with null/undefined difficulty
                 if (difficulty === undefined || difficulty === null) {
