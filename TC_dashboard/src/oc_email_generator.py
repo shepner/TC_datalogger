@@ -101,12 +101,57 @@ class OCEmailGenerator:
         
         return participation
 
+    def get_member_checkpoint_rates(self, days_back: int = 90) -> Dict[str, Dict[str, float]]:
+        """
+        Get MAX checkpoint_pass_rate for each member by OC name and position_id.
+        
+        Args:
+            days_back: Number of days to look back (default 90)
+            
+        Returns:
+            Dictionary mapping "member_name" -> "oc_name_position_id" -> max_checkpoint_pass_rate
+        """
+        query_file = "sql_queries/oc_performance_pivot.sql"
+        
+        from pathlib import Path
+        base_path = Path(__file__).parent.parent.parent
+        query_path = base_path / query_file
+        
+        if query_path.exists():
+            query = query_path.read_text()
+            query = query.replace("INTERVAL 90 DAY", f"INTERVAL {days_back} DAY")
+            results = self.bq.execute_query(query)
+        else:
+            return {}
+        
+        # Build dictionary: member_name -> oc_name_position_id -> max_checkpoint_pass_rate
+        member_rates = {}
+        for record in results:
+            member_name = record.get('member_name')
+            oc_name = record.get('oc_name')
+            position_id = record.get('position_id')
+            checkpoint_rate = record.get('checkpoint_pass_rate', 0)
+            
+            if not member_name or not oc_name or not position_id:
+                continue
+                
+            key = f"{oc_name}_{position_id}"
+            
+            if member_name not in member_rates:
+                member_rates[member_name] = {}
+            
+            # Keep MAX checkpoint_pass_rate
+            if key not in member_rates[member_name] or checkpoint_rate > member_rates[member_name][key]:
+                member_rates[member_name][key] = checkpoint_rate
+        
+        return member_rates
+
     def get_available_ocs(self) -> List[Dict[str, Any]]:
         """
-        Get list of available OCs (status = "Recruiting" or "Planning").
+        Get list of available OCs (status = "Recruiting" or "Planning") with slot details.
 
         Returns:
-            List of OC dictionaries with id, name, difficulty, status, expiration info
+            List of OC dictionaries with id, name, difficulty, status, expiration info, and slots
         """
         # Try INT64 query first (most common case)
         query_int64 = """
@@ -120,7 +165,14 @@ class OCEmailGenerator:
           TIMESTAMP_SECONDS(SAFE_CAST(expired_at AS INT64)) AS expired_at,
           TIMESTAMP_SECONDS(SAFE_CAST(ready_at AS INT64)) AS ready_at,
           ARRAY_LENGTH(slots) AS total_slots,
-          (SELECT COUNT(*) FROM UNNEST(slots) WHERE user.id IS NOT NULL) AS filled_slots
+          (SELECT COUNT(*) FROM UNNEST(slots) WHERE user.id IS NOT NULL) AS filled_slots,
+          ARRAY(
+            SELECT STRUCT(
+              slot.position_id AS position_id,
+              slot.position AS position
+            )
+            FROM UNNEST(slots) AS slot
+          ) AS slot_details
         FROM
           `torncity-402423.torn_data.v2_faction_40832_crimes-raw`
         WHERE
@@ -137,14 +189,53 @@ class OCEmailGenerator:
         """
         
         try:
-            return self.bq.execute_query(query_int64)
+            results = self.bq.execute_query(query_int64)
+            # Process slot_details if it's a JSON string
+            for oc in results:
+                if 'slot_details' in oc and isinstance(oc['slot_details'], str):
+                    import json
+                    try:
+                        oc['slot_details'] = json.loads(oc['slot_details'])
+                    except:
+                        oc['slot_details'] = []
+            return results
         except Exception as e:
             error_str = str(e)
-            # If error is about TIMESTAMP casting, return empty list
-            # This allows email generation to work without OC prioritization
-            if 'TIMESTAMP' in error_str and 'INT64' in error_str:
-                logger.warning(f"OC query failed due to mixed timestamp types. Returning empty OC list. Error: {error_str[:200]}")
-                return []
+            # If error is about TIMESTAMP casting or slot_details, try simpler query
+            if 'TIMESTAMP' in error_str and 'INT64' in error_str or 'slot_details' in error_str:
+                logger.warning(f"OC query with slots failed. Trying simpler query. Error: {error_str[:200]}")
+                # Fallback to query without slot_details
+                query_simple = """
+                SELECT
+                  id AS oc_id,
+                  name AS oc_name,
+                  difficulty,
+                  status,
+                  TIMESTAMP_SECONDS(SAFE_CAST(created_at AS INT64)) AS created_at,
+                  TIMESTAMP_SECONDS(SAFE_CAST(planning_at AS INT64)) AS planning_at,
+                  TIMESTAMP_SECONDS(SAFE_CAST(expired_at AS INT64)) AS expired_at,
+                  TIMESTAMP_SECONDS(SAFE_CAST(ready_at AS INT64)) AS ready_at,
+                  ARRAY_LENGTH(slots) AS total_slots,
+                  (SELECT COUNT(*) FROM UNNEST(slots) WHERE user.id IS NOT NULL) AS filled_slots
+                FROM
+                  `torncity-402423.torn_data.v2_faction_40832_crimes-raw`
+                WHERE
+                  status IN ('Recruiting', 'Planning')
+                  AND expired_at IS NOT NULL
+                  AND TIMESTAMP_SECONDS(SAFE_CAST(expired_at AS INT64)) > CURRENT_TIMESTAMP()
+                ORDER BY
+                  CASE status
+                    WHEN 'Planning' THEN 1
+                    WHEN 'Recruiting' THEN 2
+                    ELSE 3
+                  END,
+                  TIMESTAMP_SECONDS(SAFE_CAST(expired_at AS INT64)) ASC
+                """
+                try:
+                    return self.bq.execute_query(query_simple)
+                except Exception as e2:
+                    logger.warning(f"Fallback OC query also failed: {e2}")
+                    return []
             else:
                 raise
 
@@ -167,6 +258,7 @@ class OCEmailGenerator:
         members = self.get_members_not_in_oc()
         participation = self.get_oc_participation_counts()
         ocs = self.get_available_ocs()
+        checkpoint_rates = self.get_member_checkpoint_rates()  # member_name -> oc_name_position_id -> rate
 
         if not members:
             return "No members available for OC assignment (all members are already in OCs)."
@@ -297,36 +389,77 @@ class OCEmailGenerator:
             else:
                 ocs_for_active.append(oc)
 
-        # Assign members
-        assignments = {}  # oc_id -> [member_names]
-        active_idx = 0
-        inactive_idx = 0
-
-        # Assign active members first
-        for member in active_members:
-            if active_idx < len(ocs_for_active):
-                oc = ocs_for_active[active_idx]
+        # Assign members based on checkpoint_pass_rate (80-90 range)
+        # Structure: oc_id -> [{member_name, qualified_positions: [position_id]}]
+        assignments = {}  # oc_id -> list of assignment dicts
+        members_needing_alternatives = []  # Members with partial qualifications
+        members_needing_spawn = []  # Members with no valid OCs
+        
+        # For each member, find qualified positions (checkpoint_pass_rate 80-90)
+        for member in members_sorted:
+            member_name = member['member_name']
+            member_rates = checkpoint_rates.get(member_name, {})
+            
+            # Find all qualified OC+position combinations for this member
+            qualified_combos = []  # List of {oc_name, position_id, position, difficulty}
+            for oc_name_position_key, rate in member_rates.items():
+                if 80 <= rate <= 90:  # Valid range
+                    parts = oc_name_position_key.rsplit('_', 1)
+                    if len(parts) == 2:
+                        oc_name, position_id = parts
+                        qualified_combos.append({
+                            'oc_name': oc_name,
+                            'position_id': position_id,
+                            'rate': rate
+                        })
+            
+            # Find available OCs that match qualified combinations
+            qualified_ocs = []
+            for oc in ocs:
+                oc_name = oc['oc_name']
+                # Check if this OC matches any qualified combo
+                matching_combos = [c for c in qualified_combos if c['oc_name'] == oc_name]
+                if matching_combos:
+                    qualified_ocs.append({
+                        'oc': oc,
+                        'qualified_positions': [c['position_id'] for c in matching_combos]
+                    })
+            
+            # Assign member to best available OC
+            assigned = False
+            oc_list = ocs_for_active if member['is_active'] else ocs_for_inactive
+            
+            for qualified_oc_info in qualified_ocs:
+                oc = qualified_oc_info['oc']
                 oc_id = oc['oc_id']
+                qualified_positions = qualified_oc_info['qualified_positions']
+                
+                # Check if OC has space and member hasn't been assigned
                 if oc_id not in assignments:
                     assignments[oc_id] = []
-                if len(assignments[oc_id]) < max_members_per_oc:
-                    assignments[oc_id].append(member['member_name'])
-                    active_idx += 1
-                    if active_idx >= len(ocs_for_active):
-                        active_idx = 0
-
-        # Assign inactive members
-        for member in inactive_members:
-            if inactive_idx < len(ocs_for_inactive):
-                oc = ocs_for_inactive[inactive_idx]
-                oc_id = oc['oc_id']
-                if oc_id not in assignments:
-                    assignments[oc_id] = []
-                if len(assignments[oc_id]) < max_members_per_oc:
-                    assignments[oc_id].append(member['member_name'])
-                    inactive_idx += 1
-                    if inactive_idx >= len(ocs_for_inactive):
-                        inactive_idx = 0
+                
+                # Count current assignments for this OC
+                current_count = sum(len(a.get('qualified_positions', [])) for a in assignments[oc_id])
+                
+                if current_count < max_members_per_oc * oc.get('total_slots', 1):
+                    assignments[oc_id].append({
+                        'member_name': member_name,
+                        'qualified_positions': qualified_positions
+                    })
+                    assigned = True
+                    break
+            
+            # Track members who need alternatives or spawn recommendations
+            if not assigned:
+                if qualified_combos:
+                    # Has qualifications but no available OC
+                    members_needing_alternatives.append({
+                        'member_name': member_name,
+                        'qualified_combos': qualified_combos
+                    })
+                else:
+                    # No valid qualifications at all
+                    members_needing_spawn.append(member_name)
 
         # Generate email text
         if instructions is None:
@@ -334,7 +467,7 @@ class OCEmailGenerator:
 
         email_lines = [instructions, ""]
 
-        # Group assignments by OC
+        # Group assignments by OC with position-specific recommendations
         for oc in ocs:
             oc_id = oc['oc_id']
             if oc_id in assignments and assignments[oc_id]:
@@ -344,10 +477,42 @@ class OCEmailGenerator:
                 
                 email_lines.append(f"{oc_name} (Difficulty {difficulty})")
                 email_lines.append(f"URL: {oc_url}")
-                email_lines.append(f"Members: {', '.join(assignments[oc_id])}")
+                
+                # Group members by position requirements
+                member_list = []
+                for assignment in assignments[oc_id]:
+                    member_name = assignment['member_name']
+                    positions = assignment.get('qualified_positions', [])
+                    if positions:
+                        # Show specific positions
+                        position_str = ', '.join(positions)
+                        member_list.append(f"{member_name} (Positions: {position_str})")
+                    else:
+                        member_list.append(member_name)
+                
+                email_lines.append(f"Members: {', '.join(member_list)}")
                 email_lines.append("")
 
-        if not assignments:
+        # Add alternative OC recommendations
+        if members_needing_alternatives:
+            email_lines.append("=== MEMBERS NEEDING ALTERNATIVE OCs ===")
+            for member_info in members_needing_alternatives:
+                member_name = member_info['member_name']
+                combos = member_info['qualified_combos']
+                oc_names = list(set([c['oc_name'] for c in combos]))
+                email_lines.append(f"{member_name}: Needs OC(s) - {', '.join(oc_names)}")
+            email_lines.append("")
+
+        # Add spawn recommendations
+        if members_needing_spawn:
+            email_lines.append("=== MEMBERS NEEDING NEW OCs TO BE SPAWNED ===")
+            email_lines.append("The following members have no valid OC assignments (checkpoint_pass_rate < 80 or > 90 for all positions):")
+            email_lines.append(", ".join(members_needing_spawn))
+            email_lines.append("")
+            email_lines.append("ACTION REQUIRED: Please spawn new OCs for these members.")
+            email_lines.append("")
+
+        if not assignments and not members_needing_alternatives and not members_needing_spawn:
             email_lines.append("No members assigned to OCs (all OCs may be full or no suitable assignments found).")
 
         return "\n".join(email_lines)
