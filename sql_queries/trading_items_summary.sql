@@ -28,6 +28,8 @@ WITH parsed_events AS (
     STARTS_WITH(event, 'You were sent')
     -- Exclude money transfers (e.g., "You were sent $2,000,000 from ...")
     AND NOT REGEXP_CONTAINS(event, r'You were sent \$')
+    -- Exclude events from specific users
+    AND NOT REGEXP_CONTAINS(event, r' from Duke(?: |$)')
     AND REGEXP_EXTRACT(event, r'You were sent (\d+)x ') IS NOT NULL
 )
 SELECT

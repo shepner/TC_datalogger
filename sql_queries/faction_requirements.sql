@@ -62,6 +62,8 @@ trading_items AS (
     STARTS_WITH(event, 'You were sent')
     -- Exclude money transfers (e.g., "You were sent $2,000,000 from ...")
     AND NOT REGEXP_CONTAINS(event, r'You were sent \$')
+    -- Exclude events from specific users
+    AND NOT REGEXP_CONTAINS(event, r' from Duke(?: |$)')
     AND TIMESTAMP_SECONDS(SAFE_CAST(timestamp AS INT64)) >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 30 DAY)
   GROUP BY
     user_name
