@@ -98,15 +98,15 @@ rate_calculation AS (
     pot.role,
     pot.position_id,
     -- Calculate rate of advancement: slope of progress over time
-    CASE
-      WHEN COUNT(DISTINCT pot.executed_date) >= 2 THEN
-        ROUND(
-          (MAX(pot.avg_progress_for_date) - MIN(pot.avg_progress_for_date)) /
-          NULLIF(DATE_DIFF(MAX(pot.executed_date), MIN(pot.executed_date), DAY), 0) * 1.0,
-          0
-        ) * 100.0 / 100.0, 2
-      ELSE 0
-    END AS rate_of_advancement
+                CASE
+                  WHEN COUNT(DISTINCT pot.executed_date) >= 2 THEN
+                    ROUND(
+                      (MAX(pot.avg_progress_for_date) - MIN(pot.avg_progress_for_date)) /
+                      NULLIF(DATE_DIFF(MAX(pot.executed_date), MIN(pot.executed_date), DAY), 0),
+                      2
+                    )
+                  ELSE 0
+                END AS rate_of_advancement
   FROM
     progress_over_time AS pot
   GROUP BY

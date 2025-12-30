@@ -458,9 +458,9 @@ class OCEmailGenerator:
                   WHEN COUNT(DISTINCT pot.executed_date) >= 2 THEN
                     ROUND(
                       (MAX(pot.avg_progress_for_date) - MIN(pot.avg_progress_for_date)) /
-                      NULLIF(DATE_DIFF(MAX(pot.executed_date), MIN(pot.executed_date), DAY), 0) * 1.0,
-                      0
-                    ) * 100.0 / 100.0, 2
+                      NULLIF(DATE_DIFF(MAX(pot.executed_date), MIN(pot.executed_date), DAY), 0),
+                      2
+                    )
                   ELSE 0
                 END AS rate_of_advancement
               FROM
