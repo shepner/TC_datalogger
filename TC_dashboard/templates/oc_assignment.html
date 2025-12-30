@@ -293,8 +293,16 @@
             const members = new Map(); // key: member_name, value: {member_name, data: Map of "difficulty_oc_name_position_id" -> max checkpoint_pass_rate}
 
             filteredData.forEach(record => {
-                // Get difficulty, defaulting to null if undefined
-                const difficulty = record.difficulty != null ? record.difficulty : null;
+                // Get difficulty - handle both string and number types
+                let difficulty = record.difficulty;
+                if (difficulty === undefined || difficulty === null) {
+                    // Try alternative field names
+                    difficulty = record.oc_level || record.difficulty_level || null;
+                }
+                // Convert to number if it's a string
+                if (typeof difficulty === 'string' && difficulty !== '') {
+                    difficulty = parseInt(difficulty, 10);
+                }
                 
                 // Build column key for member data
                 const columnKey = `${difficulty}_${record.oc_name}_${record.position_id}`;
