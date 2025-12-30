@@ -362,7 +362,7 @@ class OCEmailGenerator:
         Returns:
             List of performance dictionaries
         """
-        query_file = "sql_queries/oc_performance_by_role.sql"
+        query_file = "sql_queries/oc_performance_pivot.sql"
         
         # Read query from file
         from pathlib import Path

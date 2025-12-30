@@ -255,7 +255,7 @@
             // Build history data map
             historyData.clear();
             performanceData.forEach(record => {
-                const key = `${record.member_id}_${record.oc_name}_${record.position_id}`;
+                const key = `${record.member_name}_${record.oc_name}_${record.position_id}`;
                 if (!historyData.has(key)) {
                     historyData.set(key, []);
                 }
@@ -279,7 +279,7 @@
             const ocLevelFilter = document.getElementById('oc_level_filter').value;
             let filteredData = data;
             if (ocLevelFilter) {
-                filteredData = data.filter(r => r.oc_level == ocLevelFilter);
+                filteredData = data.filter(r => r.difficulty == ocLevelFilter);
             }
 
             if (filteredData.length === 0) {
@@ -287,70 +287,95 @@
                 return;
             }
 
-            // Build column structure: OC Name + Position (e.g., "Mob Mentality - Looter (0)")
-            const columns = new Map(); // key: "oc_name_position_id", value: {oc_name, position, position_id, oc_level}
-            const members = new Map(); // key: member_id, value: {member_id, member_name, data: Map of column_key -> most_recent_record}
+            // Build hierarchical column structure: difficulty -> oc_name -> position_id
+            // Group data by difficulty -> oc_name -> position_id
+            const columnGroups = new Map(); // key: difficulty, value: Map of oc_name -> Map of position_id -> {position, position_id}
+            const members = new Map(); // key: member_name, value: {member_name, data: Map of "difficulty_oc_name_position_id" -> max checkpoint_pass_rate}
 
             filteredData.forEach(record => {
-                // Create column key
-                const columnKey = `${record.oc_name}_${record.position_id}`;
-                if (!columns.has(columnKey)) {
-                    columns.set(columnKey, {
-                        oc_name: record.oc_name,
+                // Build column key for member data
+                const columnKey = `${record.difficulty}_${record.oc_name}_${record.position_id}`;
+                
+                // Build hierarchical column structure
+                if (!columnGroups.has(record.difficulty)) {
+                    columnGroups.set(record.difficulty, new Map());
+                }
+                const difficultyGroup = columnGroups.get(record.difficulty);
+                if (!difficultyGroup.has(record.oc_name)) {
+                    difficultyGroup.set(record.oc_name, new Map());
+                }
+                const ocGroup = difficultyGroup.get(record.oc_name);
+                if (!ocGroup.has(record.position_id)) {
+                    ocGroup.set(record.position_id, {
                         position: record.position,
-                        position_id: record.position_id,
-                        oc_level: record.oc_level
+                        position_id: record.position_id
                     });
                 }
 
-                // Create member entry
-                if (!members.has(record.member_id)) {
-                    members.set(record.member_id, {
-                        member_id: record.member_id,
+                // Store member data - keep MAX checkpoint_pass_rate
+                if (!members.has(record.member_name)) {
+                    members.set(record.member_name, {
                         member_name: record.member_name,
                         data: new Map()
                     });
                 }
-
-                // Store most recent record for this member/column combination
-                const memberData = members.get(record.member_id);
-                if (!memberData.data.has(columnKey)) {
-                    memberData.data.set(columnKey, record);
-                } else {
-                    // Keep the most recent one
-                    const existing = memberData.data.get(columnKey);
-                    const existingDate = existing.executed_at ? new Date(existing.executed_at).getTime() : 0;
-                    const newDate = record.executed_at ? new Date(record.executed_at).getTime() : 0;
-                    if (newDate > existingDate) {
-                        memberData.data.set(columnKey, record);
-                    }
+                const memberData = members.get(record.member_name);
+                const currentMax = memberData.data.get(columnKey);
+                const checkpointRate = record.checkpoint_pass_rate || 0;
+                if (!currentMax || checkpointRate > currentMax) {
+                    memberData.data.set(columnKey, checkpointRate);
                 }
             });
 
-            // Sort columns: by OC level (desc), then OC name, then position_id
-            const sortedColumns = Array.from(columns.entries()).sort((a, b) => {
-                const colA = a[1];
-                const colB = b[1];
-                if (colA.oc_level !== colB.oc_level) {
-                    return colB.oc_level - colA.oc_level; // Higher level first
-                }
-                if (colA.oc_name !== colB.oc_name) {
-                    return colA.oc_name.localeCompare(colB.oc_name);
-                }
-                return colA.position_id.localeCompare(colB.position_id);
-            });
-
-            // Build header
+            // Build header with hierarchical structure
             const header = document.getElementById('pivot-header');
             header.innerHTML = '';
-            const headerRow = document.createElement('tr');
-            headerRow.innerHTML = '<th style="padding: 8px; border: 1px solid #ddd; position: sticky; left: 0; background-color: #4CAF50; z-index: 11; text-align: left;">Member</th>';
             
-            sortedColumns.forEach(([columnKey, colInfo]) => {
-                const displayName = `${colInfo.position} (${colInfo.position_id.replace('P', '')})`;
-                headerRow.innerHTML += `<th style="padding: 8px; border: 1px solid #ddd; white-space: nowrap; text-align: center;" title="L${colInfo.oc_level} ${colInfo.oc_name}">${displayName}</th>`;
+            // First row: difficulty headers (with colspan)
+            const headerRow1 = document.createElement('tr');
+            headerRow1.innerHTML = '<th rowspan="2" style="padding: 8px; border: 1px solid #ddd; position: sticky; left: 0; background-color: #4CAF50; z-index: 11; text-align: left;">Member</th>';
+            
+            const sortedDifficulties = Array.from(columnGroups.keys()).sort((a, b) => b - a); // Higher difficulty first
+            sortedDifficulties.forEach(difficulty => {
+                const difficultyGroup = columnGroups.get(difficulty);
+                let totalCols = 0;
+                difficultyGroup.forEach(ocGroup => {
+                    totalCols += ocGroup.size;
+                });
+                if (totalCols > 0) {
+                    headerRow1.innerHTML += `<th colspan="${totalCols}" style="padding: 8px; border: 1px solid #ddd; text-align: center; background-color: #4CAF50; color: white;">Level ${difficulty}</th>`;
+                }
             });
-            header.appendChild(headerRow);
+            header.appendChild(headerRow1);
+
+            // Second row: oc_name headers (with colspan for position_ids)
+            const headerRow2 = document.createElement('tr');
+            sortedDifficulties.forEach(difficulty => {
+                const difficultyGroup = columnGroups.get(difficulty);
+                const sortedOCNames = Array.from(difficultyGroup.keys()).sort();
+                sortedOCNames.forEach(ocName => {
+                    const ocGroup = difficultyGroup.get(ocName);
+                    const sortedPositionIds = Array.from(ocGroup.keys()).sort();
+                    headerRow2.innerHTML += `<th colspan="${sortedPositionIds.length}" style="padding: 8px; border: 1px solid #ddd; text-align: center; background-color: #4CAF50; color: white;">${ocName}</th>`;
+                });
+            });
+            header.appendChild(headerRow2);
+
+            // Third row: position_id headers
+            const headerRow3 = document.createElement('tr');
+            sortedDifficulties.forEach(difficulty => {
+                const difficultyGroup = columnGroups.get(difficulty);
+                const sortedOCNames = Array.from(difficultyGroup.keys()).sort();
+                sortedOCNames.forEach(ocName => {
+                    const ocGroup = difficultyGroup.get(ocName);
+                    const sortedPositionIds = Array.from(ocGroup.keys()).sort();
+                    sortedPositionIds.forEach(positionId => {
+                        const posInfo = ocGroup.get(positionId);
+                        headerRow3.innerHTML += `<th style="padding: 8px; border: 1px solid #ddd; text-align: center; background-color: #4CAF50; color: white;">${positionId}</th>`;
+                    });
+                });
+            });
+            header.appendChild(headerRow3);
 
             // Build body
             const tbody = document.getElementById('pivot-body');
@@ -365,21 +390,29 @@
                 const row = document.createElement('tr');
                 row.innerHTML = `<td style="padding: 6px; border: 1px solid #ddd; position: sticky; left: 0; background-color: white; font-weight: bold;">${member.member_name}</td>`;
                 
-                sortedColumns.forEach(([columnKey, colInfo]) => {
-                    const record = member.data.get(columnKey);
-                    if (record) {
-                        const progress = record.progress || 0;
-                        const progressClass = progress >= 90 ? 'cell-green' : (progress >= 80 ? 'cell-yellow' : 'cell-red');
-                        const historyKey = `${member.member_id}_${colInfo.oc_name}_${colInfo.position_id}`;
-                        const hasHistory = historyData.has(historyKey) && historyData.get(historyKey).length > 1;
-                        
-                        row.innerHTML += `<td class="${progressClass}" style="padding: 6px; border: 1px solid #ddd; text-align: center;">
-                            <div style="font-weight: bold;">${progress.toFixed(0)}%</div>
-                            ${hasHistory ? '<div style="font-size: 10px; color: #4CAF50; cursor: pointer;" onclick="showHistory(\'' + historyKey + '\')" title="Click to view history">history</div>' : ''}
-                        </td>`;
-                    } else {
-                        row.innerHTML += '<td style="padding: 6px; border: 1px solid #ddd; text-align: center; color: #ccc;">—</td>';
-                    }
+                sortedDifficulties.forEach(difficulty => {
+                    const difficultyGroup = columnGroups.get(difficulty);
+                    const sortedOCNames = Array.from(difficultyGroup.keys()).sort();
+                    sortedOCNames.forEach(ocName => {
+                        const ocGroup = difficultyGroup.get(ocName);
+                        const sortedPositionIds = Array.from(ocGroup.keys()).sort();
+                        sortedPositionIds.forEach(positionId => {
+                            const columnKey = `${difficulty}_${ocName}_${positionId}`;
+                            const checkpointRate = member.data.get(columnKey);
+                            
+                            if (checkpointRate !== undefined) {
+                                // Color coding based on checkpoint_pass_rate (0-100)
+                                let cellClass = '';
+                                if (checkpointRate >= 90) cellClass = 'cell-green';
+                                else if (checkpointRate >= 80) cellClass = 'cell-yellow';
+                                else cellClass = 'cell-red';
+                                
+                                row.innerHTML += `<td class="${cellClass}" style="padding: 6px; border: 1px solid #ddd; text-align: center; font-weight: bold;">${checkpointRate}</td>`;
+                            } else {
+                                row.innerHTML += '<td style="padding: 6px; border: 1px solid #ddd; text-align: center; color: #ccc;">—</td>';
+                            }
+                        });
+                    });
                 });
                 
                 tbody.appendChild(row);
@@ -392,7 +425,7 @@
 
             const historyText = records.map(r => {
                 const date = r.executed_at ? new Date(r.executed_at).toLocaleDateString() : 'Unknown';
-                return `${date}: ${(r.progress || 0).toFixed(0)}%`;
+                return `${date}: ${r.checkpoint_pass_rate || 0}`;
             }).join('\n');
 
             alert(`History for ${records[0].oc_name} - ${records[0].position}:\n\n${historyText}`);
