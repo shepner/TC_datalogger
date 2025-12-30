@@ -424,7 +424,7 @@ class OCEmailGenerator:
             ON
               os.member_id = m.id
             ORDER BY
-              os.member_name ASC,
+              member_name ASC,
               os.oc_level DESC,
               os.oc_name ASC,
               os.position ASC,
