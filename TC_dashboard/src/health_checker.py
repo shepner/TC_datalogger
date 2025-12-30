@@ -40,6 +40,12 @@ class HealthChecker:
             "log_path": "/app/logs/user_events/cron.log",
             "log_path_host": "TC_user_events/logs/cron.log",
         },
+        "tc-faction-chains": {
+            "name": "TC Faction Chains",
+            "container": "tc-faction-chains-pipeline",
+            "log_path": "/app/logs/faction_chains/cron.log",
+            "log_path_host": "TC_faction_chains/logs/cron.log",
+        },
     }
 
     def __init__(self, base_path: Optional[str] = None):

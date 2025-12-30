@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Faction Requirements Report - Torn City Faction Management</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='dashboard.css') }}">
+    <style>
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        button {
+            padding: 8px 16px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        button.secondary {
+            background-color: #2196F3;
+        }
+        .table-container {
+            max-height: 70vh;
+            overflow-y: auto;
+            overflow-x: auto;
+            border: 1px solid #ddd;
+            margin-top: 20px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+        thead {
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        th, td {
+            padding: 6px 8px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+            border-right: 1px solid #eee;
+            white-space: nowrap;
+        }
+        th {
+            background-color: #4CAF50;
+            color: white;
+            cursor: pointer;
+            user-select: none;
+            position: relative;
+        }
+        th:hover {
+            background-color: #45a049;
+        }
+        th.sortable::after {
+            content: ' ↕';
+            opacity: 0.5;
+            font-size: 10px;
+        }
+        th.sort-asc::after {
+            content: ' ↑';
+            opacity: 1;
+        }
+        th.sort-desc::after {
+            content: ' ↓';
+            opacity: 1;
+        }
+        tbody tr:hover {
+            background-color: #f5f5f5;
+        }
+        /* Stoplight color coding */
+        .cell-green {
+            background-color: #c8e6c9;
+            font-weight: 500;
+        }
+        .cell-yellow {
+            background-color: #fff9c4;
+            font-weight: 500;
+        }
+        .cell-red {
+            background-color: #ffcdd2;
+            font-weight: 500;
+        }
+        .met {
+            color: #2e7d32;
+            font-weight: bold;
+        }
+        .not-met {
+            color: #c62828;
+            font-weight: bold;
+        }
+        .action-promote {
+            background-color: #4CAF50;
+            color: white;
+            padding: 3px 6px;
+            border-radius: 3px;
+            font-size: 11px;
+        }
+        .action-demote {
+            background-color: #ff9800;
+            color: white;
+            padding: 3px 6px;
+            border-radius: 3px;
+            font-size: 11px;
+        }
+        .action-remove {
+            background-color: #f44336;
+            color: white;
+            padding: 3px 6px;
+            border-radius: 3px;
+            font-size: 11px;
+        }
+        .action-none {
+            color: #999;
+        }
+        /* Max Recommended OC level colors */
+        .oc-level-1 { background-color: #e3f2fd; }
+        .oc-level-2 { background-color: #bbdefb; }
+        .oc-level-3 { background-color: #90caf9; }
+        .oc-level-4 { background-color: #64b5f6; }
+        .oc-level-5 { background-color: #42a5f5; }
+        .oc-level-6 { background-color: #2196f3; color: white; }
+        .oc-level-7 { background-color: #1e88e5; color: white; }
+        .oc-level-8 { background-color: #1976d2; color: white; }
+        .oc-level-9 { background-color: #1565c0; color: white; }
+        .oc-level-10 { background-color: #0d47a1; color: white; }
+        .summary {
+            margin: 20px 0;
+            padding: 12px;
+            background-color: #f5f5f5;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        .error {
+            color: red;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Faction Requirements Report</h1>
+            <p>Track member compliance with faction requirements</p>
+        </header>
+
+        <button onclick="loadReport()">Refresh Report</button>
+        <a href="/"><button class="secondary">Back to Dashboard</button></a>
+
+        <div id="error" class="error" style="display: none;"></div>
+
+        <div id="summary" class="summary" style="display: none;">
+            <h3>Summary</h3>
+            <div id="summary-content"></div>
+        </div>
+
+        <div id="report-container">
+            <div class="table-container">
+                <table id="report-table" style="display: none;">
+                    <thead>
+                        <tr>
+                            <th class="sortable" data-column="member_name">Member</th>
+                            <th class="sortable" data-column="level">Level</th>
+                            <th class="sortable" data-column="position">Position</th>
+                            <th class="sortable" data-column="days_in_faction">Days in Faction</th>
+                            <th class="sortable" data-column="days_inactive">Days Inactive</th>
+                            <th class="sortable" data-column="oc_count_30d">OC (30d)</th>
+                            <th class="sortable" data-column="oc_requirement_met">OC Met</th>
+                            <th class="sortable" data-column="trading_count_30d">Trading (30d)</th>
+                            <th class="sortable" data-column="trading_requirement_met">Trading Met</th>
+                            <th class="sortable" data-column="chain_participation">Chains</th>
+                            <th class="sortable" data-column="all_requirements_met">All Met</th>
+                            <th class="sortable" data-column="can_promote">Can Promote</th>
+                            <th class="sortable" data-column="action">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="report-body">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function loadReport() {
+            document.getElementById('error').style.display = 'none';
+
+            try {
+                const response = await fetch('/api/requirements/report');
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.error || 'Failed to load report');
+                }
+
+                displayReport(data);
+            } catch (error) {
+                document.getElementById('error').textContent = error.message;
+                document.getElementById('error').style.display = 'block';
+            }
+        }
+
+        let currentSort = { column: null, direction: 'asc' };
+        let reportData = [];
+
+        function getCellClass(value, type) {
+            if (type === 'oc_count') {
+                return value >= 3 ? 'cell-green' : (value >= 1 ? 'cell-yellow' : 'cell-red');
+            } else if (type === 'trading_count') {
+                return value > 480 ? 'cell-green' : (value >= 240 ? 'cell-yellow' : 'cell-red');
+            } else if (type === 'days_inactive') {
+                return value === 0 ? 'cell-green' : (value <= 2 ? 'cell-yellow' : 'cell-red');
+            } else if (type === 'days_in_faction') {
+                return value >= 30 ? 'cell-green' : 'cell-yellow';
+            } else if (type === 'boolean') {
+                return value ? 'cell-green' : 'cell-red';
+            } else if (type === 'na') {
+                return 'cell-yellow';
+            }
+            return '';
+        }
+
+        function getOCLevelClass(level) {
+            if (level >= 1 && level <= 10) {
+                return `oc-level-${level}`;
+            }
+            return '';
+        }
+
+        function displayReport(data) {
+            const report = data.report;
+            const actions = data.actions;
+
+            // Store report data for sorting
+            reportData = report;
+
+            // Display summary
+            const summaryContent = document.getElementById('summary-content');
+            summaryContent.innerHTML = `
+                <p><strong>Promote:</strong> ${actions.promote.length} members</p>
+                <p><strong>Demote:</strong> ${actions.demote.length} members</p>
+                <p><strong>Remove:</strong> ${actions.remove.length} members</p>
+                <p><strong>No Action:</strong> ${actions.none.length} members</p>
+            `;
+            document.getElementById('summary').style.display = 'block';
+
+            // Render table
+            renderTable();
+            
+            // Attach sort handlers
+            attachSortHandlers();
+
+            document.getElementById('report-table').style.display = 'table';
+        }
+
+        function renderTable() {
+            const tbody = document.getElementById('report-body');
+            tbody.innerHTML = '';
+
+            reportData.forEach(member => {
+                const row = document.createElement('tr');
+                
+                const ocMet = member.oc_requirement_met ? '<span class="met">✓</span>' : '<span class="not-met">✗</span>';
+                const tradingMet = member.trading_requirement_met ? '<span class="met">✓</span>' : '<span class="not-met">✗</span>';
+                const chainsMet = member.chain_participation ? '<span class="met">✓</span>' : '<span class="not-met">✗</span>';
+                const allMet = member.all_requirements_met ? '<span class="met">✓</span>' : '<span class="not-met">✗</span>';
+                const canPromote = member.can_promote ? '<span class="met">✓</span>' : '<span class="not-met">✗</span>';
+                
+                const action = member.action || 'none';
+                const actionClass = `action-${action}`;
+                const actionDisplay = action === 'none' ? '-' : `<span class="${actionClass}">${action.toUpperCase()}</span>`;
+
+                const ocCount = member.oc_count_30d || 0;
+                const tradingCount = member.trading_count_30d || 0;
+                const daysInactive = member.days_inactive || 0;
+                const daysInFaction = member.days_in_faction || 0;
+                const level = member.level || 0;
+                
+                // Handle N/A case (days_in_faction < 30)
+                const isNA = daysInFaction < 30;
+                const allMetDisplay = isNA ? 'N/A' : (member.all_requirements_met ? '<span class="met">✓</span>' : '<span class="not-met">✗</span>');
+                const canPromoteDisplay = isNA ? 'N/A' : (member.can_promote ? '<span class="met">✓</span>' : '<span class="not-met">✗</span>');
+                const allMetClass = isNA ? getCellClass(null, 'na') : getCellClass(member.all_requirements_met, 'boolean');
+                const canPromoteClass = isNA ? getCellClass(null, 'na') : getCellClass(member.can_promote, 'boolean');
+
+                row.innerHTML = `
+                    <td>${member.member_name}</td>
+                    <td class="${getOCLevelClass(level)}">${level}</td>
+                    <td>${member.position || '-'}</td>
+                    <td class="${getCellClass(daysInFaction, 'days_in_faction')}">${daysInFaction}</td>
+                    <td class="${getCellClass(daysInactive, 'days_inactive')}">${daysInactive}</td>
+                    <td class="${getCellClass(ocCount, 'oc_count')}">${ocCount}</td>
+                    <td class="${getCellClass(member.oc_requirement_met, 'boolean')}">${ocMet}</td>
+                    <td class="${getCellClass(tradingCount, 'trading_count')}">${tradingCount}</td>
+                    <td class="${getCellClass(member.trading_requirement_met, 'boolean')}">${tradingMet}</td>
+                    <td class="${getCellClass(member.chain_participation, 'boolean')}">${chainsMet}</td>
+                    <td class="${allMetClass}">${allMetDisplay}</td>
+                    <td class="${canPromoteClass}">${canPromoteDisplay}</td>
+                    <td>${actionDisplay}</td>
+                `;
+
+                tbody.appendChild(row);
+            });
+        }
+
+        function sortTable(column) {
+            if (currentSort.column === column) {
+                currentSort.direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
+            } else {
+                currentSort.column = column;
+                currentSort.direction = 'asc';
+            }
+
+            reportData.sort((a, b) => {
+                let aVal = a[column];
+                let bVal = b[column];
+
+                // Handle null/undefined - treat null as less than everything
+                if (aVal == null && bVal == null) return 0;
+                if (aVal == null) return 1;  // null sorts to end
+                if (bVal == null) return -1; // null sorts to end
+
+                // Handle booleans
+                if (typeof aVal === 'boolean') {
+                    aVal = aVal ? 1 : 0;
+                    bVal = bVal ? 1 : 0;
+                }
+
+                // Handle strings
+                if (typeof aVal === 'string') {
+                    aVal = aVal.toLowerCase();
+                    bVal = bVal.toLowerCase();
+                }
+
+                // Handle numbers
+                if (typeof aVal === 'number' && typeof bVal === 'number') {
+                    return currentSort.direction === 'asc' ? aVal - bVal : bVal - aVal;
+                }
+
+                let comparison = 0;
+                if (aVal < bVal) comparison = -1;
+                if (aVal > bVal) comparison = 1;
+
+                return currentSort.direction === 'asc' ? comparison : -comparison;
+            });
+
+            // Update header sort indicators
+            document.querySelectorAll('th.sortable').forEach(th => {
+                th.classList.remove('sort-asc', 'sort-desc');
+                if (th.dataset.column === column) {
+                    th.classList.add(`sort-${currentSort.direction}`);
+                }
+            });
+
+            renderTable();
+            // Re-attach handlers after re-rendering
+            attachSortHandlers();
+        }
+
+        function attachSortHandlers() {
+            // Remove all existing listeners by removing and re-adding
+            document.querySelectorAll('th.sortable').forEach(th => {
+                // Clone to remove all event listeners
+                const newTh = th.cloneNode(true);
+                th.parentNode.replaceChild(newTh, th);
+                
+                // Add click listener
+                newTh.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    const column = newTh.dataset.column;
+                    if (column) {
+                        sortTable(column);
+                    }
+                });
+            });
+        }
+
+        // Load report on page load
+        window.addEventListener('DOMContentLoaded', loadReport);
+    </script>
+</body>
+</html>
+

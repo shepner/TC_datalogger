@@ -51,6 +51,19 @@ services:
       - ./TC_user_events/config/TC_API_config.json:/app/config/TC_API_config.json:ro
       - ./TC_user_events/logs:/app/logs
 
+  tc-faction-chains:
+    build:
+      context: ./TC_faction_chains
+      dockerfile: Dockerfile
+    container_name: tc-faction-chains-pipeline
+    restart: unless-stopped
+    environment:
+      - TZ=America/Chicago
+    volumes:
+      - ./TC_faction_chains/config/credentials.json:/app/config/credentials.json:ro
+      - ./TC_faction_chains/config/TC_API_config.json:/app/config/TC_API_config.json:ro
+      - ./TC_faction_chains/logs:/app/logs
+
   tc-dashboard:
     build:
       context: ./TC_dashboard
@@ -68,6 +81,9 @@ services:
       - ./TC_faction_members/logs:/app/logs/faction_members:ro
       - ./TC_items/logs:/app/logs/items:ro
       - ./TC_user_events/logs:/app/logs/user_events:ro
+      - ./TC_faction_chains/logs:/app/logs/faction_chains:ro
       - ./TC_dashboard:/app/data:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
+      # Mount credentials for BigQuery access (use one of the microservice credentials)
+      - ./TC_faction_crimes/config/credentials.json:/app/config/credentials.json:ro
 

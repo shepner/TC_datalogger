@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trading Items Dashboard - Torn City Faction Management</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='dashboard.css') }}">
+    <style>
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .filters {
+            margin-bottom: 20px;
+            padding: 15px;
+            background-color: #f5f5f5;
+            border-radius: 4px;
+        }
+        .filters input, .filters select {
+            padding: 8px;
+            margin-right: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        button {
+            padding: 8px 16px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 5px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        button.secondary {
+            background-color: #2196F3;
+        }
+        button.small {
+            padding: 4px 8px;
+            font-size: 12px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        th {
+            background-color: #4CAF50;
+            color: white;
+        }
+        tr:hover {
+            background-color: #f5f5f5;
+        }
+        .actions {
+            white-space: nowrap;
+        }
+        .error {
+            color: red;
+            margin-top: 10px;
+        }
+        .success {
+            color: green;
+            margin-top: 10px;
+        }
+        .paid {
+            text-decoration: line-through;
+            color: #999;
+        }
+        .copy-container {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            margin: 10px 0;
+            padding: 8px 12px;
+            background-color: #f5f5f5;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 13px;
+        }
+        .copy-button {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 24px;
+            height: 24px;
+            padding: 0;
+            background-color: transparent;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            cursor: pointer;
+            color: #666;
+            font-size: 14px;
+            margin: 0;
+        }
+        .copy-button:hover {
+            background-color: #e8e8e8;
+            border-color: #999;
+            color: #333;
+        }
+        .copy-button:active {
+            background-color: #ddd;
+        }
+        .copy-text {
+            flex: 1;
+            user-select: all;
+            cursor: text;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Trading Items Dashboard</h1>
+            <p>View and manage pending trades from members</p>
+        </header>
+
+        <div class="filters">
+            <label>Days Back:</label>
+            <input type="number" id="days_back" value="30" min="1" max="365">
+            
+            <label>View:</label>
+            <select id="view_mode">
+                <option value="grouped" selected>Grouped by Member</option>
+                <option value="individual">Individual Trades</option>
+            </select>
+            
+            <label>Member Filter:</label>
+            <input type="text" id="member_filter" placeholder="Optional member name">
+            
+            <button onclick="loadTrades()">Load Trades</button>
+            <a href="/"><button class="secondary">Back to Dashboard</button></a>
+        </div>
+
+        <div id="error" class="error" style="display: none;"></div>
+        <div id="success" class="success" style="display: none;"></div>
+
+        <div id="summary-container" style="display: none;">
+            <div class="copy-container">
+                <button class="copy-button" onclick="copySummary(this)" title="Copy to clipboard">📋</button>
+                <span class="copy-text" id="summary-text"></span>
+            </div>
+        </div>
+
+        <div id="trades-container">
+            <!-- Grouped view table -->
+            <table id="grouped-table" style="display: none;">
+                <thead>
+                    <tr>
+                        <th>Member</th>
+                        <th>Trade Count</th>
+                        <th>Total Quantity</th>
+                        <th>Total Payment</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="grouped-body">
+                </tbody>
+            </table>
+            
+            <!-- Individual view table -->
+            <table id="trades-table" style="display: none;">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Member</th>
+                        <th>Item</th>
+                        <th>Quantity</th>
+                        <th>Market Price</th>
+                        <th>Market Value</th>
+                        <th>Payment Amount</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="trades-body">
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        let currentTrades = [];
+        let isGrouped = true;
+
+        async function loadTrades() {
+            const daysBack = document.getElementById('days_back').value;
+            const memberFilter = document.getElementById('member_filter').value;
+            const viewMode = document.getElementById('view_mode').value;
+            isGrouped = viewMode === 'grouped';
+
+            document.getElementById('error').style.display = 'none';
+            document.getElementById('success').style.display = 'none';
+
+            try {
+                let url = `/api/trading/pending?days_back=${daysBack}&grouped=${isGrouped}`;
+                if (memberFilter && !isGrouped) {
+                    url += `&member=${encodeURIComponent(memberFilter)}`;
+                }
+
+                const response = await fetch(url);
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.error || 'Failed to load trades');
+                }
+
+                currentTrades = data.trades;
+                if (isGrouped) {
+                    displayGroupedTrades(currentTrades);
+                } else {
+                    displayTrades(currentTrades);
+                }
+            } catch (error) {
+                document.getElementById('error').textContent = error.message;
+                document.getElementById('error').style.display = 'block';
+            }
+        }
+
+        function displayTrades(trades) {
+            const tbody = document.getElementById('trades-body');
+            tbody.innerHTML = '';
+
+            if (trades.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="8">No pending trades found</td></tr>';
+                document.getElementById('trades-table').style.display = 'table';
+                return;
+            }
+
+            trades.forEach(trade => {
+                const row = document.createElement('tr');
+                row.dataset.eventId = trade.event_id;
+
+                const date = new Date(trade.timestamp);
+                const totalValue = trade.total_value || 0;
+                const marketPrice = trade.market_price || 0;
+                const paymentAmount = trade.payment_amount || 0;
+
+                row.innerHTML = `
+                    <td>${date.toLocaleString()}</td>
+                    <td>${trade.user_name || 'Unknown'}</td>
+                    <td>${trade.item_name || 'Unknown Item'}</td>
+                    <td>${trade.quantity || 0}</td>
+                    <td>$${marketPrice.toLocaleString()}</td>
+                    <td>$${totalValue.toLocaleString()}</td>
+                    <td>$${paymentAmount.toLocaleString()}</td>
+                    <td class="actions">
+                        <button class="small" onclick="copyValue('${paymentAmount}')">Copy Payment</button>
+                        <button class="small" onclick="copyChatMessage(${JSON.stringify(trade)})">Copy Chat</button>
+                        <button class="small" data-event-id="${trade.event_id}" data-trade='${JSON.stringify(trade)}' onclick="markAsPaidFromButton(this)">Mark Paid</button>
+                        <button class="small" onclick="unmarkAsPaid('${trade.event_id}')">Unmark Paid</button>
+                    </td>
+                `;
+
+                tbody.appendChild(row);
+            });
+
+            document.getElementById('trades-table').style.display = 'table';
+            document.getElementById('grouped-table').style.display = 'none';
+            
+            // Generate summary text for individual trades
+            const summaryLines = trades.map(trade => {
+                const paymentAmount = trade.payment_amount || 0;
+                return `${trade.user_name || 'Unknown'}: ${trade.item_name || 'Unknown'} x${trade.quantity || 0} = $${paymentAmount.toLocaleString()}`;
+            });
+            const summaryText = summaryLines.join('\n');
+            document.getElementById('summary-text').textContent = summaryText;
+            document.getElementById('summary-container').style.display = 'block';
+        }
+
+        function displayGroupedTrades(memberGroups) {
+            const tbody = document.getElementById('grouped-body');
+            tbody.innerHTML = '';
+
+            if (memberGroups.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5">No pending trades found</td></tr>';
+                document.getElementById('grouped-table').style.display = 'table';
+                document.getElementById('trades-table').style.display = 'none';
+                document.getElementById('summary-container').style.display = 'none';
+                return;
+            }
+
+            // Generate summary text for copy/paste
+            const summaryLines = memberGroups.map(member => {
+                const totalPayment = member.total_payment_amount || 0;
+                return `${member.member_name}: $${totalPayment.toLocaleString()}`;
+            });
+            const summaryText = summaryLines.join('\n');
+            document.getElementById('summary-text').textContent = summaryText;
+            document.getElementById('summary-container').style.display = 'block';
+
+            memberGroups.forEach(member => {
+                const row = document.createElement('tr');
+                const totalPayment = member.total_payment_amount || 0;
+                const tradeCount = member.trade_count || 0;
+                const totalQuantity = member.total_quantity || 0;
+                
+                // Handle trades - could be array or nested structure from BigQuery
+                let trades = member.trades || [];
+                if (!Array.isArray(trades)) {
+                    trades = [];
+                }
+                
+                // Flatten trades if they're nested structures
+                trades = trades.map(t => {
+                    if (typeof t === 'object' && t !== null) {
+                        // Handle BigQuery STRUCT format
+                        return {
+                            event_id: t.event_id || t.get && t.get('event_id'),
+                            timestamp: t.timestamp || t.get && t.get('timestamp'),
+                            item_name: t.item_name || t.get && t.get('item_name'),
+                            quantity: t.quantity || t.get && t.get('quantity'),
+                            market_price: t.market_price || t.get && t.get('market_price'),
+                            payment_amount: t.payment_amount || t.get && t.get('payment_amount')
+                        };
+                    }
+                    return t;
+                });
+                
+                const tradesHtml = trades.map(trade => {
+                    const date = new Date(trade.timestamp);
+                    const individualPayment = trade.payment_amount || 0;
+                    const tradeJson = JSON.stringify(trade).replace(/'/g, "\\'");
+                    return `
+                        <tr class="trade-detail">
+                            <td>${date.toLocaleString()}</td>
+                            <td>${trade.item_name || 'Unknown'}</td>
+                            <td>${trade.quantity || 0}</td>
+                            <td>$${(trade.market_price || 0).toLocaleString()}</td>
+                            <td>$${individualPayment.toLocaleString()}</td>
+                            <td class="actions">
+                                <button class="small" onclick="copyChatMessage(${JSON.stringify(trade)})">Copy Chat</button>
+                                <button class="small" data-event-id="${trade.event_id}" data-trade='${JSON.stringify(trade)}' onclick="markAsPaidFromButton(this)">Mark Paid</button>
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+
+                row.innerHTML = `
+                    <td>
+                        <button class="small" onclick="toggleMemberTrades(this)" style="margin-right: 5px;">▶</button>
+                        ${member.member_name || 'Unknown'}
+                    </td>
+                    <td>${tradeCount}</td>
+                    <td>${totalQuantity}</td>
+                    <td>$${totalPayment.toLocaleString()}</td>
+                    <td class="actions">
+                        <button class="small" onclick="copyValue('${totalPayment}')">Copy Total</button>
+                        <button class="small" onclick="markAllAsPaid('${member.member_name}', ${JSON.stringify(trades)})">Mark All Paid</button>
+                    </td>
+                `;
+
+                tbody.appendChild(row);
+                
+                // Add detail rows
+                const detailRow = document.createElement('tr');
+                detailRow.innerHTML = `
+                    <td colspan="5">
+                        <table style="width: 100%; margin-left: 20px; font-size: 12px;">
+                            <thead>
+                                <tr style="background-color: #e8f5e9;">
+                                    <th>Date</th>
+                                    <th>Item</th>
+                                    <th>Quantity</th>
+                                    <th>Market Price</th>
+                                    <th>Payment</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody class="member-trades-${member.member_name.replace(/\s+/g, '-')}">
+                                ${tradesHtml}
+                            </tbody>
+                        </table>
+                    </td>
+                `;
+                detailRow.style.display = 'none';
+                detailRow.className = 'member-details';
+                tbody.appendChild(detailRow);
+            });
+
+            document.getElementById('grouped-table').style.display = 'table';
+            document.getElementById('trades-table').style.display = 'none';
+        }
+
+        function copySummary(button) {
+            const summaryText = document.getElementById('summary-text').textContent;
+            navigator.clipboard.writeText(summaryText).then(() => {
+                // Visual feedback
+                const originalContent = button.innerHTML;
+                button.innerHTML = '✓';
+                button.style.color = '#4CAF50';
+                setTimeout(() => {
+                    button.innerHTML = originalContent;
+                    button.style.color = '';
+                }, 2000);
+            }).catch(err => {
+                console.error('Failed to copy:', err);
+                alert('Failed to copy to clipboard');
+            });
+        }
+
+        function toggleMemberTrades(button) {
+            const row = button.closest('tr');
+            const nextRow = row.nextElementSibling;
+            if (nextRow && nextRow.classList.contains('member-details')) {
+                const isVisible = nextRow.style.display !== 'none';
+                nextRow.style.display = isVisible ? 'none' : '';
+                button.textContent = isVisible ? '▶' : '▼';
+            }
+        }
+
+        async function markAllAsPaid(memberName, trades) {
+            if (!confirm(`Mark all ${trades.length} trades for ${memberName} as paid?`)) {
+                return;
+            }
+            
+            try {
+                for (const trade of trades) {
+                    const response = await fetch('/api/trading/mark-paid', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            event_id: trade.event_id,
+                            trade: trade
+                        })
+                    });
+                    
+                    if (!response.ok) {
+                        throw new Error(`Failed to mark trade ${trade.event_id} as paid`);
+                    }
+                }
+                
+                showSuccess(`Marked all trades for ${memberName} as paid`);
+                loadTrades();
+            } catch (error) {
+                showError(error.message);
+            }
+        }
+
+        function copyValue(value) {
+            navigator.clipboard.writeText(value).then(() => {
+                showSuccess('Value copied to clipboard!');
+            });
+        }
+
+        async function copyChatMessage(trade) {
+            try {
+                const response = await fetch('/api/trading/chat-message', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ trade: trade })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.error || 'Failed to format message');
+                }
+
+                navigator.clipboard.writeText(data.message).then(() => {
+                    showSuccess('Chat message copied to clipboard!');
+                });
+            } catch (error) {
+                showError(error.message);
+            }
+        }
+
+        async function unmarkAsPaid(eventId) {
+            if (!confirm('Unmark this trade as paid?')) {
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/trading/unmark-paid', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ event_id: eventId })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.error || 'Failed to unmark trade as paid');
+                }
+
+                showSuccess('Trade unmarked as paid');
+                loadTrades();
+            } catch (error) {
+                showError(error.message);
+            }
+        }
+
+        async function markAsPaidFromButton(button) {
+            const eventId = button.dataset.eventId;
+            const trade = JSON.parse(button.dataset.trade);
+            await markAsPaid(eventId, trade);
+        }
+
+        async function markAsPaid(eventId, trade) {
+            try {
+                const response = await fetch('/api/trading/mark-paid', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ 
+                        event_id: eventId,
+                        trade: trade
+                    })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.error || 'Failed to mark as paid');
+                }
+
+                // Remove from display
+                const row = document.querySelector(`tr[data-event-id="${eventId}"]`);
+                if (row) {
+                    row.classList.add('paid');
+                    row.querySelector('.actions').innerHTML = '<span style="color: green;">Paid</span>';
+                }
+
+                showSuccess('Trade marked as paid!');
+            } catch (error) {
+                showError(error.message);
+            }
+        }
+
+        function showError(message) {
+            const errorDiv = document.getElementById('error');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+            setTimeout(() => {
+                errorDiv.style.display = 'none';
+            }, 5000);
+        }
+
+        function showSuccess(message) {
+            const successDiv = document.getElementById('success');
+            successDiv.textContent = message;
+            successDiv.style.display = 'block';
+            setTimeout(() => {
+                successDiv.style.display = 'none';
+            }, 3000);
+        }
+
+        // Load trades on page load
+        window.addEventListener('DOMContentLoaded', loadTrades);
+    </script>
+</body>
+</html>
+

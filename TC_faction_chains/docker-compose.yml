@@ -1,0 +1,19 @@
+services:
+  tc-pipeline:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: tc-faction-chains-pipeline
+    restart: unless-stopped
+    environment:
+      - TZ=America/Chicago
+      # Add your API keys here or use .env file
+      # - TC_API_KEY_FACTION_40832=your_key_here
+    volumes:
+      # Mount credentials file
+      - ./config/credentials.json:/app/config/credentials.json:ro
+      # Mount config directory so changes take effect without rebuild
+      - ./config/TC_API_config.json:/app/config/TC_API_config.json:ro
+      # Mount logs directory for persistence
+      - ./logs:/app/logs
+
