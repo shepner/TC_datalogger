@@ -64,6 +64,33 @@
             color: green;
             margin-top: 10px;
         }
+        /* Pivot table header styling */
+        #pivot-header th {
+            border: 1px solid #ddd;
+            border-right: 1px solid #ddd;
+            border-bottom: 1px solid #ddd;
+        }
+        #pivot-header th.sortable {
+            cursor: pointer;
+            user-select: none;
+            position: relative;
+        }
+        #pivot-header th.sortable:hover {
+            background-color: #45a049;
+        }
+        #pivot-header th.sortable::after {
+            content: ' ↕';
+            opacity: 0.5;
+            font-size: 10px;
+        }
+        #pivot-header th.sort-asc::after {
+            content: ' ↑';
+            opacity: 1;
+        }
+        #pivot-header th.sort-desc::after {
+            content: ' ↓';
+            opacity: 1;
+        }
     </style>
 </head>
 <body>
@@ -235,6 +262,8 @@
         let performanceData = [];
         let currentSort = { column: null, direction: 'asc' };
         let historyData = new Map(); // Store history for each member/OC/position combination
+        let pivotColumnMap = new Map(); // Map column index to column key (difficulty_oc_name_position_id)
+        let pivotRows = []; // Store row data for sorting
 
         function toggleView() {
             const viewMode = document.querySelector('input[name="view_mode"]:checked').value;
@@ -378,7 +407,7 @@
             
             // First row: difficulty headers (with colspan)
             const headerRow1 = document.createElement('tr');
-            headerRow1.innerHTML = '<th rowspan="3" style="padding: 8px; border: 1px solid #ddd; position: sticky; left: 0; background-color: #4CAF50; z-index: 11; text-align: left;">Member</th>';
+            headerRow1.innerHTML = '<th rowspan="3" style="padding: 8px; border: 1px solid #ddd; border-right: 1px solid #ddd; position: sticky; left: 0; background-color: #4CAF50; z-index: 11; text-align: left;">Member</th>';
             
             const sortedDifficulties = Array.from(columnGroups.keys()).filter(d => d != null && typeof d === 'number').sort((a, b) => {
                 return b - a; // Higher difficulty first
@@ -390,7 +419,7 @@
                     totalCols += ocGroup.size;
                 });
                 if (totalCols > 0) {
-                    headerRow1.innerHTML += `<th colspan="${totalCols}" style="padding: 8px; border: 1px solid #ddd; text-align: center; background-color: #4CAF50; color: white;">Level ${difficulty}</th>`;
+                    headerRow1.innerHTML += `<th colspan="${totalCols}" style="padding: 8px; border: 1px solid #ddd; border-right: 1px solid #ddd; text-align: center; background-color: #4CAF50; color: white;">Level ${difficulty}</th>`;
                 }
             });
             header.appendChild(headerRow1);
@@ -403,13 +432,15 @@
                 sortedOCNames.forEach(ocName => {
                     const ocGroup = difficultyGroup.get(ocName);
                     const sortedPositionIds = Array.from(ocGroup.keys()).sort();
-                    headerRow2.innerHTML += `<th colspan="${sortedPositionIds.length}" style="padding: 8px; border: 1px solid #ddd; text-align: center; background-color: #4CAF50; color: white;">${ocName}</th>`;
+                    headerRow2.innerHTML += `<th colspan="${sortedPositionIds.length}" style="padding: 8px; border: 1px solid #ddd; border-right: 1px solid #ddd; text-align: center; background-color: #4CAF50; color: white;">${ocName}</th>`;
                 });
             });
             header.appendChild(headerRow2);
 
-            // Third row: position_id headers
+            // Third row: position_id headers (sortable)
             const headerRow3 = document.createElement('tr');
+            pivotColumnMap.clear(); // Reset column map
+            let columnIndex = 0; // Track column index (0 is Member column, so start at 1)
             sortedDifficulties.forEach(difficulty => {
                 const difficultyGroup = columnGroups.get(difficulty);
                 const sortedOCNames = Array.from(difficultyGroup.keys()).sort();
@@ -418,15 +449,22 @@
                     const sortedPositionIds = Array.from(ocGroup.keys()).sort();
                     sortedPositionIds.forEach(positionId => {
                         const posInfo = ocGroup.get(positionId);
-                        headerRow3.innerHTML += `<th style="padding: 8px; border: 1px solid #ddd; text-align: center; background-color: #4CAF50; color: white;">${positionId}</th>`;
+                        const columnKey = `${difficulty}_${ocName}_${positionId}`;
+                        pivotColumnMap.set(columnIndex + 1, columnKey); // +1 because column 0 is Member
+                        headerRow3.innerHTML += `<th class="sortable" data-column="${columnIndex + 1}" style="padding: 8px; border: 1px solid #ddd; border-right: 1px solid #ddd; text-align: center; background-color: #4CAF50; color: white; cursor: pointer;">${positionId}</th>`;
+                        columnIndex++;
                     });
                 });
             });
             header.appendChild(headerRow3);
+            
+            // Attach sort handlers to third row headers
+            attachPivotSortHandlers();
 
             // Build body
             const tbody = document.getElementById('pivot-body');
             tbody.innerHTML = '';
+            pivotRows = []; // Reset row data
 
             // Sort members by name
             const sortedMembers = Array.from(members.values()).sort((a, b) => 
@@ -435,7 +473,8 @@
 
             sortedMembers.forEach(member => {
                 const row = document.createElement('tr');
-                row.innerHTML = `<td style="padding: 6px; border: 1px solid #ddd; position: sticky; left: 0; background-color: white; font-weight: bold;">${member.member_name}</td>`;
+                const rowData = { member_name: member.member_name, cells: [] };
+                row.innerHTML = `<td style="padding: 6px; border: 1px solid #ddd; border-right: 1px solid #ddd; position: sticky; left: 0; background-color: white; font-weight: bold;">${member.member_name}</td>`;
                 
                 sortedDifficulties.forEach(difficulty => {
                     const difficultyGroup = columnGroups.get(difficulty);
@@ -447,6 +486,9 @@
                             const columnKey = `${difficulty}_${ocName}_${positionId}`;
                             const checkpointRate = member.data.get(columnKey);
                             
+                            // Store cell value for sorting
+                            rowData.cells.push(checkpointRate !== undefined ? checkpointRate : null);
+                            
                             if (checkpointRate !== undefined) {
                                 // Color coding: red for < 80 or > 90, no color for 80-90 range
                                 let cellClass = '';
@@ -454,12 +496,102 @@
                                     cellClass = 'cell-red';
                                 }
                                 
-                                row.innerHTML += `<td class="${cellClass}" style="padding: 6px; border: 1px solid #ddd; text-align: center; font-weight: bold;">${checkpointRate}</td>`;
+                                row.innerHTML += `<td class="${cellClass}" style="padding: 6px; border: 1px solid #ddd; border-right: 1px solid #ddd; text-align: center; font-weight: bold;">${checkpointRate}</td>`;
                             } else {
-                                row.innerHTML += '<td style="padding: 6px; border: 1px solid #ddd; text-align: center; color: #ccc;">—</td>';
+                                row.innerHTML += '<td style="padding: 6px; border: 1px solid #ddd; border-right: 1px solid #ddd; text-align: center; color: #ccc;">—</td>';
                             }
                         });
                     });
+                });
+                
+                pivotRows.push(rowData);
+                tbody.appendChild(row);
+            });
+        }
+        
+        function attachPivotSortHandlers() {
+            // Remove all existing listeners by removing and re-adding
+            document.querySelectorAll('#pivot-header th.sortable').forEach(th => {
+                // Clone to remove all event listeners
+                const newTh = th.cloneNode(true);
+                th.parentNode.replaceChild(newTh, th);
+                
+                // Add click listener
+                newTh.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    const columnIndex = parseInt(newTh.dataset.column);
+                    sortPivotTable(columnIndex);
+                });
+            });
+        }
+        
+        function sortPivotTable(columnIndex) {
+            if (currentSort.column === columnIndex) {
+                currentSort.direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
+            } else {
+                currentSort.column = columnIndex;
+                currentSort.direction = 'asc';
+            }
+
+            // Sort rows based on the selected column
+            pivotRows.sort((a, b) => {
+                let aVal = a.cells[columnIndex - 1]; // -1 because column 0 is Member
+                let bVal = b.cells[columnIndex - 1];
+
+                // Handle null/undefined - treat null as less than everything
+                if (aVal == null && bVal == null) {
+                    // If both null, sort by member name
+                    return a.member_name.localeCompare(b.member_name);
+                }
+                if (aVal == null) return 1;  // null sorts to end
+                if (bVal == null) return -1; // null sorts to end
+
+                // Handle numbers
+                if (typeof aVal === 'number' && typeof bVal === 'number') {
+                    const comparison = currentSort.direction === 'asc' ? aVal - bVal : bVal - aVal;
+                    // If equal, sort by member name
+                    return comparison !== 0 ? comparison : a.member_name.localeCompare(b.member_name);
+                }
+
+                // Fallback: compare as strings
+                const comparison = aVal < bVal ? -1 : (aVal > bVal ? 1 : 0);
+                const result = currentSort.direction === 'asc' ? comparison : -comparison;
+                // If equal, sort by member name
+                return result !== 0 ? result : a.member_name.localeCompare(b.member_name);
+            });
+
+            // Update header sort indicators
+            document.querySelectorAll('#pivot-header th.sortable').forEach(th => {
+                th.classList.remove('sort-asc', 'sort-desc');
+                if (parseInt(th.dataset.column) === columnIndex) {
+                    th.classList.add(`sort-${currentSort.direction}`);
+                }
+            });
+
+            // Re-render table body
+            renderPivotTableBody();
+        }
+        
+        function renderPivotTableBody() {
+            const tbody = document.getElementById('pivot-body');
+            tbody.innerHTML = '';
+            
+            // Render rows in sorted order
+            pivotRows.forEach(rowData => {
+                const row = document.createElement('tr');
+                row.innerHTML = `<td style="padding: 6px; border: 1px solid #ddd; border-right: 1px solid #ddd; position: sticky; left: 0; background-color: white; font-weight: bold;">${rowData.member_name}</td>`;
+                
+                rowData.cells.forEach((checkpointRate, idx) => {
+                    if (checkpointRate !== undefined && checkpointRate !== null) {
+                        // Color coding: red for < 80 or > 90, no color for 80-90 range
+                        let cellClass = '';
+                        if (checkpointRate < 80 || checkpointRate > 90) {
+                            cellClass = 'cell-red';
+                        }
+                        row.innerHTML += `<td class="${cellClass}" style="padding: 6px; border: 1px solid #ddd; border-right: 1px solid #ddd; text-align: center; font-weight: bold;">${checkpointRate}</td>`;
+                    } else {
+                        row.innerHTML += '<td style="padding: 6px; border: 1px solid #ddd; border-right: 1px solid #ddd; text-align: center; color: #ccc;">—</td>';
+                    }
                 });
                 
                 tbody.appendChild(row);
