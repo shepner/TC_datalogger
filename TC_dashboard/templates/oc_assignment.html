@@ -287,21 +287,34 @@
                 return;
             }
 
+            // Debug: Check first record structure
+            if (filteredData.length > 0) {
+                console.log('First record:', filteredData[0]);
+                console.log('Difficulty value:', filteredData[0].difficulty, 'Type:', typeof filteredData[0].difficulty);
+            }
+
             // Build hierarchical column structure: difficulty -> oc_name -> position_id
             // Group data by difficulty -> oc_name -> position_id
             const columnGroups = new Map(); // key: difficulty, value: Map of oc_name -> Map of position_id -> {position, position_id}
             const members = new Map(); // key: member_name, value: {member_name, data: Map of "difficulty_oc_name_position_id" -> max checkpoint_pass_rate}
 
             filteredData.forEach(record => {
-                // Get difficulty - handle both string and number types
+                // Get difficulty - ensure it's a number
                 let difficulty = record.difficulty;
+                
+                // Handle null/undefined
                 if (difficulty === undefined || difficulty === null) {
-                    // Try alternative field names
-                    difficulty = record.oc_level || record.difficulty_level || null;
-                }
-                // Convert to number if it's a string
-                if (typeof difficulty === 'string' && difficulty !== '') {
-                    difficulty = parseInt(difficulty, 10);
+                    console.warn('Missing difficulty in record:', record);
+                    difficulty = null;
+                } else {
+                    // Convert to number if it's a string
+                    if (typeof difficulty === 'string') {
+                        difficulty = parseInt(difficulty, 10);
+                        if (isNaN(difficulty)) {
+                            console.warn('Invalid difficulty value:', record.difficulty, 'in record:', record);
+                            difficulty = null;
+                        }
+                    }
                 }
                 
                 // Build column key for member data
