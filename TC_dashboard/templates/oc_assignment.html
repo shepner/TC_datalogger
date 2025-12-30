@@ -279,7 +279,16 @@
             const ocLevelFilter = document.getElementById('oc_level_filter').value;
             let filteredData = data;
             if (ocLevelFilter) {
-                filteredData = data.filter(r => r.difficulty == ocLevelFilter);
+                // Convert filter to number for comparison
+                const filterNum = parseInt(ocLevelFilter, 10);
+                filteredData = data.filter(r => {
+                    const diff = r.difficulty;
+                    // Handle both string and number types
+                    if (typeof diff === 'string') {
+                        return parseInt(diff, 10) === filterNum;
+                    }
+                    return diff === filterNum;
+                });
             }
 
             if (filteredData.length === 0) {
@@ -369,7 +378,7 @@
             
             // First row: difficulty headers (with colspan)
             const headerRow1 = document.createElement('tr');
-            headerRow1.innerHTML = '<th rowspan="2" style="padding: 8px; border: 1px solid #ddd; position: sticky; left: 0; background-color: #4CAF50; z-index: 11; text-align: left;">Member</th>';
+            headerRow1.innerHTML = '<th rowspan="3" style="padding: 8px; border: 1px solid #ddd; position: sticky; left: 0; background-color: #4CAF50; z-index: 11; text-align: left;">Member</th>';
             
             const sortedDifficulties = Array.from(columnGroups.keys()).filter(d => d != null && typeof d === 'number').sort((a, b) => {
                 return b - a; // Higher difficulty first
