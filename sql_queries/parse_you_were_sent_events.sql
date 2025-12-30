@@ -58,6 +58,8 @@ FROM
 WHERE
   -- Filter only events that start with "You were sent"
   STARTS_WITH(event, 'You were sent')
+  -- Exclude money transfers (e.g., "You were sent $2,000,000 from ...")
+  AND NOT REGEXP_CONTAINS(event, r'You were sent \$')
 
 ORDER BY
   timestamp ASC;

@@ -73,6 +73,8 @@ class TradingDashboard:
             `torncity-402423.torn_data.v2_torn_user_events-raw`
           WHERE
             STARTS_WITH(event, 'You were sent')
+            -- Exclude money transfers (e.g., "You were sent $2,000,000 from ...")
+            AND NOT REGEXP_CONTAINS(event, r'You were sent \$')
             AND REGEXP_EXTRACT(event, r'You were sent (\d+)x ') IS NOT NULL
             AND TIMESTAMP_SECONDS(SAFE_CAST(timestamp AS INT64)) >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL @days_back DAY)
         ),
@@ -149,6 +151,8 @@ class TradingDashboard:
             `torncity-402423.torn_data.v2_torn_user_events-raw`
           WHERE
             STARTS_WITH(event, 'You were sent')
+            -- Exclude money transfers (e.g., "You were sent $2,000,000 from ...")
+            AND NOT REGEXP_CONTAINS(event, r'You were sent \$')
             AND REGEXP_EXTRACT(event, r'You were sent (\d+)x ') IS NOT NULL
             AND TIMESTAMP_SECONDS(SAFE_CAST(timestamp AS INT64)) >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL @days_back DAY)
         ),
@@ -363,6 +367,8 @@ class TradingDashboard:
             `torncity-402423.torn_data.v2_torn_user_events-raw`
           WHERE
             STARTS_WITH(event, 'You were sent')
+            -- Exclude money transfers (e.g., "You were sent $2,000,000 from ...")
+            AND NOT REGEXP_CONTAINS(event, r'You were sent \$')
             AND REGEXP_EXTRACT(event, r'You were sent (\d+)x ') IS NOT NULL
             AND TIMESTAMP_SECONDS(SAFE_CAST(timestamp AS INT64)) >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL @days_back DAY)
         )
