@@ -238,178 +238,93 @@
         let performanceData = [];
         let currentSort = { column: null, direction: 'asc' };
 
-        function toggleView() {
-            const viewMode = document.querySelector('input[name="view_mode"]:checked').value;
-            if (viewMode === 'pivot') {
-                document.getElementById('pivot-container').style.display = 'block';
-                document.getElementById('detail-container').style.display = 'none';
-                displayPivotView(performanceData);
-            } else {
-                document.getElementById('pivot-container').style.display = 'none';
-                document.getElementById('detail-container').style.display = 'block';
-                displayDetailView(performanceData);
-            }
-        }
-
         function displayPerformance(performance) {
-            performanceData = performance;
-            toggleView();
-            document.getElementById('performance-container').style.display = 'block';
-        }
-
-        function displayPivotView(data) {
-            // Filter by OC level if selected
-            const ocLevelFilter = document.getElementById('oc_level_filter').value;
-            let filteredData = data;
-            if (ocLevelFilter) {
-                filteredData = data.filter(r => r.oc_level == ocLevelFilter);
-            }
-
-            if (filteredData.length === 0) {
-                document.getElementById('pivot-body').innerHTML = '<tr><td colspan="100">No performance data found</td></tr>';
-                return;
-            }
-
-            // Group by member and role, then pivot
-            const memberRoleMap = new Map();
-            const roles = new Set();
-            const ocLevels = new Set();
-
-            filteredData.forEach(record => {
-                const key = `${record.member_id}_${record.oc_level}_${record.role}`;
-                if (!memberRoleMap.has(key)) {
-                    memberRoleMap.set(key, {
-                        member_id: record.member_id,
-                        member_name: record.member_name,
-                        oc_level: record.oc_level,
-                        role: record.role,
-                        data: record
-                    });
-                }
-                roles.add(`${record.oc_level}-${record.role}`);
-                ocLevels.add(record.oc_level);
-            });
-
-            // Build header
-            const header = document.getElementById('pivot-header');
-            header.innerHTML = '';
-            const headerRow = document.createElement('tr');
-            headerRow.innerHTML = '<th style="padding: 8px; border: 1px solid #ddd; position: sticky; left: 0; background-color: #4CAF50; z-index: 11;">Member</th>';
+            performanceData = performance || [];
             
-            const sortedRoles = Array.from(roles).sort();
-            sortedRoles.forEach(roleKey => {
-                const [level, role] = roleKey.split('-');
-                headerRow.innerHTML += `<th class="sortable" data-role="${roleKey}" style="padding: 8px; border: 1px solid #ddd; cursor: pointer; white-space: nowrap;" title="Click to sort">L${level} ${role} ↕</th>`;
+            // Populate member filter
+            const memberFilter = document.getElementById('member_filter');
+            const members = [...new Set(performanceData.map(r => r.member_name).filter(Boolean))].sort();
+            const currentValue = memberFilter.value;
+            memberFilter.innerHTML = '<option value="">All Members</option>';
+            members.forEach(member => {
+                const option = document.createElement('option');
+                option.value = member;
+                option.textContent = member;
+                if (member === currentValue) option.selected = true;
+                memberFilter.appendChild(option);
             });
-            header.appendChild(headerRow);
-
-            // Build body - group by member
-            const members = new Map();
-            filteredData.forEach(record => {
-                if (!members.has(record.member_id)) {
-                    members.set(record.member_id, {
-                        member_id: record.member_id,
-                        member_name: record.member_name,
-                        roles: new Map()
-                    });
-                }
-                const roleKey = `${record.oc_level}-${record.role}`;
-                members.get(record.member_id).roles.set(roleKey, record);
-            });
-
-            const tbody = document.getElementById('pivot-body');
-            tbody.innerHTML = '';
-
-            Array.from(members.values()).sort((a, b) => a.member_name.localeCompare(b.member_name)).forEach(member => {
-                const row = document.createElement('tr');
-                row.innerHTML = `<td style="padding: 6px; border: 1px solid #ddd; position: sticky; left: 0; background-color: white; font-weight: bold;">${member.member_name}</td>`;
-                
-                sortedRoles.forEach(roleKey => {
-                    const record = member.roles.get(roleKey);
-                    if (record) {
-                        const recentProb = record.most_recent_progress || 0;
-                        const rate = record.rate_of_advancement || 0;
-                        const successRate = record.success_rate || 0;
-                        
-                        let cellClass = '';
-                        if (recentProb >= 90) cellClass = 'cell-green';
-                        else if (recentProb >= 80) cellClass = 'cell-yellow';
-                        else cellClass = 'cell-red';
-
-                        const rateDisplay = rate > 0 ? `+${rate.toFixed(2)}` : rate.toFixed(2);
-                        row.innerHTML += `<td class="${cellClass}" style="padding: 6px; border: 1px solid #ddd; text-align: center;" title="Recent: ${recentProb.toFixed(1)}%, Rate: ${rateDisplay}/day, Success: ${successRate.toFixed(1)}%">
-                            <div style="font-weight: bold;">${recentProb.toFixed(1)}%</div>
-                            <div style="font-size: 9px; color: #666;">${rateDisplay}/d</div>
-                        </td>`;
-                    } else {
-                        row.innerHTML += '<td style="padding: 6px; border: 1px solid #ddd; text-align: center; color: #ccc;">-</td>';
-                    }
-                });
-                
-                tbody.appendChild(row);
-            });
-        }
-
-        function displayDetailView(data) {
-            // Filter by OC level if selected
+            
+            // Apply filters
             const ocLevelFilter = document.getElementById('oc_level_filter').value;
-            let filteredData = data;
+            const memberFilterValue = document.getElementById('member_filter').value;
+            let filteredData = performanceData;
+            
             if (ocLevelFilter) {
-                filteredData = data.filter(r => r.oc_level == ocLevelFilter);
+                filteredData = filteredData.filter(r => r.oc_level == ocLevelFilter);
+            }
+            if (memberFilterValue) {
+                filteredData = filteredData.filter(r => r.member_name === memberFilterValue);
             }
 
             const tbody = document.getElementById('performance-body');
             tbody.innerHTML = '';
 
             if (filteredData.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="10">No performance data found</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="9">No performance data found</td></tr>';
+                document.getElementById('performance-container').style.display = 'block';
                 return;
             }
 
+            // Group by member, OC name, and position for better organization
+            const grouped = new Map();
             filteredData.forEach(record => {
+                const key = `${record.member_name}_${record.oc_name}_${record.position}_${record.position_id}`;
+                if (!grouped.has(key)) {
+                    grouped.set(key, []);
+                }
+                grouped.get(key).push(record);
+            });
+
+            // Sort each group by executed_at (most recent first)
+            grouped.forEach((records, key) => {
+                records.sort((a, b) => {
+                    const dateA = a.executed_at ? new Date(a.executed_at).getTime() : 0;
+                    const dateB = b.executed_at ? new Date(b.executed_at).getTime() : 0;
+                    return dateB - dateA; // Most recent first
+                });
+            });
+
+            // Display records
+            Array.from(grouped.values()).flat().forEach(record => {
                 const row = document.createElement('tr');
-                const successRate = record.success_rate || 0;
-                const avgProgress = record.avg_progress || 0;
-                const recentProb = record.most_recent_progress || 0;
-                const rate = record.rate_of_advancement || 0;
-                const lastAttempt = record.last_attempt_date ? new Date(record.last_attempt_date) : null;
+                const progress = record.progress || 0;
+                const executedAt = record.executed_at ? new Date(record.executed_at) : null;
+                const outcome = record.outcome || '-';
+                const checkpointRate = record.checkpoint_pass_rate != null ? (record.checkpoint_pass_rate * 100).toFixed(1) + '%' : '-';
 
-                // Color coding
-                let successRateClass = '';
-                if (successRate >= 90) successRateClass = 'cell-green';
-                else if (successRate >= 80) successRateClass = 'cell-yellow';
-                else successRateClass = 'cell-red';
-
+                // Color coding for probability
                 let progressClass = '';
-                if (avgProgress >= 90) progressClass = 'cell-green';
-                else if (avgProgress >= 80) progressClass = 'cell-yellow';
+                if (progress >= 90) progressClass = 'cell-green';
+                else if (progress >= 80) progressClass = 'cell-yellow';
                 else progressClass = 'cell-red';
 
-                let recentProbClass = '';
-                if (recentProb >= 90) recentProbClass = 'cell-green';
-                else if (recentProb >= 80) recentProbClass = 'cell-yellow';
-                else recentProbClass = 'cell-red';
-
-                const rateDisplay = rate > 0 ? `+${rate.toFixed(2)}` : rate.toFixed(2);
-                const rateClass = rate > 0 ? 'cell-green' : (rate < 0 ? 'cell-red' : '');
-
                 row.innerHTML = `
-                    <td style="padding: 6px; border: 1px solid #ddd;">${record.member_name || 'Unknown'}</td>
+                    <td style="padding: 6px; border: 1px solid #ddd; position: sticky; left: 0; background-color: white; font-weight: bold;">${record.member_name || 'Unknown'}</td>
                     <td style="padding: 6px; border: 1px solid #ddd; text-align: center;">${record.oc_level || '-'}</td>
-                    <td style="padding: 6px; border: 1px solid #ddd;">${record.role || '-'}</td>
+                    <td style="padding: 6px; border: 1px solid #ddd;">${record.oc_name || '-'}</td>
+                    <td style="padding: 6px; border: 1px solid #ddd;">${record.position || '-'}</td>
                     <td style="padding: 6px; border: 1px solid #ddd;">${record.position_id || '-'}</td>
-                    <td style="padding: 6px; border: 1px solid #ddd; text-align: center;">${record.total_attempts || 0}</td>
-                    <td class="${successRateClass}" style="padding: 6px; border: 1px solid #ddd; text-align: center; font-weight: bold;">${successRate.toFixed(1)}%</td>
-                    <td class="${recentProbClass}" style="padding: 6px; border: 1px solid #ddd; text-align: center; font-weight: bold;">${recentProb.toFixed(1)}%</td>
-                    <td class="${rateClass}" style="padding: 6px; border: 1px solid #ddd; text-align: center;">${rateDisplay}/day</td>
-                    <td class="${progressClass}" style="padding: 6px; border: 1px solid #ddd; text-align: center;">${avgProgress.toFixed(1)}%</td>
-                    <td style="padding: 6px; border: 1px solid #ddd;">${lastAttempt ? lastAttempt.toLocaleDateString() : '-'}</td>
+                    <td style="padding: 6px; border: 1px solid #ddd;">${executedAt ? executedAt.toLocaleString() : '-'}</td>
+                    <td class="${progressClass}" style="padding: 6px; border: 1px solid #ddd; text-align: center; font-weight: bold;">${progress.toFixed(1)}%</td>
+                    <td style="padding: 6px; border: 1px solid #ddd; text-align: center;">${outcome}</td>
+                    <td style="padding: 6px; border: 1px solid #ddd; text-align: center;">${checkpointRate}</td>
                 `;
 
                 tbody.appendChild(row);
             });
 
             attachSortHandlers();
+            document.getElementById('performance-container').style.display = 'block';
         }
 
         function sortTable(column) {
@@ -421,9 +336,14 @@
             }
 
             const ocLevelFilter = document.getElementById('oc_level_filter').value;
+            const memberFilterValue = document.getElementById('member_filter').value;
             let filteredData = performanceData;
+            
             if (ocLevelFilter) {
-                filteredData = performanceData.filter(r => r.oc_level == ocLevelFilter);
+                filteredData = filteredData.filter(r => r.oc_level == ocLevelFilter);
+            }
+            if (memberFilterValue) {
+                filteredData = filteredData.filter(r => r.member_name === memberFilterValue);
             }
 
             filteredData.sort((a, b) => {
@@ -433,6 +353,12 @@
                 if (aVal == null && bVal == null) return 0;
                 if (aVal == null) return 1;
                 if (bVal == null) return -1;
+
+                // Handle date strings
+                if (column === 'executed_at') {
+                    aVal = aVal ? new Date(aVal).getTime() : 0;
+                    bVal = bVal ? new Date(bVal).getTime() : 0;
+                }
 
                 if (typeof aVal === 'number' && typeof bVal === 'number') {
                     return currentSort.direction === 'asc' ? aVal - bVal : bVal - aVal;
@@ -455,19 +381,50 @@
                 th.classList.remove('sort-asc', 'sort-desc');
                 if (th.dataset.column === column) {
                     th.classList.add(`sort-${currentSort.direction}`);
-                    th.innerHTML = th.innerHTML.replace(/ [↑↓]/, '') + (currentSort.direction === 'asc' ? ' ↑' : ' ↓');
+                    th.innerHTML = th.innerHTML.replace(/ [↑↓↕]/, '') + (currentSort.direction === 'asc' ? ' ↑' : ' ↓');
+                } else {
+                    th.innerHTML = th.innerHTML.replace(/ [↑↓]/, '') + ' ↕';
                 }
             });
 
-            displayDetailView(filteredData);
+            const tbody = document.getElementById('performance-body');
+            tbody.innerHTML = '';
+
+            filteredData.forEach(record => {
+                const row = document.createElement('tr');
+                const progress = record.progress || 0;
+                const executedAt = record.executed_at ? new Date(record.executed_at) : null;
+                const outcome = record.outcome || '-';
+                const checkpointRate = record.checkpoint_pass_rate != null ? (record.checkpoint_pass_rate * 100).toFixed(1) + '%' : '-';
+
+                let progressClass = '';
+                if (progress >= 90) progressClass = 'cell-green';
+                else if (progress >= 80) progressClass = 'cell-yellow';
+                else progressClass = 'cell-red';
+
+                row.innerHTML = `
+                    <td style="padding: 6px; border: 1px solid #ddd; position: sticky; left: 0; background-color: white; font-weight: bold;">${record.member_name || 'Unknown'}</td>
+                    <td style="padding: 6px; border: 1px solid #ddd; text-align: center;">${record.oc_level || '-'}</td>
+                    <td style="padding: 6px; border: 1px solid #ddd;">${record.oc_name || '-'}</td>
+                    <td style="padding: 6px; border: 1px solid #ddd;">${record.position || '-'}</td>
+                    <td style="padding: 6px; border: 1px solid #ddd;">${record.position_id || '-'}</td>
+                    <td style="padding: 6px; border: 1px solid #ddd;">${executedAt ? executedAt.toLocaleString() : '-'}</td>
+                    <td class="${progressClass}" style="padding: 6px; border: 1px solid #ddd; text-align: center; font-weight: bold;">${progress.toFixed(1)}%</td>
+                    <td style="padding: 6px; border: 1px solid #ddd; text-align: center;">${outcome}</td>
+                    <td style="padding: 6px; border: 1px solid #ddd; text-align: center;">${checkpointRate}</td>
+                `;
+
+                tbody.appendChild(row);
+            });
+
+            attachSortHandlers();
         }
 
         function attachSortHandlers() {
             document.querySelectorAll('th.sortable').forEach(th => {
-                const newTh = th.cloneNode(true);
-                th.parentNode.replaceChild(newTh, th);
-                newTh.addEventListener('click', () => {
-                    sortTable(newTh.dataset.column);
+                th.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    sortTable(th.dataset.column);
                 });
             });
         }
@@ -487,8 +444,22 @@
         .cell-red {
             background-color: #ffcdd2;
         }
-        #performance-table tbody tr:hover,
-        #pivot-table tbody tr:hover {
+        #performance-table {
+            overflow-x: auto;
+            display: block;
+        }
+        #performance-table thead {
+            display: block;
+            position: sticky;
+            top: 0;
+            z-index: 9;
+        }
+        #performance-table tbody {
+            display: block;
+            max-height: 600px;
+            overflow-y: auto;
+        }
+        #performance-table tbody tr:hover {
             background-color: #f5f5f5;
         }
         th.sortable:hover {
