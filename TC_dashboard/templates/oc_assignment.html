@@ -97,7 +97,7 @@
 
         <div style="margin-top: 40px; border-top: 2px solid #ddd; padding-top: 20px;">
             <h2>OC Performance Dashboard</h2>
-            <p>View member performance by role and OC level</p>
+            <p>View member probability of success over time for each OC and position.</p>
             
             <div style="margin-bottom: 15px;">
                 <label for="performance_days">Days Back:</label>
@@ -105,55 +105,38 @@
                 <button onclick="loadPerformance()" style="margin-left: 10px;">Load Performance Data</button>
             </div>
 
-            <div id="performance-container" style="display: none;">
+            <div id="performance-container" style="display: none; margin-top: 30px;">
                 <div style="margin-bottom: 15px;">
-                    <label>
-                        <input type="radio" name="view_mode" value="pivot" checked onchange="toggleView()"> Pivot View
-                    </label>
-                    <label style="margin-left: 20px;">
-                        <input type="radio" name="view_mode" value="detail" onchange="toggleView()"> Detail View
-                    </label>
-                    <label style="margin-left: 20px;">
-                        <input type="checkbox" id="filter_oc_level" onchange="toggleView()"> Filter by OC Level:
-                        <select id="oc_level_filter" onchange="toggleView()" style="margin-left: 5px;">
-                            <option value="">All Levels</option>
-                            <option value="5">Level 5</option>
-                            <option value="4">Level 4</option>
-                            <option value="3">Level 3</option>
-                            <option value="2">Level 2</option>
-                            <option value="1">Level 1</option>
-                        </select>
-                    </label>
+                    <label for="oc_level_filter">OC Level Filter:</label>
+                    <select id="oc_level_filter" onchange="displayPerformance(performanceData)" style="margin-left: 10px; padding: 5px;">
+                        <option value="">All</option>
+                        <option value="1">Level 1</option>
+                        <option value="2">Level 2</option>
+                        <option value="3">Level 3</option>
+                        <option value="4">Level 4</option>
+                        <option value="5">Level 5</option>
+                    </select>
+                    
+                    <label for="member_filter" style="margin-left: 20px;">Member:</label>
+                    <select id="member_filter" onchange="displayPerformance(performanceData)" style="margin-left: 10px; padding: 5px;">
+                        <option value="">All Members</option>
+                    </select>
                 </div>
 
-                <!-- Pivot View -->
-                <div id="pivot-container" style="display: none;">
-                    <div style="max-height: 70vh; overflow-y: auto; overflow-x: auto; border: 1px solid #ddd; margin-top: 20px;">
-                        <table id="pivot-table" style="width: 100%; border-collapse: collapse; font-size: 11px;">
-                            <thead id="pivot-header" style="position: sticky; top: 0; background-color: #4CAF50; color: white; z-index: 10;">
-                            </thead>
-                            <tbody id="pivot-body">
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-
-                <!-- Detail View -->
-                <div id="detail-container" style="display: none;">
+                <div id="performance-content">
                     <div style="max-height: 70vh; overflow-y: auto; overflow-x: auto; border: 1px solid #ddd; margin-top: 20px;">
                         <table id="performance-table" style="width: 100%; border-collapse: collapse; font-size: 12px;">
                             <thead style="position: sticky; top: 0; background-color: #4CAF50; color: white; z-index: 10;">
                                 <tr>
-                                    <th class="sortable" data-column="member_name" style="padding: 8px; border: 1px solid #ddd; cursor: pointer;">Member ↕</th>
-                                    <th class="sortable" data-column="oc_level" style="padding: 8px; border: 1px solid #ddd; cursor: pointer; text-align: center;">OC Level ↕</th>
-                                    <th class="sortable" data-column="role" style="padding: 8px; border: 1px solid #ddd; cursor: pointer;">Role ↕</th>
-                                    <th style="padding: 8px; border: 1px solid #ddd;">Position</th>
-                                    <th class="sortable" data-column="total_attempts" style="padding: 8px; border: 1px solid #ddd; cursor: pointer; text-align: center;">Attempts ↕</th>
-                                    <th class="sortable" data-column="success_rate" style="padding: 8px; border: 1px solid #ddd; cursor: pointer; text-align: center;">Success Rate ↕</th>
-                                    <th class="sortable" data-column="most_recent_progress" style="padding: 8px; border: 1px solid #ddd; cursor: pointer; text-align: center;">Recent Prob ↕</th>
-                                    <th class="sortable" data-column="rate_of_advancement" style="padding: 8px; border: 1px solid #ddd; cursor: pointer; text-align: center;">Rate of Adv ↕</th>
-                                    <th style="padding: 8px; border: 1px solid #ddd; text-align: center;">Avg Progress</th>
-                                    <th style="padding: 8px; border: 1px solid #ddd;">Last Attempt</th>
+                                    <th class="sortable" data-column="member_name" style="padding: 8px; border: 1px solid #ddd; cursor: pointer; position: sticky; left: 0; z-index: 11;">Member ↕</th>
+                                    <th class="sortable" data-column="oc_level" style="padding: 8px; border: 1px solid #ddd; cursor: pointer;">OC Level ↕</th>
+                                    <th class="sortable" data-column="oc_name" style="padding: 8px; border: 1px solid #ddd; cursor: pointer;">OC Name ↕</th>
+                                    <th class="sortable" data-column="position" style="padding: 8px; border: 1px solid #ddd; cursor: pointer;">Position ↕</th>
+                                    <th class="sortable" data-column="position_id" style="padding: 8px; border: 1px solid #ddd; cursor: pointer;">Position ID ↕</th>
+                                    <th class="sortable" data-column="executed_at" style="padding: 8px; border: 1px solid #ddd; cursor: pointer;">Date ↕</th>
+                                    <th class="sortable" data-column="progress" style="padding: 8px; border: 1px solid #ddd; cursor: pointer;">Probability ↕</th>
+                                    <th class="sortable" data-column="outcome" style="padding: 8px; border: 1px solid #ddd; cursor: pointer;">Outcome ↕</th>
+                                    <th class="sortable" data-column="checkpoint_pass_rate" style="padding: 8px; border: 1px solid #ddd; cursor: pointer;">Checkpoint Rate ↕</th>
                                 </tr>
                             </thead>
                             <tbody id="performance-body">
