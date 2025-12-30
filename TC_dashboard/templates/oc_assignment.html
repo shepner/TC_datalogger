@@ -288,7 +288,7 @@
             }
 
             // Debug: Check first record structure
-            if (filteredData.length > 0) {
+            if (filteredData.length > 0 && filteredData[0]) {
                 console.log('First record:', filteredData[0]);
                 console.log('Difficulty value:', filteredData[0].difficulty, 'Type:', typeof filteredData[0].difficulty);
             }
@@ -357,6 +357,12 @@
                 }
             });
 
+            // Check if we have any valid data after filtering
+            if (columnGroups.size === 0) {
+                document.getElementById('pivot-body').innerHTML = '<tr><td colspan="100" style="padding: 20px; text-align: center;">No performance data found (all records may have been filtered out due to missing difficulty values).</td></tr>';
+                return;
+            }
+
             // Build header with hierarchical structure
             const header = document.getElementById('pivot-header');
             header.innerHTML = '';
@@ -365,7 +371,7 @@
             const headerRow1 = document.createElement('tr');
             headerRow1.innerHTML = '<th rowspan="2" style="padding: 8px; border: 1px solid #ddd; position: sticky; left: 0; background-color: #4CAF50; z-index: 11; text-align: left;">Member</th>';
             
-            const sortedDifficulties = Array.from(columnGroups.keys()).filter(d => d != null).sort((a, b) => {
+            const sortedDifficulties = Array.from(columnGroups.keys()).filter(d => d != null && typeof d === 'number').sort((a, b) => {
                 return b - a; // Higher difficulty first
             });
             sortedDifficulties.forEach(difficulty => {
