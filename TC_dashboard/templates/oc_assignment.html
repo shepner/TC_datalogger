@@ -293,14 +293,17 @@
             const members = new Map(); // key: member_name, value: {member_name, data: Map of "difficulty_oc_name_position_id" -> max checkpoint_pass_rate}
 
             filteredData.forEach(record => {
+                // Get difficulty, defaulting to null if undefined
+                const difficulty = record.difficulty != null ? record.difficulty : null;
+                
                 // Build column key for member data
-                const columnKey = `${record.difficulty}_${record.oc_name}_${record.position_id}`;
+                const columnKey = `${difficulty}_${record.oc_name}_${record.position_id}`;
                 
                 // Build hierarchical column structure
-                if (!columnGroups.has(record.difficulty)) {
-                    columnGroups.set(record.difficulty, new Map());
+                if (!columnGroups.has(difficulty)) {
+                    columnGroups.set(difficulty, new Map());
                 }
-                const difficultyGroup = columnGroups.get(record.difficulty);
+                const difficultyGroup = columnGroups.get(difficulty);
                 if (!difficultyGroup.has(record.oc_name)) {
                     difficultyGroup.set(record.oc_name, new Map());
                 }
@@ -335,7 +338,12 @@
             const headerRow1 = document.createElement('tr');
             headerRow1.innerHTML = '<th rowspan="2" style="padding: 8px; border: 1px solid #ddd; position: sticky; left: 0; background-color: #4CAF50; z-index: 11; text-align: left;">Member</th>';
             
-            const sortedDifficulties = Array.from(columnGroups.keys()).sort((a, b) => b - a); // Higher difficulty first
+            const sortedDifficulties = Array.from(columnGroups.keys()).sort((a, b) => {
+                // Handle null/undefined values - put them at the end
+                if (a == null) return 1;
+                if (b == null) return -1;
+                return b - a; // Higher difficulty first
+            });
             sortedDifficulties.forEach(difficulty => {
                 const difficultyGroup = columnGroups.get(difficulty);
                 let totalCols = 0;
@@ -343,7 +351,8 @@
                     totalCols += ocGroup.size;
                 });
                 if (totalCols > 0) {
-                    headerRow1.innerHTML += `<th colspan="${totalCols}" style="padding: 8px; border: 1px solid #ddd; text-align: center; background-color: #4CAF50; color: white;">Level ${difficulty}</th>`;
+                    const difficultyLabel = difficulty != null ? `Level ${difficulty}` : 'Level ?';
+                    headerRow1.innerHTML += `<th colspan="${totalCols}" style="padding: 8px; border: 1px solid #ddd; text-align: center; background-color: #4CAF50; color: white;">${difficultyLabel}</th>`;
                 }
             });
             header.appendChild(headerRow1);
