@@ -42,7 +42,7 @@ oc_slots AS (
     slot.user.id IS NOT NULL
     AND crime.executed_at IS NOT NULL
     AND TIMESTAMP_SECONDS(SAFE_CAST(crime.executed_at AS INT64)) >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 90 DAY)
-    AND slot.user.checkpoint_pass_rate IS NOT NULL
+    AND slot.checkpoint_pass_rate IS NOT NULL
     -- Only include members who are currently in the faction
     AND slot.user.id IN (SELECT member_id FROM current_members)
 )
