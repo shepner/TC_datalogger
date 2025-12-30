@@ -428,7 +428,7 @@ class OCEmailGenerator:
               os.oc_level DESC,
               os.role ASC,
               success_rate DESC,
-              os.member_name ASC
+              COALESCE(m.name, CAST(os.member_id AS STRING)) ASC
             """
             query = query.replace("@days_back", str(days_back))
             return self.bq.execute_query(query)

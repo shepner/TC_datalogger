@@ -68,5 +68,5 @@ ORDER BY
   os.oc_level DESC,
   os.role ASC,
   success_rate DESC,
-  os.member_name ASC;
+  COALESCE(m.name, CAST(os.member_id AS STRING)) ASC;
 
