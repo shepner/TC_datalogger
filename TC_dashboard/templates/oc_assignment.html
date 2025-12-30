@@ -363,7 +363,7 @@
 
             sortedMembers.forEach(member => {
                 const row = document.createElement('tr');
-                row.innerHTML = `<td style="padding: 6px; border: 1px solid #ddd; position: sticky; left: 0; background-color: white; font-weight: bold;">${member.member_name} (${member.member_id})</td>`;
+                row.innerHTML = `<td style="padding: 6px; border: 1px solid #ddd; position: sticky; left: 0; background-color: white; font-weight: bold;">${member.member_name}</td>`;
                 
                 sortedColumns.forEach(([columnKey, colInfo]) => {
                     const record = member.data.get(columnKey);
