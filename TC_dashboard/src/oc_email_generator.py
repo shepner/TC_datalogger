@@ -352,3 +352,84 @@ class OCEmailGenerator:
 
         return "\n".join(email_lines)
 
+    def get_oc_performance_by_role(self, days_back: int = 90) -> List[Dict[str, Any]]:
+        """
+        Get OC performance data by member, role, and OC level.
+
+        Args:
+            days_back: Number of days to look back (default 90)
+
+        Returns:
+            List of performance dictionaries
+        """
+        query_file = "sql_queries/oc_performance_by_role.sql"
+        
+        # Read query from file
+        from pathlib import Path
+        base_path = Path(__file__).parent.parent.parent
+        query_path = base_path / query_file
+        
+        if query_path.exists():
+            query = query_path.read_text()
+            # Replace the days_back parameter
+            query = query.replace("INTERVAL 90 DAY", f"INTERVAL {days_back} DAY")
+            return self.bq.execute_query(query)
+        else:
+            # Fallback: inline query
+            query = """
+            WITH oc_slots AS (
+              SELECT
+                crime.id AS crime_id,
+                crime.name AS crime_name,
+                crime.difficulty AS oc_level,
+                TIMESTAMP_SECONDS(SAFE_CAST(crime.executed_at AS INT64)) AS executed_at,
+                slot.position AS role,
+                slot.position_id,
+                slot.user.id AS member_id,
+                slot.user.progress AS progress,
+                slot.user.outcome AS outcome,
+                slot.checkpoint_pass_rate AS checkpoint_pass_rate
+              FROM
+                `torncity-402423.torn_data.v2_faction_40832_crimes-raw` AS crime,
+                UNNEST(crime.slots) AS slot
+              WHERE
+                slot.user.id IS NOT NULL
+                AND crime.executed_at IS NOT NULL
+                AND TIMESTAMP_SECONDS(SAFE_CAST(crime.executed_at AS INT64)) >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL @days_back DAY)
+                AND slot.user.progress IS NOT NULL
+            )
+            SELECT
+              os.member_id,
+              COALESCE(m.name, CAST(os.member_id AS STRING)) AS member_name,
+              os.oc_level,
+              os.role,
+              os.position_id,
+              COUNT(*) AS total_attempts,
+              COUNTIF(os.outcome = 'Successful') AS successful_attempts,
+              ROUND(100.0 * COUNTIF(os.outcome = 'Successful') / COUNT(*), 1) AS success_rate,
+              ROUND(AVG(os.progress), 1) AS avg_progress,
+              ROUND(AVG(os.checkpoint_pass_rate), 1) AS avg_checkpoint_pass_rate,
+              MAX(os.executed_at) AS last_attempt_date
+            FROM
+              oc_slots AS os
+            LEFT JOIN
+              `torncity-402423.torn_data.v2_faction_40832_members-raw` AS m
+            ON
+              os.member_id = m.id
+            GROUP BY
+              os.member_id,
+              m.name,
+              os.oc_level,
+              os.role,
+              os.position_id
+            HAVING
+              COUNT(*) >= 1
+            ORDER BY
+              os.oc_level DESC,
+              os.role ASC,
+              success_rate DESC,
+              os.member_name ASC
+            """
+            query = query.replace("@days_back", str(days_back))
+            return self.bq.execute_query(query)
+

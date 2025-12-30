@@ -94,6 +94,40 @@
             <textarea id="email-text" readonly></textarea>
             <button class="copy-button" onclick="copyEmail()">Copy to Clipboard</button>
         </div>
+
+        <div style="margin-top: 40px; border-top: 2px solid #ddd; padding-top: 20px;">
+            <h2>OC Performance Dashboard</h2>
+            <p>View member performance by role and OC level</p>
+            
+            <div style="margin-bottom: 15px;">
+                <label for="performance_days">Days Back:</label>
+                <input type="number" id="performance_days" value="90" min="7" max="365" style="width: 100px; margin-left: 10px;">
+                <button onclick="loadPerformance()" style="margin-left: 10px;">Load Performance Data</button>
+            </div>
+
+            <div id="performance-container" style="display: none;">
+                <div style="max-height: 70vh; overflow-y: auto; overflow-x: auto; border: 1px solid #ddd; margin-top: 20px;">
+                    <table id="performance-table" style="width: 100%; border-collapse: collapse; font-size: 12px;">
+                        <thead style="position: sticky; top: 0; background-color: #4CAF50; color: white; z-index: 10;">
+                            <tr>
+                                <th style="padding: 8px; border: 1px solid #ddd;">Member</th>
+                                <th style="padding: 8px; border: 1px solid #ddd;">OC Level</th>
+                                <th style="padding: 8px; border: 1px solid #ddd;">Role</th>
+                                <th style="padding: 8px; border: 1px solid #ddd;">Position</th>
+                                <th style="padding: 8px; border: 1px solid #ddd;">Attempts</th>
+                                <th style="padding: 8px; border: 1px solid #ddd;">Successful</th>
+                                <th style="padding: 8px; border: 1px solid #ddd;">Success Rate</th>
+                                <th style="padding: 8px; border: 1px solid #ddd;">Avg Progress</th>
+                                <th style="padding: 8px; border: 1px solid #ddd;">Avg Checkpoint</th>
+                                <th style="padding: 8px; border: 1px solid #ddd;">Last Attempt</th>
+                            </tr>
+                        </thead>
+                        <tbody id="performance-body">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -146,7 +180,92 @@
                 button.textContent = originalText;
             }, 2000);
         }
+
+        async function loadPerformance() {
+            const daysBack = document.getElementById('performance_days').value;
+            document.getElementById('error').style.display = 'none';
+
+            try {
+                const response = await fetch(`/api/oc-assignment/performance?days_back=${daysBack}`);
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.error || 'Failed to load performance data');
+                }
+
+                displayPerformance(data.performance);
+            } catch (error) {
+                document.getElementById('error').textContent = error.message;
+                document.getElementById('error').style.display = 'block';
+            }
+        }
+
+        function displayPerformance(performance) {
+            const tbody = document.getElementById('performance-body');
+            tbody.innerHTML = '';
+
+            if (performance.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="10">No performance data found</td></tr>';
+                document.getElementById('performance-container').style.display = 'block';
+                return;
+            }
+
+            performance.forEach(record => {
+                const row = document.createElement('tr');
+                const successRate = record.success_rate || 0;
+                const avgProgress = record.avg_progress || 0;
+                const lastAttempt = record.last_attempt_date ? new Date(record.last_attempt_date) : null;
+
+                // Color coding for success rate
+                let successRateClass = '';
+                if (successRate >= 90) successRateClass = 'cell-green';
+                else if (successRate >= 80) successRateClass = 'cell-yellow';
+                else successRateClass = 'cell-red';
+
+                // Color coding for avg progress
+                let progressClass = '';
+                if (avgProgress >= 90) progressClass = 'cell-green';
+                else if (avgProgress >= 80) progressClass = 'cell-yellow';
+                else progressClass = 'cell-red';
+
+                row.innerHTML = `
+                    <td style="padding: 6px; border: 1px solid #ddd;">${record.member_name || 'Unknown'}</td>
+                    <td style="padding: 6px; border: 1px solid #ddd; text-align: center;">${record.oc_level || '-'}</td>
+                    <td style="padding: 6px; border: 1px solid #ddd;">${record.role || '-'}</td>
+                    <td style="padding: 6px; border: 1px solid #ddd;">${record.position_id || '-'}</td>
+                    <td style="padding: 6px; border: 1px solid #ddd; text-align: center;">${record.total_attempts || 0}</td>
+                    <td style="padding: 6px; border: 1px solid #ddd; text-align: center;">${record.successful_attempts || 0}</td>
+                    <td class="${successRateClass}" style="padding: 6px; border: 1px solid #ddd; text-align: center; font-weight: bold;">${successRate.toFixed(1)}%</td>
+                    <td class="${progressClass}" style="padding: 6px; border: 1px solid #ddd; text-align: center;">${avgProgress.toFixed(1)}%</td>
+                    <td style="padding: 6px; border: 1px solid #ddd; text-align: center;">${record.avg_checkpoint_pass_rate ? record.avg_checkpoint_pass_rate.toFixed(1) + '%' : '-'}</td>
+                    <td style="padding: 6px; border: 1px solid #ddd;">${lastAttempt ? lastAttempt.toLocaleDateString() : '-'}</td>
+                `;
+
+                tbody.appendChild(row);
+            });
+
+            document.getElementById('performance-container').style.display = 'block';
+        }
+
+        // Load performance data on page load
+        window.addEventListener('DOMContentLoaded', () => {
+            loadPerformance();
+        });
     </script>
+    <style>
+        .cell-green {
+            background-color: #c8e6c9;
+        }
+        .cell-yellow {
+            background-color: #fff9c4;
+        }
+        .cell-red {
+            background-color: #ffcdd2;
+        }
+        #performance-table tbody tr:hover {
+            background-color: #f5f5f5;
+        }
+    </style>
 </body>
 </html>
 

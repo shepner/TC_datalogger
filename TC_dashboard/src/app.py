@@ -104,6 +104,23 @@ def generate_oc_email():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/api/oc-assignment/performance", methods=["GET"])
+def get_oc_performance():
+    """Get OC performance by role and level."""
+    if not oc_email_generator:
+        return jsonify({"error": "BigQuery client not available"}), 500
+    
+    try:
+        days_back = int(request.args.get("days_back", 90))
+        
+        performance = oc_email_generator.get_oc_performance_by_role(days_back=days_back)
+        
+        return jsonify({"performance": performance})
+    except Exception as e:
+        logger.error(f"Error getting OC performance: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/trading")
 def trading():
     """Trading items dashboard page."""
