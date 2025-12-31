@@ -242,7 +242,11 @@ def get_oc_performance():
                     member_max_oc[member_name] = highest_level
             else:
                 # Highest level has good rate (83+), use it
+                # This ensures members with 83-89% at Level 6 get Max OC = 6
                 member_max_oc[member_name] = highest_level
+        
+        # Debug: Log member_max_oc for troubleshooting
+        logger.debug(f"member_max_oc: {member_max_oc}")
         
         # Add counts and max recommended OC to performance data
         for record in performance:
