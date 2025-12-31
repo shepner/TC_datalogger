@@ -183,16 +183,6 @@
             </div>
         </div>
 
-        <div class="form-group">
-            <label for="instructions">Custom Instructions (optional):</label>
-            <textarea id="instructions" placeholder="Please join the OC assigned to you below. Make sure you have the required items if needed."></textarea>
-        </div>
-
-        <div class="form-group">
-            <label for="max_members">Max Members per OC:</label>
-            <input type="number" id="max_members" value="1" min="1" max="10">
-        </div>
-
         <a href="/"><button class="secondary">Back to Dashboard</button></a>
 
         <div id="error" class="error" style="display: none;"></div>
@@ -212,9 +202,6 @@
         });
 
         async function generateEmail() {
-            const instructions = document.getElementById('instructions').value;
-            const maxMembers = parseInt(document.getElementById('max_members').value);
-            
             document.getElementById('error').style.display = 'none';
             document.getElementById('success').style.display = 'none';
             document.getElementById('email-output').style.display = 'block';
@@ -226,10 +213,7 @@
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify({
-                        instructions: instructions || null,
-                        max_members_per_oc: maxMembers
-                    })
+                    body: JSON.stringify({})
                 });
 
                 const data = await response.json();

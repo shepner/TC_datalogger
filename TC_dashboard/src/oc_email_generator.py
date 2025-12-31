@@ -315,17 +315,9 @@ class OCEmailGenerator:
             else:
                 raise
 
-    def generate_email(
-        self,
-        instructions: Optional[str] = None,
-        max_members_per_oc: int = 1,
-    ) -> str:
+    def generate_email(self) -> str:
         """
-        Generate OC assignment email text.
-
-        Args:
-            instructions: Custom instructions to include (uses default if None)
-            max_members_per_oc: Maximum members to assign per OC
+        Generate OC assignment email text using the form letter template.
 
         Returns:
             Email text ready for copy/paste
