@@ -190,14 +190,23 @@ def get_oc_performance():
         for record in performance:
             member_name = record.get('member_name')
             difficulty_raw = record.get('difficulty') or record.get('oc_level')
-            checkpoint_rate = record.get('checkpoint_pass_rate', 0)
+            checkpoint_rate_raw = record.get('checkpoint_pass_rate')
             
-            if not member_name or difficulty_raw is None:
+            if not member_name or difficulty_raw is None or checkpoint_rate_raw is None:
                 continue
             
             # Ensure difficulty is an integer
             try:
                 difficulty = int(difficulty_raw)
+            except (ValueError, TypeError):
+                continue
+            
+            # Ensure checkpoint_rate is a number (handle both 0-100 and 0.0-1.0 formats)
+            try:
+                checkpoint_rate = float(checkpoint_rate_raw)
+                # If rate is between 0 and 1, assume it's a decimal and convert to percentage
+                if 0 <= checkpoint_rate <= 1:
+                    checkpoint_rate = checkpoint_rate * 100
             except (ValueError, TypeError):
                 continue
             
