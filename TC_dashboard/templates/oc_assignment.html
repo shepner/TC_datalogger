@@ -707,7 +707,7 @@
                     } else if (sort.type === 'position_id') {
                         // Sort by specific column
                         const colIdx = parseInt(sort.column);
-                        const cellIdx = colIdx - 1; // -1 because column 0 is Member
+                        const cellIdx = colIdx - 3; // -3 because columns 0=Member, 1=OC 30d, 2=OC 7d
                         comparison = compareCellValues(a.cells[cellIdx], b.cells[cellIdx], sort.direction);
                     }
                     
