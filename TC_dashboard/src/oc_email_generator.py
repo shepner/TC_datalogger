@@ -597,26 +597,6 @@ class OCEmailGenerator:
                 
                 email_lines.append("")
 
-        # Add alternative OC recommendations
-        if members_needing_alternatives:
-            email_lines.append("")
-            email_lines.append("=== MEMBERS NEEDING ALTERNATIVE OCs ===")
-            for member_info in members_needing_alternatives:
-                member_name = member_info['member_name']
-                combos = member_info['qualified_combos']
-                oc_names = list(set([c['oc_name'] for c in combos]))
-                email_lines.append(f"{member_name}: Needs OC(s) - {', '.join(oc_names)}")
-            email_lines.append("")
-
-        # Add spawn recommendations
-        if members_needing_spawn:
-            email_lines.append("")
-            email_lines.append("=== MEMBERS NEEDING NEW OCs TO BE SPAWNED ===")
-            email_lines.append("The following members have no valid OC assignments (checkpoint_pass_rate < 80 or > 90 for all positions):")
-            email_lines.append(", ".join(members_needing_spawn))
-            email_lines.append("")
-            email_lines.append("ACTION REQUIRED: Please spawn new OCs for these members.")
-            email_lines.append("")
 
         return "\n".join(email_lines)
 
