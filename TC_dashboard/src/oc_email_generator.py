@@ -537,40 +537,86 @@ class OCEmailGenerator:
                     # No valid qualifications at all
                     members_needing_spawn.append(member_name)
 
-        # Generate email text
-        if instructions is None:
-            instructions = """Please join the OC assigned to you below. Make sure you have the required items if needed."""
+        # Generate email text using form letter format
+        email_lines = []
+        
+        # Form letter guidelines
+        email_lines.append("OC quick guidelines:")
+        email_lines.append("")
+        email_lines.append("")
+        email_lines.append("If you get bumped from your OC, it is probably because of these 2 reasons:")
+        email_lines.append("")
+        email_lines.append("- It is expected that all members in Level 2+ OCs will have an 80 to 90 success rate.  Only with Level 1 OCs, participants may have a 0 to 90 success rate.")
+        email_lines.append("")
+        email_lines.append("- Do not join the Level 5 No Reserve OC.  We cant (yet) complete the 2nd part so its all just a waste of time.")
+        email_lines.append("")
+        email_lines.append("")
+        email_lines.append("If you can do a higher level OC than what was assigned, then go ahead and take it!  (just make sure you are within the 80 to 90 range).  If there arent any OCs of the level you need available, just wait a few hours, Ill spawn more.")
+        email_lines.append("")
+        email_lines.append("")
+        email_lines.append("Finally, dont forget to login daily, quickly join your OC, and be available when your OC is ready!")
+        email_lines.append("")
+        email_lines.append("")
+        email_lines.append("Here are today's OC assignments:")
+        email_lines.append("")
+        email_lines.append("")
 
-        email_lines = [instructions, ""]
-
-        # Group assignments by OC with position-specific recommendations
+        # Group assignments by level (6, 5, 4, 3, 2, 1), then by OC
+        # Structure: level -> [oc_id] -> [assignments]
+        assignments_by_level = {}  # level -> {oc_id: [assignments]}
+        
         for oc in ocs:
             oc_id = oc['oc_id']
             if oc_id in assignments and assignments[oc_id]:
+                difficulty = oc.get('difficulty')
+                if difficulty is None:
+                    continue
+                
+                level = int(difficulty)
+                if level not in assignments_by_level:
+                    assignments_by_level[level] = {}
+                
+                assignments_by_level[level][oc_id] = assignments[oc_id]
+
+        # Output by level in descending order (6, 5, 4, 3, 2, 1)
+        for level in sorted(assignments_by_level.keys(), reverse=True):
+            level_assignments = assignments_by_level[level]
+            
+            # For each OC at this level
+            for oc in ocs:
+                oc_id = oc['oc_id']
+                if oc_id not in level_assignments:
+                    continue
+                
                 oc_name = oc['oc_name']
-                difficulty = oc.get('difficulty', '?')
                 oc_url = f"https://www.torn.com/factions.php?step=your#/war/oc/{oc_id}"
                 
-                email_lines.append(f"{oc_name} (Difficulty {difficulty})")
-                email_lines.append(f"URL: {oc_url}")
+                # Format: Lv <number> - <OC Name> - <OC URL>
+                email_lines.append(f"Lv {level} - {oc_name} - {oc_url}")
                 
-                # Group members by position requirements
-                member_list = []
-                for assignment in assignments[oc_id]:
+                # Member list as markdown bullets
+                for assignment in level_assignments[oc_id]:
                     member_name = assignment['member_name']
                     positions = assignment.get('qualified_positions', [])
                     if positions:
-                        # Show specific positions
+                        # Show specific positions in parentheses
                         position_str = ', '.join(positions)
-                        member_list.append(f"{member_name} (Positions: {position_str})")
+                        email_lines.append(f"- {member_name} (Positions: {position_str})")
                     else:
-                        member_list.append(member_name)
+                        email_lines.append(f"- {member_name}")
                 
-                email_lines.append(f"Members: {', '.join(member_list)}")
+                email_lines.append("")
+
+        # If no assignments, show empty structure
+        if not assignments_by_level:
+            for level in [6, 5, 4, 3, 2, 1]:
+                email_lines.append(f"Lv {level} -")
+                email_lines.append("-")
                 email_lines.append("")
 
         # Add alternative OC recommendations
         if members_needing_alternatives:
+            email_lines.append("")
             email_lines.append("=== MEMBERS NEEDING ALTERNATIVE OCs ===")
             for member_info in members_needing_alternatives:
                 member_name = member_info['member_name']
@@ -581,15 +627,13 @@ class OCEmailGenerator:
 
         # Add spawn recommendations
         if members_needing_spawn:
+            email_lines.append("")
             email_lines.append("=== MEMBERS NEEDING NEW OCs TO BE SPAWNED ===")
             email_lines.append("The following members have no valid OC assignments (checkpoint_pass_rate < 80 or > 90 for all positions):")
             email_lines.append(", ".join(members_needing_spawn))
             email_lines.append("")
             email_lines.append("ACTION REQUIRED: Please spawn new OCs for these members.")
             email_lines.append("")
-
-        if not assignments and not members_needing_alternatives and not members_needing_spawn:
-            email_lines.append("No members assigned to OCs (all OCs may be full or no suitable assignments found).")
 
         return "\n".join(email_lines)
 
