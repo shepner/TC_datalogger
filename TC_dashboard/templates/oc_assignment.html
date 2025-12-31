@@ -480,6 +480,7 @@
                         oc_count_30d: record.oc_count_30d || 0,
                         oc_count_7d: record.oc_count_7d || 0,
                         is_in_oc: record.is_in_oc || false,
+                        max_recommended_oc: record.max_recommended_oc || null,
                         data: new Map()
                     });
                 }
@@ -493,6 +494,12 @@
                 }
                 if (record.is_in_oc !== undefined) {
                     memberData.is_in_oc = record.is_in_oc;
+                }
+                if (record.max_recommended_oc !== undefined && record.max_recommended_oc !== null) {
+                    // Keep the highest max recommended OC
+                    if (memberData.max_recommended_oc === null || record.max_recommended_oc > memberData.max_recommended_oc) {
+                        memberData.max_recommended_oc = record.max_recommended_oc;
+                    }
                 }
                 const currentMax = memberData.data.get(columnKey);
                 const checkpointRate = record.checkpoint_pass_rate || 0;
