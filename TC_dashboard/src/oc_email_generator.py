@@ -464,6 +464,12 @@ class OCEmailGenerator:
         # Track which members have been assigned
         assigned_members = set()
         
+        # Filter out "No Reserve OC" - it's a 2-part OC with "Bidding War" followup
+        # that has poor success rates, costing faction Respect and members Money/CE
+        def is_no_reserve_oc(oc):
+            oc_name = oc.get('oc_name', '').lower()
+            return 'no reserve' in oc_name
+        
         # Assign members to OCs based on priority:
         # 1. Active members → OCs starting soonest (if already has members) or OCs that won't expire for >1 day
         # 2. Inactive members → OCs with longer delay
@@ -476,8 +482,12 @@ class OCEmailGenerator:
             # Get appropriate OC list based on activity
             oc_list = ocs_for_active if member['is_active'] else ocs_for_inactive
             
-            # Try to assign member to first available OC
+            # Try to assign member to first available OC (excluding No Reserve)
             for oc in oc_list:
+                # Skip No Reserve OC
+                if is_no_reserve_oc(oc):
+                    continue
+                
                 oc_id = oc['oc_id']
                 
                 # Check if OC has space
