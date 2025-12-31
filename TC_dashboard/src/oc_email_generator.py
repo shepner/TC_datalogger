@@ -549,6 +549,64 @@ class OCEmailGenerator:
                     assignments[oc_id].append(member_name)
                     assigned_members.add(member_name)
                     break
+            
+            # If member wasn't assigned and has OC history, try all OCs (not just activity-based list)
+            if member_name not in assigned_members and has_oc_history:
+                # Fallback: try all OCs regardless of activity status
+                for oc in ocs:
+                    # Skip No Reserve OC
+                    if is_no_reserve_oc(oc):
+                        continue
+                    
+                    oc_id = oc['oc_id']
+                    
+                    # Check if OC has space
+                    if oc_id not in assignments:
+                        assignments[oc_id] = []
+                    
+                    # Check available slots
+                    total_slots = oc.get('total_slots', 0)
+                    filled_slots = oc.get('filled_slots', 0)
+                    assigned_count = len(assignments[oc_id])
+                    available_slots = total_slots - filled_slots - assigned_count
+                    
+                    if available_slots > 0:
+                        assignments[oc_id].append(member_name)
+                        assigned_members.add(member_name)
+                        break
+            
+            # If still not assigned and no OC history, try all Level 1 OCs
+            if member_name not in assigned_members and not has_oc_history:
+                for oc in ocs:
+                    # Skip No Reserve OC
+                    if is_no_reserve_oc(oc):
+                        continue
+                    
+                    difficulty = oc.get('difficulty')
+                    if difficulty is None or int(difficulty) != 1:
+                        continue
+                    
+                    oc_id = oc['oc_id']
+                    
+                    # Check if OC has space
+                    if oc_id not in assignments:
+                        assignments[oc_id] = []
+                    
+                    # Check available slots
+                    total_slots = oc.get('total_slots', 0)
+                    filled_slots = oc.get('filled_slots', 0)
+                    assigned_count = len(assignments[oc_id])
+                    available_slots = total_slots - filled_slots - assigned_count
+                    
+                    if available_slots > 0:
+                        assignments[oc_id].append(member_name)
+                        assigned_members.add(member_name)
+                        break
+
+        # Log unassigned members for debugging
+        unassigned = [m['member_name'] for m in members_sorted if m['member_name'] not in assigned_members]
+        if unassigned:
+            logger.info(f"Unassigned members ({len(unassigned)}): {', '.join(unassigned)}")
 
         # Generate email text using form letter format
         email_lines = []
