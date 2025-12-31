@@ -540,7 +540,7 @@ class OCEmailGenerator:
         # Generate email text using form letter format
         email_lines = []
         
-        # Form letter guidelines
+        # Form letter guidelines - match exact spacing from screenshot
         email_lines.append("OC quick guidelines:")
         email_lines.append("")
         email_lines.append("")
@@ -558,7 +558,6 @@ class OCEmailGenerator:
         email_lines.append("")
         email_lines.append("")
         email_lines.append("Here are today's OC assignments:")
-        email_lines.append("")
         email_lines.append("")
         email_lines.append("")
 
