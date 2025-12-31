@@ -262,12 +262,15 @@ def get_oc_performance():
         
         # Debug: Log member_max_oc for troubleshooting
         logger.info(f"member_max_oc calculated for {len(member_max_oc)} members")
-        if len(member_max_oc) < 10:
-            logger.info(f"member_max_oc: {member_max_oc}")
-        # Log sample of level rates for debugging
-        sample_members = list(member_level_rates.keys())[:5]
-        for member in sample_members:
-            logger.info(f"{member} level_rates: {member_level_rates[member]}")
+        # Log specific members from screenshot to debug
+        test_members = ['Acnar', 'makers_mark_man', 'Raptor_RSA', 'Ti12', 'Zero_pl']
+        for member in test_members:
+            if member in member_max_oc:
+                logger.info(f"{member} -> member_max_oc = {member_max_oc[member]}")
+            elif member in member_level_rates:
+                logger.info(f"{member} -> level_rates = {member_level_rates[member]}, but NOT in member_max_oc")
+            else:
+                logger.info(f"{member} -> NOT in member_level_rates at all")
         
         # Add counts and max recommended OC to performance data
         for record in performance:
