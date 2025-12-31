@@ -143,15 +143,43 @@ def get_oc_performance():
                     counts_map[member_id] = {'oc_count_30d': 0, 'oc_count_7d': 0}
                 counts_map[member_id]['oc_count_7d'] = row.get('oc_count_7d', 0)
         
-        # Add counts to performance data
+        # Calculate max recommended OC level for each member
+        # Max recommended = highest difficulty where member has checkpoint_pass_rate between 80-90
+        member_max_oc = {}  # member_name -> max_difficulty
+        for record in performance:
+            member_name = record.get('member_name')
+            difficulty = record.get('difficulty') or record.get('oc_level')
+            checkpoint_rate = record.get('checkpoint_pass_rate', 0)
+            
+            if not member_name or not difficulty:
+                continue
+            
+            # Check if checkpoint_rate is in the valid range (80-90)
+            if 80 <= checkpoint_rate <= 90:
+                if member_name not in member_max_oc:
+                    member_max_oc[member_name] = difficulty
+                else:
+                    # Keep the highest difficulty
+                    if difficulty > member_max_oc[member_name]:
+                        member_max_oc[member_name] = difficulty
+        
+        # Add counts and max recommended OC to performance data
         for record in performance:
             member_id = record.get('member_id')
+            member_name = record.get('member_name')
+            
             if member_id in counts_map:
                 record['oc_count_30d'] = counts_map[member_id]['oc_count_30d']
                 record['oc_count_7d'] = counts_map[member_id]['oc_count_7d']
             else:
                 record['oc_count_30d'] = 0
                 record['oc_count_7d'] = 0
+            
+            # Add max recommended OC
+            if member_name in member_max_oc:
+                record['max_recommended_oc'] = member_max_oc[member_name]
+            else:
+                record['max_recommended_oc'] = None
         
         return jsonify({"performance": performance})
     except Exception as e:

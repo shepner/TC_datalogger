@@ -64,6 +64,17 @@
             color: green;
             margin-top: 10px;
         }
+        /* Max Recommended OC level colors */
+        .oc-level-1 { background-color: #e3f2fd; }
+        .oc-level-2 { background-color: #bbdefb; }
+        .oc-level-3 { background-color: #90caf9; }
+        .oc-level-4 { background-color: #64b5f6; }
+        .oc-level-5 { background-color: #42a5f5; }
+        .oc-level-6 { background-color: #2196f3; color: white; }
+        .oc-level-7 { background-color: #1e88e5; color: white; }
+        .oc-level-8 { background-color: #1976d2; color: white; }
+        .oc-level-9 { background-color: #1565c0; color: white; }
+        .oc-level-10 { background-color: #0d47a1; color: white; }
         /* Pivot table header styling */
         #pivot-table {
             border-collapse: collapse;
@@ -506,12 +517,13 @@
             headerRow1.innerHTML += '<th rowspan="3" class="sortable" data-column="oc_30d" data-type="oc_30d" style="padding: 8px; position: sticky; left: 80px; background-color: #4CAF50; z-index: 11; text-align: center; cursor: pointer;">OC 30d</th>';
             headerRow1.innerHTML += '<th rowspan="3" class="sortable" data-column="oc_7d" data-type="oc_7d" style="padding: 8px; position: sticky; left: 140px; background-color: #4CAF50; z-index: 11; text-align: center; cursor: pointer;">OC 7d</th>';
             headerRow1.innerHTML += '<th rowspan="3" class="sortable" data-column="in_oc" data-type="in_oc" style="padding: 8px; position: sticky; left: 200px; background-color: #4CAF50; z-index: 11; text-align: center; cursor: pointer;">In OC</th>';
+            headerRow1.innerHTML += '<th rowspan="3" class="sortable" data-column="max_oc" data-type="max_oc" style="padding: 8px; position: sticky; left: 260px; background-color: #4CAF50; z-index: 11; text-align: center; cursor: pointer;">Max OC</th>';
             
             const sortedDifficulties = Array.from(columnGroups.keys()).filter(d => d != null && typeof d === 'number').sort((a, b) => {
                 return b - a; // Higher difficulty first
             });
             pivotHeaderMetadata = []; // Reset metadata
-            let columnIndex = 4; // Start at 4 (0 is Member, 1 is OC 30d, 2 is OC 7d, 3 is In OC)
+            let columnIndex = 5; // Start at 5 (0 is Member, 1 is OC 30d, 2 is OC 7d, 3 is In OC, 4 is Max OC)
             sortedDifficulties.forEach(difficulty => {
                 const difficultyGroup = columnGroups.get(difficulty);
                 let totalCols = 0;
@@ -540,7 +552,7 @@
 
             // Second row: oc_name headers (with colspan for position_ids) - sortable
             const headerRow2 = document.createElement('tr');
-            columnIndex = 4; // Skip Member, OC 30d, OC 7d, In OC columns
+            columnIndex = 5; // Skip Member, OC 30d, OC 7d, In OC, Max OC columns
             sortedDifficulties.forEach(difficulty => {
                 const difficultyGroup = columnGroups.get(difficulty);
                 const sortedOCNames = Array.from(difficultyGroup.keys()).sort();
@@ -557,7 +569,7 @@
             // Third row: position_id headers (sortable)
             const headerRow3 = document.createElement('tr');
             pivotColumnMap.clear(); // Reset column map
-            columnIndex = 4; // Track column index (0 is Member, 1 is OC 30d, 2 is OC 7d, 3 is In OC, so start at 4)
+            columnIndex = 5; // Track column index (0 is Member, 1 is OC 30d, 2 is OC 7d, 3 is In OC, 4 is Max OC, so start at 5)
             sortedDifficulties.forEach(difficulty => {
                 const difficultyGroup = columnGroups.get(difficulty);
                 const sortedOCNames = Array.from(difficultyGroup.keys()).sort();
@@ -590,11 +602,15 @@
 
             sortedMembers.forEach(member => {
                 const row = document.createElement('tr');
-                const rowData = { member_name: member.member_name, oc_count_30d: member.oc_count_30d || 0, oc_count_7d: member.oc_count_7d || 0, is_in_oc: member.is_in_oc || false, cells: [] };
+                const rowData = { member_name: member.member_name, oc_count_30d: member.oc_count_30d || 0, oc_count_7d: member.oc_count_7d || 0, is_in_oc: member.is_in_oc || false, max_recommended_oc: member.max_recommended_oc || null, cells: [] };
+                const maxOcLevel = member.max_recommended_oc || null;
+                const maxOcClass = maxOcLevel && maxOcLevel >= 1 && maxOcLevel <= 10 ? `oc-level-${maxOcLevel}` : '';
+                const maxOcDisplay = maxOcLevel !== null ? maxOcLevel : '—';
                 row.innerHTML = `<td style="padding: 6px; border: 1px solid #ddd; border-right: 1px solid #ddd; position: sticky; left: 0; background-color: white; font-weight: bold;">${member.member_name}</td>`;
                 row.innerHTML += `<td style="padding: 6px; border: 1px solid #ddd; border-right: 1px solid #ddd; position: sticky; left: 80px; background-color: white; text-align: center; font-weight: bold;">${member.oc_count_30d || 0}</td>`;
                 row.innerHTML += `<td style="padding: 6px; border: 1px solid #ddd; border-right: 1px solid #ddd; position: sticky; left: 140px; background-color: white; text-align: center; font-weight: bold;">${member.oc_count_7d || 0}</td>`;
                 row.innerHTML += `<td style="padding: 6px; border: 1px solid #ddd; border-right: 1px solid #ddd; position: sticky; left: 200px; background-color: white; text-align: center; font-weight: bold;">${member.is_in_oc ? '✓' : '✗'}</td>`;
+                row.innerHTML += `<td class="${maxOcClass}" style="padding: 6px; border: 1px solid #ddd; border-right: 1px solid #ddd; position: sticky; left: 260px; background-color: white; text-align: center; font-weight: bold;">${maxOcDisplay}</td>`;
                 
                 sortedDifficulties.forEach(difficulty => {
                     const difficultyGroup = columnGroups.get(difficulty);
@@ -701,6 +717,8 @@
                         comparison = compareCellValues(a.oc_count_7d || 0, b.oc_count_7d || 0, sort.direction);
                     } else if (sort.type === 'in_oc') {
                         comparison = compareCellValues(a.is_in_oc ? 1 : 0, b.is_in_oc ? 1 : 0, sort.direction);
+                    } else if (sort.type === 'max_oc') {
+                        comparison = compareCellValues(a.max_recommended_oc || 0, b.max_recommended_oc || 0, sort.direction);
                     } else if (sort.type === 'difficulty') {
                         // Sort by all columns in this difficulty group
                         const difficulty = parseInt(sort.difficulty);
@@ -715,7 +733,7 @@
                     } else if (sort.type === 'position_id') {
                         // Sort by specific column
                         const colIdx = parseInt(sort.column);
-                        const cellIdx = colIdx - 4; // -4 because columns 0=Member, 1=OC 30d, 2=OC 7d, 3=In OC
+                        const cellIdx = colIdx - 5; // -5 because columns 0=Member, 1=OC 30d, 2=OC 7d, 3=In OC, 4=Max OC
                         comparison = compareCellValues(a.cells[cellIdx], b.cells[cellIdx], sort.direction);
                     }
                     
@@ -748,9 +766,9 @@
         
         function compareByCells(a, b, relevantCells, direction) {
             // Compare by average or max value in relevant cells
-            // columnIndex starts at 4 (after Member, OC 30d, OC 7d, In OC), so subtract 4 to get cell index
-            const aVals = relevantCells.map(m => a.cells[m.columnIndex - 4]).filter(v => v != null);
-            const bVals = relevantCells.map(m => b.cells[m.columnIndex - 4]).filter(v => v != null);
+            // columnIndex starts at 5 (after Member, OC 30d, OC 7d, In OC, Max OC), so subtract 5 to get cell index
+            const aVals = relevantCells.map(m => a.cells[m.columnIndex - 5]).filter(v => v != null);
+            const bVals = relevantCells.map(m => b.cells[m.columnIndex - 5]).filter(v => v != null);
             
             if (aVals.length === 0 && bVals.length === 0) return 0;
             if (aVals.length === 0) return 1;
