@@ -209,11 +209,25 @@ def get_oc_performance():
                 record['oc_count_7d'] = 0
             
             # Add max recommended OC
-            # Priority: 1) 90+ at highest level (recommend next level), 2) 80-90 range, 3) Level 1 if no 80+
+            # Priority: 1) 90+ at highest level (recommend multiple levels based on rate), 2) 80-90 range, 3) Level 1 if no 80+
             if (member_name in member_highest_level_rate and 
                 member_highest_level_rate[member_name] >= 90):
-                # Member has 90+ at their highest level, recommend next level higher (takes priority)
-                record['max_recommended_oc'] = member_highest_level[member_name] + 1
+                # Member has 90+ at their highest level, recommend levels higher based on rate
+                # 90-92%: +1 level (likely to have 80%+ at next level)
+                # 93-94%: +2 levels (very likely to jump multiple levels)
+                # 95%+: +3 levels (exceptional performance, can jump even more)
+                highest_rate = member_highest_level_rate[member_name]
+                highest_level = member_highest_level[member_name]
+                
+                if highest_rate >= 95:
+                    # 95%+ can jump 3+ levels
+                    record['max_recommended_oc'] = highest_level + 3
+                elif highest_rate >= 93:
+                    # 93-94% can jump 2 levels
+                    record['max_recommended_oc'] = highest_level + 2
+                else:
+                    # 90-92% can jump 1 level
+                    record['max_recommended_oc'] = highest_level + 1
             elif member_name in member_max_oc:
                 # Member has position in 80-90 range, use that
                 record['max_recommended_oc'] = member_max_oc[member_name]
