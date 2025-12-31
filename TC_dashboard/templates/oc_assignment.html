@@ -193,20 +193,24 @@
             <input type="number" id="max_members" value="1" min="1" max="10">
         </div>
 
-        <button onclick="generateEmail()">Generate Email</button>
         <a href="/"><button class="secondary">Back to Dashboard</button></a>
 
         <div id="error" class="error" style="display: none;"></div>
         <div id="success" class="success" style="display: none;"></div>
 
-        <div id="email-output" class="email-output" style="display: none;">
+        <div id="email-output" class="email-output" style="display: block;">
             <h3>Generated Email:</h3>
-            <textarea id="email-text" readonly></textarea>
+            <textarea id="email-text" readonly>Generating email...</textarea>
             <button class="copy-button" onclick="copyEmail()">Copy to Clipboard</button>
         </div>
     </div>
 
     <script>
+        // Auto-generate email when page loads
+        window.addEventListener('DOMContentLoaded', function() {
+            generateEmail();
+        });
+
         async function generateEmail() {
             const instructions = document.getElementById('instructions').value;
             const maxMembers = parseInt(document.getElementById('max_members').value);
