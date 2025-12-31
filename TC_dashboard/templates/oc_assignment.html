@@ -137,10 +137,10 @@
                     </label>
                 </div>
                 <div id="filter-controls" style="display: none; flex-direction: row; align-items: center; gap: 5px; flex-shrink: 0;">
-                    <label for="oc_level_filter" style="margin: 0; white-space: nowrap;">Level:</label>
-                    <select id="oc_level_filter" onchange="toggleView()" style="padding: 4px 8px; font-size: 13px;">
-                        <option value="">All</option>
-                    </select>
+                    <label style="margin: 0; white-space: nowrap;">Level:</label>
+                    <div id="oc_level_checkboxes" style="display: flex; flex-direction: row; align-items: center; gap: 8px; flex-wrap: wrap;">
+                        <!-- Checkboxes will be populated here -->
+                    </div>
                 </div>
             </div>
 
@@ -334,27 +334,37 @@
             // Sort difficulties in descending order (highest first)
             const sortedDifficulties = Array.from(difficulties).sort((a, b) => b - a);
             
-            // Populate the filter dropdown
-            const filterSelect = document.getElementById('oc_level_filter');
-            const currentValue = filterSelect.value; // Preserve current selection
+            // Get the checkbox container
+            const checkboxContainer = document.getElementById('oc_level_checkboxes');
+            checkboxContainer.innerHTML = ''; // Clear existing checkboxes
             
-            // Clear existing options except "All"
-            filterSelect.innerHTML = '<option value="">All</option>';
-            
-            // Add options for each available difficulty level
-            sortedDifficulties.forEach(difficulty => {
-                const option = document.createElement('option');
-                option.value = difficulty;
-                option.textContent = `Level ${difficulty}`;
-                filterSelect.appendChild(option);
+            // Store which checkboxes were previously checked
+            const previouslyChecked = new Set();
+            checkboxContainer.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+                if (cb.checked) {
+                    previouslyChecked.add(parseInt(cb.value, 10));
+                }
             });
             
-            // Restore previous selection if it still exists
-            if (currentValue && sortedDifficulties.includes(parseInt(currentValue, 10))) {
-                filterSelect.value = currentValue;
-            } else {
-                filterSelect.value = ''; // Reset to "All" if previous selection no longer exists
-            }
+            // Add checkboxes for each available difficulty level
+            sortedDifficulties.forEach(difficulty => {
+                const label = document.createElement('label');
+                label.style.cssText = 'margin: 0; white-space: nowrap; display: flex; align-items: center; cursor: pointer; font-size: 13px;';
+                
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.value = difficulty;
+                checkbox.id = `oc_level_${difficulty}`;
+                checkbox.checked = previouslyChecked.has(difficulty) || previouslyChecked.size === 0; // Check if previously checked, or check all by default
+                checkbox.style.marginRight = '4px';
+                checkbox.addEventListener('change', toggleView);
+                
+                const text = document.createTextNode(difficulty);
+                
+                label.appendChild(checkbox);
+                label.appendChild(text);
+                checkboxContainer.appendChild(label);
+            });
         }
 
         function displayPerformance(performance) {
@@ -398,20 +408,23 @@
         }
 
         function displayPivotView(data) {
-            const ocLevelFilter = document.getElementById('oc_level_filter').value;
+            // Get checked difficulty levels
+            const checkedLevels = new Set();
+            document.querySelectorAll('#oc_level_checkboxes input[type="checkbox"]:checked').forEach(cb => {
+                checkedLevels.add(parseInt(cb.value, 10));
+            });
+            
             let filteredData = data;
-            if (ocLevelFilter) {
-                // Convert filter to number for comparison
-                const filterNum = parseInt(ocLevelFilter, 10);
+            // If at least one checkbox is checked, filter by checked levels
+            if (checkedLevels.size > 0) {
                 filteredData = data.filter(r => {
                     const diff = r.difficulty !== undefined ? r.difficulty : r.oc_level;
                     // Handle both string and number types
-                    if (typeof diff === 'string') {
-                        return parseInt(diff, 10) === filterNum;
-                    }
-                    return diff === filterNum;
+                    const diffNum = typeof diff === 'string' ? parseInt(diff, 10) : diff;
+                    return checkedLevels.has(diffNum);
                 });
             }
+            // If no checkboxes are checked, show all data (shouldn't happen, but handle it)
 
             if (filteredData.length === 0) {
                 document.getElementById('pivot-body').innerHTML = '<tr><td colspan="100" style="padding: 20px; text-align: center;">No performance data found</td></tr>';
@@ -863,11 +876,22 @@
         }
 
         function displayDetailView(data) {
-            const ocLevelFilter = document.getElementById('oc_level_filter').value;
+            // Get checked difficulty levels
+            const checkedLevels = new Set();
+            document.querySelectorAll('#oc_level_checkboxes input[type="checkbox"]:checked').forEach(cb => {
+                checkedLevels.add(parseInt(cb.value, 10));
+            });
+            
             let filteredData = data;
-            if (ocLevelFilter) {
-                filteredData = data.filter(r => r.oc_level == ocLevelFilter);
+            // If at least one checkbox is checked, filter by checked levels
+            if (checkedLevels.size > 0) {
+                filteredData = data.filter(r => {
+                    const ocLevel = r.oc_level || r.difficulty;
+                    const ocLevelNum = typeof ocLevel === 'string' ? parseInt(ocLevel, 10) : ocLevel;
+                    return checkedLevels.has(ocLevelNum);
+                });
             }
+            // If no checkboxes are checked, show all data
 
             const tbody = document.getElementById('performance-body');
             tbody.innerHTML = '';
