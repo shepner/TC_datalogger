@@ -509,7 +509,8 @@ class OCEmailGenerator:
                 # Count current assignments for this OC
                 current_count = sum(len(a.get('qualified_positions', [])) for a in assignments[oc_id])
                 
-                if current_count < max_members_per_oc * oc.get('total_slots', 1):
+                # Assign one member per OC (no limit on members per OC)
+                if current_count < oc.get('total_slots', 1):
                     assignments[oc_id].append({
                         'member_name': member_name,
                         'qualified_positions': qualified_positions
