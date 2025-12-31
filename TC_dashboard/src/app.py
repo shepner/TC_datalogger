@@ -184,8 +184,7 @@ def get_oc_performance():
             if checkpoint_rate >= 80:
                 member_has_80_plus[member_name] = True
         
-        # Second pass: find highest difficulty with checkpoint_pass_rate between 80-90
-        # Also track best rates per level to prefer levels with better performance
+        # Second pass: track best rates per level for each member
         member_level_rates = {}  # member_name -> {level: best_rate}
         
         for record in performance:
@@ -211,29 +210,39 @@ def get_oc_performance():
                 # Keep the best (highest) rate for this level
                 if checkpoint_rate > member_level_rates[member_name][difficulty]:
                     member_level_rates[member_name][difficulty] = checkpoint_rate
+        
+        # Third pass: determine max OC based on best rates per level
+        # Prefer highest level with 80-90 range, but if higher level has borderline rate (80-82)
+        # and lower level has good rate (85+), prefer the lower level
+        for member_name, level_rates in member_level_rates.items():
+            # Find all levels with rates in 80-90 range, sorted by level (descending)
+            valid_levels = []
+            for level, rate in level_rates.items():
+                if 80 <= rate <= 90:
+                    valid_levels.append((level, rate))
             
-            # Check if checkpoint_rate is in the valid range (80-90)
-            if 80 <= checkpoint_rate <= 90:
-                if member_name not in member_max_oc:
-                    member_max_oc[member_name] = difficulty
+            if not valid_levels:
+                continue
+            
+            # Sort by level descending
+            valid_levels.sort(key=lambda x: x[0], reverse=True)
+            
+            # If highest level has borderline rate (80-82) and we have a good rate (85+) at a lower level, use lower
+            highest_level, highest_rate = valid_levels[0]
+            
+            if highest_rate <= 82:
+                # Check if there's a lower level with a good rate (85+)
+                for level, rate in valid_levels[1:]:
+                    if rate >= 85:
+                        # Prefer this lower level with good rate
+                        member_max_oc[member_name] = level
+                        break
                 else:
-                    # Keep the highest difficulty, but prefer levels with better rates
-                    # If current level has a borderline rate (80-82) and we have a better rate (85+) at a lower level, prefer the lower level
-                    current_max_level = member_max_oc[member_name]
-                    current_max_rate = member_level_rates[member_name].get(current_max_level, 0)
-                    
-                    # If new level is higher and has a good rate (83+), use it
-                    # If new level is higher but borderline (80-82), and we have a better rate (85+) at current max, keep current
-                    if difficulty > current_max_level:
-                        if checkpoint_rate >= 83:
-                            # Good rate at higher level, use it
-                            member_max_oc[member_name] = difficulty
-                        elif checkpoint_rate <= 82 and current_max_rate >= 85:
-                            # Borderline rate at higher level, but good rate at lower level - keep lower
-                            pass
-                        else:
-                            # Use higher level
-                            member_max_oc[member_name] = difficulty
+                    # No better lower level, use highest
+                    member_max_oc[member_name] = highest_level
+            else:
+                # Highest level has good rate (83+), use it
+                member_max_oc[member_name] = highest_level
         
         # Add counts and max recommended OC to performance data
         for record in performance:
