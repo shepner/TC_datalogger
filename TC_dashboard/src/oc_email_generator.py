@@ -467,9 +467,11 @@ class OCEmailGenerator:
         # Track which members have been assigned
         assigned_members = set()
         
-        # Filter out "No Reserve OC" - it's a 2-part OC with "Bidding War" followup
+        # Filter out "No Reserve OC" if requested - it's a 2-part OC with "Bidding War" followup
         # that has poor success rates, costing faction Respect and members Money/CE
         def is_no_reserve_oc(oc):
+            if not exclude_no_reserve:
+                return False
             oc_name = oc.get('oc_name', '').lower()
             return 'no reserve' in oc_name
         
