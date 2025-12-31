@@ -139,7 +139,7 @@
                     <input type="number" id="performance_days" value="90" min="7" max="365" step="1" style="width: 70px; padding: 4px;" onchange="validateDaysBack()">
                 </div>
                 <button onclick="loadPerformance()" style="padding: 6px 12px; font-size: 13px;">Load Performance Data</button>
-                <div id="view-controls" style="display: none; display: flex; align-items: center; gap: 8px;">
+                <div id="view-controls" style="display: none; align-items: center; gap: 8px;">
                     <label style="margin: 0; white-space: nowrap;">
                         <input type="radio" name="view_mode" value="pivot" checked onchange="toggleView()" style="margin-right: 4px;"> Pivot
                     </label>
@@ -147,7 +147,7 @@
                         <input type="radio" name="view_mode" value="detail" onchange="toggleView()" style="margin-right: 4px;"> Detail
                     </label>
                 </div>
-                <div id="filter-controls" style="display: none; display: flex; align-items: center; gap: 5px;">
+                <div id="filter-controls" style="display: none; align-items: center; gap: 5px;">
                     <label for="oc_level_filter" style="margin: 0; white-space: nowrap;">Level:</label>
                     <select id="oc_level_filter" onchange="toggleView()" style="padding: 4px 8px; font-size: 13px;">
                         <option value="">All</option>
