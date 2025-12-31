@@ -155,10 +155,16 @@ def get_oc_performance():
         # First pass: track highest level and rates for each member
         for record in performance:
             member_name = record.get('member_name')
-            difficulty = record.get('difficulty') or record.get('oc_level')
+            difficulty_raw = record.get('difficulty') or record.get('oc_level')
             checkpoint_rate = record.get('checkpoint_pass_rate', 0)
             
-            if not member_name or not difficulty:
+            if not member_name or difficulty_raw is None:
+                continue
+            
+            # Ensure difficulty is an integer
+            try:
+                difficulty = int(difficulty_raw)
+            except (ValueError, TypeError):
                 continue
             
             # Track highest level attempted
@@ -181,10 +187,16 @@ def get_oc_performance():
         # Second pass: find highest difficulty with checkpoint_pass_rate between 80-90
         for record in performance:
             member_name = record.get('member_name')
-            difficulty = record.get('difficulty') or record.get('oc_level')
+            difficulty_raw = record.get('difficulty') or record.get('oc_level')
             checkpoint_rate = record.get('checkpoint_pass_rate', 0)
             
-            if not member_name or not difficulty:
+            if not member_name or difficulty_raw is None:
+                continue
+            
+            # Ensure difficulty is an integer
+            try:
+                difficulty = int(difficulty_raw)
+            except (ValueError, TypeError):
                 continue
             
             # Check if checkpoint_rate is in the valid range (80-90)
