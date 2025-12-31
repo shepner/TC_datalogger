@@ -145,18 +145,36 @@ def get_oc_performance():
         
         # Calculate max recommended OC level for each member
         # Max recommended = highest difficulty where member has checkpoint_pass_rate between 80-90
+        # If member has 90+ at their highest level, recommend next level higher
         # If member has no position with checkpoint_pass_rate >= 80, set to Level 1
-        member_max_oc = {}  # member_name -> max_difficulty
+        member_max_oc = {}  # member_name -> max_difficulty (80-90 range)
         member_has_80_plus = {}  # member_name -> bool (has any position with >= 80)
+        member_highest_level = {}  # member_name -> highest difficulty they've attempted
+        member_highest_level_rate = {}  # member_name -> checkpoint_pass_rate at highest level
         
-        # First pass: check if member has any position with >= 80 checkpoint_pass_rate
+        # First pass: track highest level and rates for each member
         for record in performance:
             member_name = record.get('member_name')
+            difficulty = record.get('difficulty') or record.get('oc_level')
             checkpoint_rate = record.get('checkpoint_pass_rate', 0)
             
-            if not member_name:
+            if not member_name or not difficulty:
                 continue
             
+            # Track highest level attempted
+            if member_name not in member_highest_level:
+                member_highest_level[member_name] = difficulty
+                member_highest_level_rate[member_name] = checkpoint_rate
+            else:
+                if difficulty > member_highest_level[member_name]:
+                    member_highest_level[member_name] = difficulty
+                    member_highest_level_rate[member_name] = checkpoint_rate
+                elif difficulty == member_highest_level[member_name]:
+                    # Keep the highest checkpoint_rate for this level
+                    if checkpoint_rate > member_highest_level_rate[member_name]:
+                        member_highest_level_rate[member_name] = checkpoint_rate
+            
+            # Check if member has any position with >= 80
             if checkpoint_rate >= 80:
                 member_has_80_plus[member_name] = True
         
@@ -192,10 +210,18 @@ def get_oc_performance():
             
             # Add max recommended OC
             if member_name in member_max_oc:
+                # Member has position in 80-90 range, use that
                 record['max_recommended_oc'] = member_max_oc[member_name]
             elif member_name in member_has_80_plus:
-                # Member has >= 80 but not in 80-90 range, so no recommendation
-                record['max_recommended_oc'] = None
+                # Member has >= 80 but not in 80-90 range
+                # Check if they have 90+ at their highest level
+                if (member_name in member_highest_level_rate and 
+                    member_highest_level_rate[member_name] >= 90):
+                    # Recommend next level higher
+                    record['max_recommended_oc'] = member_highest_level[member_name] + 1
+                else:
+                    # No recommendation
+                    record['max_recommended_oc'] = None
             else:
                 # Member has no position with >= 80, automatically set to Level 1
                 record['max_recommended_oc'] = 1
