@@ -151,11 +151,6 @@
                     <label for="oc_level_filter" style="margin-left: 20px;">OC Level Filter:</label>
                     <select id="oc_level_filter" onchange="toggleView()" style="margin-left: 10px; padding: 5px;">
                         <option value="">All</option>
-                        <option value="1">Level 1</option>
-                        <option value="2">Level 2</option>
-                        <option value="3">Level 3</option>
-                        <option value="4">Level 4</option>
-                        <option value="5">Level 5</option>
                     </select>
                 </div>
 
@@ -311,9 +306,49 @@
             }
         }
 
+        function populateOCLevelFilter(data) {
+            // Extract unique difficulty levels from the data
+            const difficulties = new Set();
+            data.forEach(record => {
+                // Check both 'difficulty' and 'oc_level' field names
+                const difficulty = record.difficulty !== undefined ? record.difficulty : record.oc_level;
+                if (difficulty !== undefined && difficulty !== null && !isNaN(difficulty)) {
+                    difficulties.add(parseInt(difficulty, 10));
+                }
+            });
+            
+            // Sort difficulties in descending order (highest first)
+            const sortedDifficulties = Array.from(difficulties).sort((a, b) => b - a);
+            
+            // Populate the filter dropdown
+            const filterSelect = document.getElementById('oc_level_filter');
+            const currentValue = filterSelect.value; // Preserve current selection
+            
+            // Clear existing options except "All"
+            filterSelect.innerHTML = '<option value="">All</option>';
+            
+            // Add options for each available difficulty level
+            sortedDifficulties.forEach(difficulty => {
+                const option = document.createElement('option');
+                option.value = difficulty;
+                option.textContent = `Level ${difficulty}`;
+                filterSelect.appendChild(option);
+            });
+            
+            // Restore previous selection if it still exists
+            if (currentValue && sortedDifficulties.includes(parseInt(currentValue, 10))) {
+                filterSelect.value = currentValue;
+            } else {
+                filterSelect.value = ''; // Reset to "All" if previous selection no longer exists
+            }
+        }
+
         function displayPerformance(performance) {
             performanceData = performance || [];
             currentSorts = []; // Reset sorts when loading new data
+            
+            // Populate OC Level Filter based on available data
+            populateOCLevelFilter(performanceData);
             
             // Build history data map
             historyData.clear();
