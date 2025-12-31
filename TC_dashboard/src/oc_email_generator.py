@@ -315,9 +315,12 @@ class OCEmailGenerator:
             else:
                 raise
 
-    def generate_email(self) -> str:
+    def generate_email(self, exclude_no_reserve: bool = True) -> str:
         """
         Generate OC assignment email text using the form letter template.
+
+        Args:
+            exclude_no_reserve: If True, exclude "No Reserve OC" from assignments (default: True)
 
         Returns:
             Email text ready for copy/paste

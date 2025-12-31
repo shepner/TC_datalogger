@@ -183,6 +183,13 @@
             </div>
         </div>
 
+        <div class="form-group" style="margin-top: 20px;">
+            <label style="display: flex; align-items: center; cursor: pointer;">
+                <input type="checkbox" id="exclude_no_reserve" checked style="margin-right: 8px; width: auto;">
+                <span>Exclude No Reserve OC (default: excluded)</span>
+            </label>
+        </div>
+
         <a href="/"><button class="secondary">Back to Dashboard</button></a>
 
         <div id="error" class="error" style="display: none;"></div>
@@ -207,13 +214,17 @@
             document.getElementById('email-output').style.display = 'block';
             document.getElementById('email-text').value = 'Generating email...';
 
+            const excludeNoReserve = document.getElementById('exclude_no_reserve').checked;
+
             try {
                 const response = await fetch('/api/oc-assignment/generate', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify({})
+                    body: JSON.stringify({
+                        exclude_no_reserve: excludeNoReserve
+                    })
                 });
 
                 const data = await response.json();

@@ -89,8 +89,11 @@ def generate_oc_email():
         return jsonify({"error": "BigQuery client not available"}), 500
     
     try:
+        data = request.get_json() or {}
+        exclude_no_reserve = data.get('exclude_no_reserve', True)  # Default to True (exclude)
+        
         # Generate email using default form letter template
-        email_text = oc_email_generator.generate_email()
+        email_text = oc_email_generator.generate_email(exclude_no_reserve=exclude_no_reserve)
         
         return jsonify({"email_text": email_text})
     except Exception as e:
