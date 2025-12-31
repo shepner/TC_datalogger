@@ -480,6 +480,7 @@
                         oc_count_30d: record.oc_count_30d || 0,
                         oc_count_7d: record.oc_count_7d || 0,
                         is_in_oc: record.is_in_oc || false,
+                        days_in_faction: record.days_in_faction || 0,
                         max_recommended_oc: record.max_recommended_oc || null,
                         data: new Map()
                     });
@@ -494,6 +495,9 @@
                 }
                 if (record.is_in_oc !== undefined) {
                     memberData.is_in_oc = record.is_in_oc;
+                }
+                if (record.days_in_faction !== undefined) {
+                    memberData.days_in_faction = record.days_in_faction;
                 }
                 if (record.max_recommended_oc !== undefined && record.max_recommended_oc !== null) {
                     // Keep the highest max recommended OC
@@ -609,14 +613,19 @@
 
             sortedMembers.forEach(member => {
                 const row = document.createElement('tr');
-                const rowData = { member_name: member.member_name, oc_count_30d: member.oc_count_30d || 0, oc_count_7d: member.oc_count_7d || 0, is_in_oc: member.is_in_oc || false, max_recommended_oc: member.max_recommended_oc || null, cells: [] };
+                const rowData = { member_name: member.member_name, oc_count_30d: member.oc_count_30d || 0, oc_count_7d: member.oc_count_7d || 0, is_in_oc: member.is_in_oc || false, days_in_faction: member.days_in_faction || 0, max_recommended_oc: member.max_recommended_oc || null, cells: [] };
                 const maxOcLevel = member.max_recommended_oc || null;
                 const maxOcClass = maxOcLevel && maxOcLevel >= 1 && maxOcLevel <= 10 ? `oc-level-${maxOcLevel}` : '';
                 const maxOcDisplay = maxOcLevel !== null ? maxOcLevel : '—';
+                
+                // Determine In OC cell styling: red if not in OC and days_in_faction > 3
+                const inOcValue = member.is_in_oc ? '✓' : '✗';
+                const inOcBgColor = (!member.is_in_oc && member.days_in_faction > 3) ? '#ffcdd2' : 'white';
+                
                 row.innerHTML = `<td style="padding: 6px; border: 1px solid #ddd; border-right: 1px solid #ddd; position: sticky; left: 0; background-color: white; font-weight: bold;">${member.member_name}</td>`;
                 row.innerHTML += `<td style="padding: 6px; border: 1px solid #ddd; border-right: 1px solid #ddd; position: sticky; left: 80px; background-color: white; text-align: center; font-weight: bold;">${member.oc_count_30d || 0}</td>`;
                 row.innerHTML += `<td style="padding: 6px; border: 1px solid #ddd; border-right: 1px solid #ddd; position: sticky; left: 140px; background-color: white; text-align: center; font-weight: bold;">${member.oc_count_7d || 0}</td>`;
-                row.innerHTML += `<td style="padding: 6px; border: 1px solid #ddd; border-right: 1px solid #ddd; position: sticky; left: 200px; background-color: white; text-align: center; font-weight: bold;">${member.is_in_oc ? '✓' : '✗'}</td>`;
+                row.innerHTML += `<td style="padding: 6px; border: 1px solid #ddd; border-right: 1px solid #ddd; position: sticky; left: 200px; background-color: ${inOcBgColor}; text-align: center; font-weight: bold;">${inOcValue}</td>`;
                 row.innerHTML += `<td class="${maxOcClass}" style="padding: 6px; border: 1px solid #ddd; border-right: 1px solid #ddd; position: sticky; left: 260px; background-color: white; text-align: center; font-weight: bold;">${maxOcDisplay}</td>`;
                 
                 sortedDifficulties.forEach(difficulty => {
