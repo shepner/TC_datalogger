@@ -101,6 +101,82 @@ class OCEmailGenerator:
         
         return participation
 
+    def get_oc_participation_counts_30d(self) -> List[Dict[str, Any]]:
+        """
+        Get OC participation counts for all members in the last 30 days.
+
+        Returns:
+            List of dictionaries with member_id and oc_count_30d
+        """
+        query = """
+        WITH oc_participations AS (
+          SELECT DISTINCT
+            slot.user.id AS member_id,
+            crime.id AS crime_id
+          FROM
+            `torncity-402423.torn_data.v2_faction_40832_crimes-raw` AS crime,
+            UNNEST(crime.slots) AS slot
+          WHERE
+            slot.user.id IS NOT NULL
+            AND crime.executed_at IS NOT NULL
+            AND TIMESTAMP_SECONDS(SAFE_CAST(crime.executed_at AS INT64)) >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 30 DAY)
+        )
+        SELECT
+          oc.member_id,
+          COUNT(DISTINCT oc.crime_id) AS oc_count_30d
+        FROM
+          oc_participations AS oc
+        GROUP BY
+          oc.member_id
+        """
+        try:
+            return self.bq.execute_query(query)
+        except Exception as e:
+            error_str = str(e)
+            if 'TIMESTAMP' in error_str and 'INT64' in error_str:
+                logger.warning("OC participation 30d query failed due to mixed timestamp types. Returning empty results.")
+                return []
+            else:
+                raise
+
+    def get_oc_participation_counts_7d(self) -> List[Dict[str, Any]]:
+        """
+        Get OC participation counts for all members in the last 7 days.
+
+        Returns:
+            List of dictionaries with member_id and oc_count_7d
+        """
+        query = """
+        WITH oc_participations AS (
+          SELECT DISTINCT
+            slot.user.id AS member_id,
+            crime.id AS crime_id
+          FROM
+            `torncity-402423.torn_data.v2_faction_40832_crimes-raw` AS crime,
+            UNNEST(crime.slots) AS slot
+          WHERE
+            slot.user.id IS NOT NULL
+            AND crime.executed_at IS NOT NULL
+            AND TIMESTAMP_SECONDS(SAFE_CAST(crime.executed_at AS INT64)) >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 7 DAY)
+        )
+        SELECT
+          oc.member_id,
+          COUNT(DISTINCT oc.crime_id) AS oc_count_7d
+        FROM
+          oc_participations AS oc
+        GROUP BY
+          oc.member_id
+        """
+        try:
+            return self.bq.execute_query(query)
+        except Exception as e:
+            error_str = str(e)
+            if 'TIMESTAMP' in error_str and 'INT64' in error_str:
+                logger.warning("OC participation 7d query failed due to mixed timestamp types. Returning empty results.")
+                return []
+            else:
+                raise
+
     def get_member_checkpoint_rates(self, days_back: int = 90) -> Dict[str, Dict[str, float]]:
         """
         Get MAX checkpoint_pass_rate for each member by OC name and position_id.

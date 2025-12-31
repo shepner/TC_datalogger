@@ -462,14 +462,23 @@
                     });
                 }
 
-                // Store member data - keep MAX checkpoint_pass_rate
+                // Store member data - keep MAX checkpoint_pass_rate and OC counts
                 if (!members.has(record.member_name)) {
                     members.set(record.member_name, {
                         member_name: record.member_name,
+                        oc_count_30d: record.oc_count_30d || 0,
+                        oc_count_7d: record.oc_count_7d || 0,
                         data: new Map()
                     });
                 }
                 const memberData = members.get(record.member_name);
+                // Update OC counts if present (use max to handle multiple records)
+                if (record.oc_count_30d !== undefined) {
+                    memberData.oc_count_30d = record.oc_count_30d;
+                }
+                if (record.oc_count_7d !== undefined) {
+                    memberData.oc_count_7d = record.oc_count_7d;
+                }
                 const currentMax = memberData.data.get(columnKey);
                 const checkpointRate = record.checkpoint_pass_rate || 0;
                 if (!currentMax || checkpointRate > currentMax) {
@@ -490,12 +499,14 @@
             // First row: difficulty headers (with colspan) - sortable
             const headerRow1 = document.createElement('tr');
             headerRow1.innerHTML = '<th rowspan="3" class="sortable" data-column="member" data-type="member" style="padding: 8px; position: sticky; left: 0; background-color: #4CAF50; z-index: 11; text-align: left; cursor: pointer;">Member</th>';
+            headerRow1.innerHTML += '<th rowspan="3" class="sortable" data-column="oc_30d" data-type="oc_30d" style="padding: 8px; position: sticky; left: 80px; background-color: #4CAF50; z-index: 11; text-align: center; cursor: pointer;">OC 30d</th>';
+            headerRow1.innerHTML += '<th rowspan="3" class="sortable" data-column="oc_7d" data-type="oc_7d" style="padding: 8px; position: sticky; left: 140px; background-color: #4CAF50; z-index: 11; text-align: center; cursor: pointer;">OC 7d</th>';
             
             const sortedDifficulties = Array.from(columnGroups.keys()).filter(d => d != null && typeof d === 'number').sort((a, b) => {
                 return b - a; // Higher difficulty first
             });
             pivotHeaderMetadata = []; // Reset metadata
-            let columnIndex = 1; // Start at 1 (0 is Member)
+            let columnIndex = 3; // Start at 3 (0 is Member, 1 is OC 30d, 2 is OC 7d)
             sortedDifficulties.forEach(difficulty => {
                 const difficultyGroup = columnGroups.get(difficulty);
                 let totalCols = 0;
@@ -524,7 +535,7 @@
 
             // Second row: oc_name headers (with colspan for position_ids) - sortable
             const headerRow2 = document.createElement('tr');
-            columnIndex = 1;
+            columnIndex = 3; // Skip Member, OC 30d, OC 7d columns
             sortedDifficulties.forEach(difficulty => {
                 const difficultyGroup = columnGroups.get(difficulty);
                 const sortedOCNames = Array.from(difficultyGroup.keys()).sort();
@@ -541,7 +552,7 @@
             // Third row: position_id headers (sortable)
             const headerRow3 = document.createElement('tr');
             pivotColumnMap.clear(); // Reset column map
-            columnIndex = 1; // Track column index (0 is Member column, so start at 1)
+            columnIndex = 3; // Track column index (0 is Member, 1 is OC 30d, 2 is OC 7d, so start at 3)
             sortedDifficulties.forEach(difficulty => {
                 const difficultyGroup = columnGroups.get(difficulty);
                 const sortedOCNames = Array.from(difficultyGroup.keys()).sort();
@@ -574,8 +585,10 @@
 
             sortedMembers.forEach(member => {
                 const row = document.createElement('tr');
-                const rowData = { member_name: member.member_name, cells: [] };
+                const rowData = { member_name: member.member_name, oc_count_30d: member.oc_count_30d || 0, oc_count_7d: member.oc_count_7d || 0, cells: [] };
                 row.innerHTML = `<td style="padding: 6px; border: 1px solid #ddd; border-right: 1px solid #ddd; position: sticky; left: 0; background-color: white; font-weight: bold;">${member.member_name}</td>`;
+                row.innerHTML += `<td style="padding: 6px; border: 1px solid #ddd; border-right: 1px solid #ddd; position: sticky; left: 80px; background-color: white; text-align: center; font-weight: bold;">${member.oc_count_30d || 0}</td>`;
+                row.innerHTML += `<td style="padding: 6px; border: 1px solid #ddd; border-right: 1px solid #ddd; position: sticky; left: 140px; background-color: white; text-align: center; font-weight: bold;">${member.oc_count_7d || 0}</td>`;
                 
                 sortedDifficulties.forEach(difficulty => {
                     const difficultyGroup = columnGroups.get(difficulty);
@@ -676,6 +689,10 @@
                         comparison = sort.direction === 'asc' 
                             ? a.member_name.localeCompare(b.member_name)
                             : b.member_name.localeCompare(a.member_name);
+                    } else if (sort.type === 'oc_30d') {
+                        comparison = compareCellValues(a.oc_count_30d || 0, b.oc_count_30d || 0, sort.direction);
+                    } else if (sort.type === 'oc_7d') {
+                        comparison = compareCellValues(a.oc_count_7d || 0, b.oc_count_7d || 0, sort.direction);
                     } else if (sort.type === 'difficulty') {
                         // Sort by all columns in this difficulty group
                         const difficulty = parseInt(sort.difficulty);

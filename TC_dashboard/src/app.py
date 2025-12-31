@@ -122,6 +122,37 @@ def get_oc_performance():
         
         performance = oc_email_generator.get_oc_performance_by_role(days_back=days_back)
         
+        # Get OC participation counts (30d and 7d)
+        oc_counts_30d = oc_email_generator.get_oc_participation_counts_30d()
+        oc_counts_7d = oc_email_generator.get_oc_participation_counts_7d()
+        
+        # Create a map of member_id to counts
+        counts_map = {}
+        for row in oc_counts_30d:
+            member_id = row.get('member_id')
+            if member_id:
+                counts_map[member_id] = {
+                    'oc_count_30d': row.get('oc_count_30d', 0),
+                    'oc_count_7d': 0
+                }
+        
+        for row in oc_counts_7d:
+            member_id = row.get('member_id')
+            if member_id:
+                if member_id not in counts_map:
+                    counts_map[member_id] = {'oc_count_30d': 0, 'oc_count_7d': 0}
+                counts_map[member_id]['oc_count_7d'] = row.get('oc_count_7d', 0)
+        
+        # Add counts to performance data
+        for record in performance:
+            member_id = record.get('member_id')
+            if member_id in counts_map:
+                record['oc_count_30d'] = counts_map[member_id]['oc_count_30d']
+                record['oc_count_7d'] = counts_map[member_id]['oc_count_7d']
+            else:
+                record['oc_count_30d'] = 0
+                record['oc_count_7d'] = 0
+        
         return jsonify({"performance": performance})
     except Exception as e:
         logger.error(f"Error getting OC performance: {e}", exc_info=True)
