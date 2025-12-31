@@ -145,7 +145,22 @@ def get_oc_performance():
         
         # Calculate max recommended OC level for each member
         # Max recommended = highest difficulty where member has checkpoint_pass_rate between 80-90
+        # If member has no position with checkpoint_pass_rate >= 80, set to Level 1
         member_max_oc = {}  # member_name -> max_difficulty
+        member_has_80_plus = {}  # member_name -> bool (has any position with >= 80)
+        
+        # First pass: check if member has any position with >= 80 checkpoint_pass_rate
+        for record in performance:
+            member_name = record.get('member_name')
+            checkpoint_rate = record.get('checkpoint_pass_rate', 0)
+            
+            if not member_name:
+                continue
+            
+            if checkpoint_rate >= 80:
+                member_has_80_plus[member_name] = True
+        
+        # Second pass: find highest difficulty with checkpoint_pass_rate between 80-90
         for record in performance:
             member_name = record.get('member_name')
             difficulty = record.get('difficulty') or record.get('oc_level')
@@ -178,8 +193,12 @@ def get_oc_performance():
             # Add max recommended OC
             if member_name in member_max_oc:
                 record['max_recommended_oc'] = member_max_oc[member_name]
-            else:
+            elif member_name in member_has_80_plus:
+                # Member has >= 80 but not in 80-90 range, so no recommendation
                 record['max_recommended_oc'] = None
+            else:
+                # Member has no position with >= 80, automatically set to Level 1
+                record['max_recommended_oc'] = 1
         
         return jsonify({"performance": performance})
     except Exception as e:
