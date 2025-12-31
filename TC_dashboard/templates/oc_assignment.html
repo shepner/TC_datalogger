@@ -740,8 +740,9 @@
         
         function compareByCells(a, b, relevantCells, direction) {
             // Compare by average or max value in relevant cells
-            const aVals = relevantCells.map(m => a.cells[m.columnIndex - 1]).filter(v => v != null);
-            const bVals = relevantCells.map(m => b.cells[m.columnIndex - 1]).filter(v => v != null);
+            // columnIndex starts at 3 (after Member, OC 30d, OC 7d), so subtract 3 to get cell index
+            const aVals = relevantCells.map(m => a.cells[m.columnIndex - 3]).filter(v => v != null);
+            const bVals = relevantCells.map(m => b.cells[m.columnIndex - 3]).filter(v => v != null);
             
             if (aVals.length === 0 && bVals.length === 0) return 0;
             if (aVals.length === 0) return 1;
