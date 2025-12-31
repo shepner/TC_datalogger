@@ -650,6 +650,7 @@ class OCEmailGenerator:
             SELECT
               os.member_id,
               COALESCE(m.name, CAST(os.member_id AS STRING)) AS member_name,
+              COALESCE(m.is_in_oc, FALSE) AS is_in_oc,
               os.difficulty,
               os.oc_name,
               os.position,

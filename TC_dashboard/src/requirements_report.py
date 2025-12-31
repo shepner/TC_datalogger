@@ -50,6 +50,7 @@ class RequirementsReport:
                 level,
                 position,
                 days_in_faction,
+                is_in_oc,
                 TIMESTAMP_SECONDS(SAFE_CAST(last_action.timestamp AS INT64)) AS last_action_timestamp,
                 DATE_DIFF(CURRENT_DATE(), DATE(TIMESTAMP_SECONDS(SAFE_CAST(last_action.timestamp AS INT64))), DAY) AS days_inactive
               FROM
@@ -119,6 +120,7 @@ class RequirementsReport:
               m.position,
               m.days_in_faction,
               m.days_inactive,
+              COALESCE(m.is_in_oc, FALSE) AS is_in_oc,
               COALESCE(oc.oc_count_30d, 0) AS oc_count_30d,
               COALESCE(oc.oc_count_7d, 0) AS oc_count_7d,
               COALESCE(oc.oc_count_30d, 0) >= 3 AS oc_requirement_met,
