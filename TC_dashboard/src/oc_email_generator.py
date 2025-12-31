@@ -560,6 +560,7 @@ class OCEmailGenerator:
         email_lines.append("Here are today's OC assignments:")
         email_lines.append("")
         email_lines.append("")
+        email_lines.append("")
 
         # Group assignments by level (6, 5, 4, 3, 2, 1), then by OC
         # Structure: level -> [oc_id] -> [assignments]
@@ -579,39 +580,29 @@ class OCEmailGenerator:
                 assignments_by_level[level][oc_id] = assignments[oc_id]
 
         # Output by level in descending order (6, 5, 4, 3, 2, 1)
-        # Show all levels, even if empty
-        for level in [6, 5, 4, 3, 2, 1]:
-            if level in assignments_by_level:
-                level_assignments = assignments_by_level[level]
+        # Only show levels that have assignments
+        for level in sorted(assignments_by_level.keys(), reverse=True):
+            level_assignments = assignments_by_level[level]
+            
+            # For each OC at this level
+            for oc in ocs:
+                oc_id = oc['oc_id']
+                if oc_id not in level_assignments:
+                    continue
                 
-                # For each OC at this level
-                for oc in ocs:
-                    oc_id = oc['oc_id']
-                    if oc_id not in level_assignments:
-                        continue
-                    
-                    oc_name = oc['oc_name']
-                    oc_url = f"https://www.torn.com/factions.php?step=your#/war/oc/{oc_id}"
-                    
-                    # Format: Lv <number> - <OC Name> - <OC URL>
-                    email_lines.append(f"Lv {level} - {oc_name} - {oc_url}")
-                    
-                    # Member list as markdown bullets
-                    for assignment in level_assignments[oc_id]:
-                        member_name = assignment['member_name']
-                        positions = assignment.get('qualified_positions', [])
-                        if positions:
-                            # Show specific positions in parentheses
-                            position_str = ', '.join(positions)
-                            email_lines.append(f"- {member_name} (Positions: {position_str})")
-                        else:
-                            email_lines.append(f"- {member_name}")
-                    
-                    email_lines.append("")
-            else:
-                # No assignments at this level, show empty structure
-                email_lines.append(f"Lv {level} -")
-                email_lines.append("-")
+                oc_name = oc['oc_name']
+                # Use the correct URL format: #/tab=crimes&crimeId=
+                oc_url = f"https://www.torn.com/factions.php?step=your#/tab=crimes&crimeId={oc_id}"
+                
+                # Format: Lv <number> - <OC Name> - <OC URL>
+                email_lines.append(f"Lv {level} - {oc_name} - {oc_url}")
+                
+                # Member list (one per line, no bullets)
+                for assignment in level_assignments[oc_id]:
+                    member_name = assignment['member_name']
+                    # Don't show positions in the email (per user's example)
+                    email_lines.append(member_name)
+                
                 email_lines.append("")
 
         # Add alternative OC recommendations
