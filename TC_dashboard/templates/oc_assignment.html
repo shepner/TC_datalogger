@@ -117,15 +117,15 @@
                     <input type="number" id="performance_days" value="90" min="7" max="365" step="1" style="width: 70px; padding: 4px;" onchange="validateDaysBack()">
                 </div>
                 <button onclick="loadPerformance()" style="padding: 6px 12px; font-size: 13px;">Load Performance Data</button>
-                <div id="view-controls" style="display: none; flex-direction: row; align-items: center; gap: 8px;">
-                    <label style="margin: 0; white-space: nowrap;">
+                <div id="view-controls" style="display: none; flex-direction: row; align-items: center; gap: 8px; flex-shrink: 0;">
+                    <label style="margin: 0; white-space: nowrap; display: flex; align-items: center;">
                         <input type="radio" name="view_mode" value="pivot" checked onchange="toggleView()" style="margin-right: 4px;"> Pivot
                     </label>
-                    <label style="margin: 0; white-space: nowrap;">
+                    <label style="margin: 0; white-space: nowrap; display: flex; align-items: center;">
                         <input type="radio" name="view_mode" value="detail" onchange="toggleView()" style="margin-right: 4px;"> Detail
                     </label>
                 </div>
-                <div id="filter-controls" style="display: none; flex-direction: row; align-items: center; gap: 5px;">
+                <div id="filter-controls" style="display: none; flex-direction: row; align-items: center; gap: 5px; flex-shrink: 0;">
                     <label for="oc_level_filter" style="margin: 0; white-space: nowrap;">Level:</label>
                     <select id="oc_level_filter" onchange="toggleView()" style="padding: 4px 8px; font-size: 13px;">
                         <option value="">All</option>
@@ -375,8 +375,12 @@
             // Show view and filter controls
             const viewControls = document.getElementById('view-controls');
             const filterControls = document.getElementById('filter-controls');
-            viewControls.style.display = 'flex';
-            filterControls.style.display = 'flex';
+            if (viewControls) {
+                viewControls.style.display = 'flex';
+            }
+            if (filterControls) {
+                filterControls.style.display = 'flex';
+            }
             
             toggleView();
             document.getElementById('performance-container').style.display = 'block';
