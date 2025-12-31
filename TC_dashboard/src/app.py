@@ -274,11 +274,29 @@ def get_oc_performance():
                     record['max_recommended_oc'] = highest_level + 1
             elif member_name in member_max_oc:
                 # Member has position in 80-90 range, use that
+                # This should include members with 83-89% at Level 6, giving them Max OC = 6
                 record['max_recommended_oc'] = member_max_oc[member_name]
             elif member_name in member_has_80_plus:
                 # Member has >= 80 but not in 80-90 range and not 90+ at highest level
-                # No recommendation
-                record['max_recommended_oc'] = None
+                # This means they have > 90% somewhere, but not at their highest level
+                # Check if they have 90+ at a level below their highest
+                # If so, recommend next level from that point
+                if member_name in member_level_rates:
+                    # Find highest level with 90+ rate
+                    levels_with_90_plus = [(l, r) for l, r in member_level_rates[member_name].items() if r >= 90]
+                    if levels_with_90_plus:
+                        levels_with_90_plus.sort(key=lambda x: x[0], reverse=True)
+                        best_level, best_rate = levels_with_90_plus[0]
+                        if best_rate >= 94:
+                            record['max_recommended_oc'] = best_level + 2
+                        else:
+                            record['max_recommended_oc'] = best_level + 1
+                    else:
+                        # No recommendation
+                        record['max_recommended_oc'] = None
+                else:
+                    # No recommendation
+                    record['max_recommended_oc'] = None
             else:
                 # Member has no position with >= 80, automatically set to Level 1
                 record['max_recommended_oc'] = 1
