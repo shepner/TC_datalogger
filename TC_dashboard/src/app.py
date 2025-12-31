@@ -221,6 +221,9 @@ def get_oc_performance():
         # Prefer highest level with 80-90 range, but if higher level has borderline rate (80-82)
         # and lower level has good rate (85+), prefer the lower level
         for member_name, level_rates in member_level_rates.items():
+            # Debug: Log for specific members
+            if member_name in ['Acnar', 'makers_mark_man', 'Raptor_RSA', 'Ti12', 'Zero_pl']:
+                logger.info(f"Processing {member_name} with level_rates: {level_rates}")
             # Find all levels with rates in 80-90 range, sorted by level (descending)
             valid_levels = []
             for level, rate in level_rates.items():
@@ -259,6 +262,9 @@ def get_oc_performance():
                 # Highest level has good rate (83+), use it
                 # This ensures members with 83-89% at Level 6 get Max OC = 6
                 member_max_oc[member_name] = highest_level
+                # Debug: Log for specific members
+                if member_name in ['Acnar', 'makers_mark_man', 'Raptor_RSA', 'Ti12', 'Zero_pl']:
+                    logger.info(f"  -> Added {member_name} to member_max_oc with value {highest_level}")
         
         # Debug: Log member_max_oc for troubleshooting
         logger.info(f"member_max_oc calculated for {len(member_max_oc)} members")
@@ -304,6 +310,23 @@ def get_oc_performance():
                 # Member has position in 80-90 range, use that
                 # This should include members with 83-89% at Level 6, giving them Max OC = 6
                 record['max_recommended_oc'] = member_max_oc[member_name]
+                # Debug: Log for specific members
+                if member_name in ['Acnar', 'makers_mark_man', 'Raptor_RSA', 'Ti12', 'Zero_pl']:
+                    logger.info(f"  -> Set {member_name} max_recommended_oc to {member_max_oc[member_name]} on record")
+            else:
+                # Debug: Log for specific members who aren't in member_max_oc
+                if member_name in ['Acnar', 'makers_mark_man', 'Raptor_RSA', 'Ti12', 'Zero_pl']:
+                    logger.info(f"  -> {member_name} NOT in member_max_oc, checking other conditions...")
+                if (member_name in member_highest_level_rate and 
+                    member_highest_level_rate[member_name] >= 90):
+                    if member_name in ['Acnar', 'makers_mark_man', 'Raptor_RSA', 'Ti12', 'Zero_pl']:
+                        logger.info(f"  -> {member_name} has 90+ at highest level")
+                elif member_name in member_has_80_plus:
+                    if member_name in ['Acnar', 'makers_mark_man', 'Raptor_RSA', 'Ti12', 'Zero_pl']:
+                        logger.info(f"  -> {member_name} has 80+ but not in member_max_oc")
+                else:
+                    if member_name in ['Acnar', 'makers_mark_man', 'Raptor_RSA', 'Ti12', 'Zero_pl']:
+                        logger.info(f"  -> {member_name} has no 80+, setting to Level 1")
             elif member_name in member_has_80_plus:
                 # Member has >= 80 but not in 80-90 range and not 90+ at highest level
                 # This means they have > 90% somewhere, but not at their highest level
