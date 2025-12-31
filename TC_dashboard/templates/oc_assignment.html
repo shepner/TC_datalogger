@@ -524,11 +524,11 @@
             
             // First row: difficulty headers (with colspan) - sortable
             const headerRow1 = document.createElement('tr');
-            headerRow1.innerHTML = '<th rowspan="3" class="sortable" data-column="member" data-type="member" style="padding: 8px; position: sticky; left: 0; background-color: #4CAF50; z-index: 11; text-align: left; cursor: pointer;">Member</th>';
-            headerRow1.innerHTML += '<th rowspan="3" class="sortable" data-column="oc_30d" data-type="oc_30d" style="padding: 8px; position: sticky; left: 80px; background-color: #4CAF50; z-index: 11; text-align: center; cursor: pointer;">OC 30d</th>';
-            headerRow1.innerHTML += '<th rowspan="3" class="sortable" data-column="oc_7d" data-type="oc_7d" style="padding: 8px; position: sticky; left: 140px; background-color: #4CAF50; z-index: 11; text-align: center; cursor: pointer;">OC 7d</th>';
-            headerRow1.innerHTML += '<th rowspan="3" class="sortable" data-column="in_oc" data-type="in_oc" style="padding: 8px; position: sticky; left: 200px; background-color: #4CAF50; z-index: 11; text-align: center; cursor: pointer;">In OC</th>';
-            headerRow1.innerHTML += '<th rowspan="3" class="sortable" data-column="max_oc" data-type="max_oc" style="padding: 8px; position: sticky; left: 260px; background-color: #4CAF50; z-index: 11; text-align: center; cursor: pointer;">Max OC</th>';
+            headerRow1.innerHTML = '<th rowspan="3" class="sortable" data-column="member" data-type="member" style="padding: 8px; position: sticky; left: 0; background-color: #4CAF50; z-index: 11; text-align: left; cursor: pointer; width: 120px; min-width: 120px; max-width: 120px;">Member</th>';
+            headerRow1.innerHTML += '<th rowspan="3" class="sortable" data-column="oc_30d" data-type="oc_30d" style="padding: 8px; position: sticky; left: 120px; background-color: #4CAF50; z-index: 11; text-align: center; cursor: pointer; width: 60px; min-width: 60px; max-width: 60px;">OC 30d</th>';
+            headerRow1.innerHTML += '<th rowspan="3" class="sortable" data-column="oc_7d" data-type="oc_7d" style="padding: 8px; position: sticky; left: 180px; background-color: #4CAF50; z-index: 11; text-align: center; cursor: pointer; width: 60px; min-width: 60px; max-width: 60px;">OC 7d</th>';
+            headerRow1.innerHTML += '<th rowspan="3" class="sortable" data-column="in_oc" data-type="in_oc" style="padding: 8px; position: sticky; left: 240px; background-color: #4CAF50; z-index: 11; text-align: center; cursor: pointer; width: 60px; min-width: 60px; max-width: 60px;">In OC</th>';
+            headerRow1.innerHTML += '<th rowspan="3" class="sortable" data-column="max_oc" data-type="max_oc" style="padding: 8px; position: sticky; left: 300px; background-color: #4CAF50; z-index: 11; text-align: center; cursor: pointer; width: 60px; min-width: 60px; max-width: 60px;">Max OC</th>';
             
             const sortedDifficulties = Array.from(columnGroups.keys()).filter(d => d != null && typeof d === 'number').sort((a, b) => {
                 return b - a; // Higher difficulty first
@@ -622,11 +622,11 @@
                 const inOcValue = member.is_in_oc ? '✓' : '✗';
                 const inOcBgColor = (!member.is_in_oc && member.days_in_faction > 3) ? '#ffcdd2' : 'white';
                 
-                row.innerHTML = `<td style="padding: 6px; border: 1px solid #ddd; border-right: 1px solid #ddd; position: sticky; left: 0; background-color: white; font-weight: bold;">${member.member_name}</td>`;
-                row.innerHTML += `<td style="padding: 6px; border: 1px solid #ddd; border-right: 1px solid #ddd; position: sticky; left: 80px; background-color: white; text-align: center; font-weight: bold;">${member.oc_count_30d || 0}</td>`;
-                row.innerHTML += `<td style="padding: 6px; border: 1px solid #ddd; border-right: 1px solid #ddd; position: sticky; left: 140px; background-color: white; text-align: center; font-weight: bold;">${member.oc_count_7d || 0}</td>`;
-                row.innerHTML += `<td style="padding: 6px; border: 1px solid #ddd; border-right: 1px solid #ddd; position: sticky; left: 200px; background-color: ${inOcBgColor}; text-align: center; font-weight: bold;">${inOcValue}</td>`;
-                row.innerHTML += `<td class="${maxOcClass}" style="padding: 6px; border: 1px solid #ddd; border-right: 1px solid #ddd; position: sticky; left: 260px; background-color: white; text-align: center; font-weight: bold;">${maxOcDisplay}</td>`;
+                row.innerHTML = `<td style="padding: 6px; border: 1px solid #ddd; border-right: 1px solid #ddd; position: sticky; left: 0; background-color: white; font-weight: bold; width: 120px; min-width: 120px; max-width: 120px;">${member.member_name}</td>`;
+                row.innerHTML += `<td style="padding: 6px; border: 1px solid #ddd; border-right: 1px solid #ddd; position: sticky; left: 120px; background-color: white; text-align: center; font-weight: bold; width: 60px; min-width: 60px; max-width: 60px;">${member.oc_count_30d || 0}</td>`;
+                row.innerHTML += `<td style="padding: 6px; border: 1px solid #ddd; border-right: 1px solid #ddd; position: sticky; left: 180px; background-color: white; text-align: center; font-weight: bold; width: 60px; min-width: 60px; max-width: 60px;">${member.oc_count_7d || 0}</td>`;
+                row.innerHTML += `<td style="padding: 6px; border: 1px solid #ddd; border-right: 1px solid #ddd; position: sticky; left: 240px; background-color: ${inOcBgColor}; text-align: center; font-weight: bold; width: 60px; min-width: 60px; max-width: 60px;">${inOcValue}</td>`;
+                row.innerHTML += `<td class="${maxOcClass}" style="padding: 6px; border: 1px solid #ddd; border-right: 1px solid #ddd; position: sticky; left: 300px; background-color: white; text-align: center; font-weight: bold; width: 60px; min-width: 60px; max-width: 60px;">${maxOcDisplay}</td>`;
                 
                 sortedDifficulties.forEach(difficulty => {
                     const difficultyGroup = columnGroups.get(difficulty);
@@ -827,11 +827,11 @@
                 const inOcValue = rowData.is_in_oc ? '✓' : '✗';
                 const inOcBgColor = (!rowData.is_in_oc && rowData.days_in_faction > 3) ? '#ffcdd2' : 'white';
                 
-                row.innerHTML = `<td style="padding: 6px; border: 1px solid #ddd; border-right: 1px solid #ddd; position: sticky; left: 0; background-color: white; font-weight: bold;">${rowData.member_name}</td>`;
-                row.innerHTML += `<td style="padding: 6px; border: 1px solid #ddd; border-right: 1px solid #ddd; position: sticky; left: 80px; background-color: white; text-align: center; font-weight: bold;">${rowData.oc_count_30d || 0}</td>`;
-                row.innerHTML += `<td style="padding: 6px; border: 1px solid #ddd; border-right: 1px solid #ddd; position: sticky; left: 140px; background-color: white; text-align: center; font-weight: bold;">${rowData.oc_count_7d || 0}</td>`;
-                row.innerHTML += `<td style="padding: 6px; border: 1px solid #ddd; border-right: 1px solid #ddd; position: sticky; left: 200px; background-color: ${inOcBgColor}; text-align: center; font-weight: bold;">${inOcValue}</td>`;
-                row.innerHTML += `<td class="${maxOcClass}" style="padding: 6px; border: 1px solid #ddd; border-right: 1px solid #ddd; position: sticky; left: 260px; background-color: white; text-align: center; font-weight: bold;">${maxOcDisplay}</td>`;
+                row.innerHTML = `<td style="padding: 6px; border: 1px solid #ddd; border-right: 1px solid #ddd; position: sticky; left: 0; background-color: white; font-weight: bold; width: 120px; min-width: 120px; max-width: 120px;">${rowData.member_name}</td>`;
+                row.innerHTML += `<td style="padding: 6px; border: 1px solid #ddd; border-right: 1px solid #ddd; position: sticky; left: 120px; background-color: white; text-align: center; font-weight: bold; width: 60px; min-width: 60px; max-width: 60px;">${rowData.oc_count_30d || 0}</td>`;
+                row.innerHTML += `<td style="padding: 6px; border: 1px solid #ddd; border-right: 1px solid #ddd; position: sticky; left: 180px; background-color: white; text-align: center; font-weight: bold; width: 60px; min-width: 60px; max-width: 60px;">${rowData.oc_count_7d || 0}</td>`;
+                row.innerHTML += `<td style="padding: 6px; border: 1px solid #ddd; border-right: 1px solid #ddd; position: sticky; left: 240px; background-color: ${inOcBgColor}; text-align: center; font-weight: bold; width: 60px; min-width: 60px; max-width: 60px;">${inOcValue}</td>`;
+                row.innerHTML += `<td class="${maxOcClass}" style="padding: 6px; border: 1px solid #ddd; border-right: 1px solid #ddd; position: sticky; left: 300px; background-color: white; text-align: center; font-weight: bold; width: 60px; min-width: 60px; max-width: 60px;">${maxOcDisplay}</td>`;
                 
                 rowData.cells.forEach((checkpointRate, idx) => {
                     if (checkpointRate !== undefined && checkpointRate !== null) {
