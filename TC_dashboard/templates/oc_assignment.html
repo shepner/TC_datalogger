@@ -133,28 +133,29 @@
             <div style="margin-top: 40px; border-top: 2px solid #ddd; padding-top: 20px;">
             <h2 style="margin-bottom: 10px;">OC Performance Dashboard</h2>
             
-            <div id="performance-container" style="display: none; margin-top: 10px;">
-                <div style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap; margin-bottom: 15px;">
-                    <div style="display: flex; align-items: center; gap: 5px;">
-                        <label for="performance_days" style="margin: 0; white-space: nowrap;">Days Back:</label>
-                        <input type="number" id="performance_days" value="90" min="7" max="365" step="1" style="width: 70px; padding: 4px;" onchange="validateDaysBack()">
-                    </div>
-                    <button onclick="loadPerformance()" style="padding: 6px 12px; font-size: 13px;">Load Performance Data</button>
-                    <div style="display: flex; align-items: center; gap: 8px;">
-                        <label style="margin: 0; white-space: nowrap;">
-                            <input type="radio" name="view_mode" value="pivot" checked onchange="toggleView()" style="margin-right: 4px;"> Pivot
-                        </label>
-                        <label style="margin: 0; white-space: nowrap;">
-                            <input type="radio" name="view_mode" value="detail" onchange="toggleView()" style="margin-right: 4px;"> Detail
-                        </label>
-                    </div>
-                    <div style="display: flex; align-items: center; gap: 5px;">
-                        <label for="oc_level_filter" style="margin: 0; white-space: nowrap;">Level:</label>
-                        <select id="oc_level_filter" onchange="toggleView()" style="padding: 4px 8px; font-size: 13px;">
-                            <option value="">All</option>
-                        </select>
-                    </div>
+            <div style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap; margin-bottom: 15px;">
+                <div style="display: flex; align-items: center; gap: 5px;">
+                    <label for="performance_days" style="margin: 0; white-space: nowrap;">Days Back:</label>
+                    <input type="number" id="performance_days" value="90" min="7" max="365" step="1" style="width: 70px; padding: 4px;" onchange="validateDaysBack()">
                 </div>
+                <button onclick="loadPerformance()" style="padding: 6px 12px; font-size: 13px;">Load Performance Data</button>
+                <div id="view-controls" style="display: none; display: flex; align-items: center; gap: 8px;">
+                    <label style="margin: 0; white-space: nowrap;">
+                        <input type="radio" name="view_mode" value="pivot" checked onchange="toggleView()" style="margin-right: 4px;"> Pivot
+                    </label>
+                    <label style="margin: 0; white-space: nowrap;">
+                        <input type="radio" name="view_mode" value="detail" onchange="toggleView()" style="margin-right: 4px;"> Detail
+                    </label>
+                </div>
+                <div id="filter-controls" style="display: none; display: flex; align-items: center; gap: 5px;">
+                    <label for="oc_level_filter" style="margin: 0; white-space: nowrap;">Level:</label>
+                    <select id="oc_level_filter" onchange="toggleView()" style="padding: 4px 8px; font-size: 13px;">
+                        <option value="">All</option>
+                    </select>
+                </div>
+            </div>
+
+            <div id="performance-container" style="display: none; margin-top: 10px;">
 
                 <!-- Pivot View -->
                 <div id="pivot-container">
@@ -370,6 +371,10 @@
                     return dateB - dateA;
                 });
             });
+            
+            // Show view and filter controls
+            document.getElementById('view-controls').style.display = 'flex';
+            document.getElementById('filter-controls').style.display = 'flex';
             
             toggleView();
             document.getElementById('performance-container').style.display = 'block';
