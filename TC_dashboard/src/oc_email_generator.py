@@ -24,9 +24,10 @@ class OCEmailGenerator:
     def get_members_not_in_oc(self) -> List[Dict[str, Any]]:
         """
         Get list of members who are not currently in an OC.
+        Excludes members who have been in the faction for less than 72 hours.
 
         Returns:
-            List of member dictionaries with id, name, level, last_action_timestamp
+            List of member dictionaries with id, name, level, last_action_timestamp, days_in_faction
         """
         query = """
         SELECT
@@ -38,12 +39,14 @@ class OCEmailGenerator:
             CURRENT_DATE(), 
             DATE(TIMESTAMP_SECONDS(SAFE_CAST(last_action.timestamp AS INT64))), 
             DAY
-          ) AS days_inactive
+          ) AS days_inactive,
+          days_in_faction
         FROM
           `torncity-402423.torn_data.v2_faction_40832_members-raw`
         WHERE
           is_in_oc = FALSE
           AND last_action.timestamp IS NOT NULL
+          AND days_in_faction >= 3
         ORDER BY
           name ASC
         """
@@ -487,11 +490,21 @@ class OCEmailGenerator:
             # Get appropriate OC list based on activity
             oc_list = ocs_for_active if member['is_active'] else ocs_for_inactive
             
+            # Check if member has any OC history
+            member_id = member['member_id']
+            has_oc_history = member_id in members_with_oc_history
+            
             # Try to assign member to first available OC (excluding No Reserve)
             for oc in oc_list:
                 # Skip No Reserve OC
                 if is_no_reserve_oc(oc):
                     continue
+                
+                # Members with no OC history can only join Level 1 OCs
+                if not has_oc_history:
+                    difficulty = oc.get('difficulty')
+                    if difficulty is None or int(difficulty) != 1:
+                        continue
                 
                 oc_id = oc['oc_id']
                 
