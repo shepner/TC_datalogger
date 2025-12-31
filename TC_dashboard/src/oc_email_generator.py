@@ -767,7 +767,15 @@ class OCEmailGenerator:
                         continue
                     
                     difficulty = oc.get('difficulty')
-                    if difficulty is None or int(difficulty) != 1:
+                    if difficulty is None:
+                        continue
+                    
+                    try:
+                        difficulty = int(difficulty)
+                    except (ValueError, TypeError):
+                        continue
+                    
+                    if difficulty != 1:
                         continue
                     
                     oc_id = oc['oc_id']
@@ -785,6 +793,7 @@ class OCEmailGenerator:
                     if available_slots > 0:
                         assignments[oc_id].append(member_name)
                         assigned_members.add(member_name)
+                        logger.debug(f"Assigned new member {member_name} to Level 1 OC {oc_id}")
                         break
 
         # Log unassigned members for debugging
