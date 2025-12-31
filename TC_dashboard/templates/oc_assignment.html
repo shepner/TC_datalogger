@@ -108,29 +108,7 @@
             <p>Generate email text for OC assignments with member prioritization</p>
         </header>
 
-        <div class="form-group">
-            <label for="instructions">Custom Instructions (optional):</label>
-            <textarea id="instructions" placeholder="Please join the OC assigned to you below. Make sure you have the required items if needed."></textarea>
-        </div>
-
-        <div class="form-group">
-            <label for="max_members">Max Members per OC:</label>
-            <input type="number" id="max_members" value="1" min="1" max="10">
-        </div>
-
-        <button onclick="generateEmail()">Generate Email</button>
-        <a href="/"><button class="secondary">Back to Dashboard</button></a>
-
-        <div id="error" class="error" style="display: none;"></div>
-        <div id="success" class="success" style="display: none;"></div>
-
-        <div id="email-output" class="email-output" style="display: none;">
-            <h3>Generated Email:</h3>
-            <textarea id="email-text" readonly></textarea>
-            <button class="copy-button" onclick="copyEmail()">Copy to Clipboard</button>
-        </div>
-
-            <div style="margin-top: 40px; border-top: 2px solid #ddd; padding-top: 20px;">
+            <div style="margin-top: 20px; margin-bottom: 30px; border-bottom: 2px solid #ddd; padding-bottom: 20px;">
             <h2 style="margin-bottom: 10px;">OC Performance Dashboard</h2>
             
             <div style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap; margin-bottom: 15px;">
@@ -192,6 +170,28 @@
                     </div>
                 </div>
             </div>
+        </div>
+
+        <div class="form-group">
+            <label for="instructions">Custom Instructions (optional):</label>
+            <textarea id="instructions" placeholder="Please join the OC assigned to you below. Make sure you have the required items if needed."></textarea>
+        </div>
+
+        <div class="form-group">
+            <label for="max_members">Max Members per OC:</label>
+            <input type="number" id="max_members" value="1" min="1" max="10">
+        </div>
+
+        <button onclick="generateEmail()">Generate Email</button>
+        <a href="/"><button class="secondary">Back to Dashboard</button></a>
+
+        <div id="error" class="error" style="display: none;"></div>
+        <div id="success" class="success" style="display: none;"></div>
+
+        <div id="email-output" class="email-output" style="display: none;">
+            <h3>Generated Email:</h3>
+            <textarea id="email-text" readonly></textarea>
+            <button class="copy-button" onclick="copyEmail()">Copy to Clipboard</button>
         </div>
     </div>
 
