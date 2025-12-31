@@ -457,78 +457,43 @@ class OCEmailGenerator:
             else:
                 ocs_for_active.append(oc)
 
-        # Assign members based on checkpoint_pass_rate (80-90 range)
-        # Structure: oc_id -> [{member_name, qualified_positions: [position_id]}]
-        assignments = {}  # oc_id -> list of assignment dicts
-        members_needing_alternatives = []  # Members with partial qualifications
-        members_needing_spawn = []  # Members with no valid OCs
+        # Assign all members to available OCs
+        # Structure: oc_id -> [member_name]
+        assignments = {}  # oc_id -> list of member names
         
-        # For each member, find qualified positions (checkpoint_pass_rate 80-90)
+        # Track which members have been assigned
+        assigned_members = set()
+        
+        # Assign members to OCs based on priority:
+        # 1. Active members → OCs starting soonest (if already has members) or OCs that won't expire for >1 day
+        # 2. Inactive members → OCs with longer delay
         for member in members_sorted:
             member_name = member['member_name']
-            member_rates = checkpoint_rates.get(member_name, {})
             
-            # Find all qualified OC+position combinations for this member
-            qualified_combos = []  # List of {oc_name, position_id, position, difficulty}
-            for oc_name_position_key, rate in member_rates.items():
-                if 80 <= rate <= 90:  # Valid range
-                    parts = oc_name_position_key.rsplit('_', 1)
-                    if len(parts) == 2:
-                        oc_name, position_id = parts
-                        qualified_combos.append({
-                            'oc_name': oc_name,
-                            'position_id': position_id,
-                            'rate': rate
-                        })
+            if member_name in assigned_members:
+                continue
             
-            # Find available OCs that match qualified combinations
-            qualified_ocs = []
-            for oc in ocs:
-                oc_name = oc['oc_name']
-                # Check if this OC matches any qualified combo
-                matching_combos = [c for c in qualified_combos if c['oc_name'] == oc_name]
-                if matching_combos:
-                    qualified_ocs.append({
-                        'oc': oc,
-                        'qualified_positions': [c['position_id'] for c in matching_combos]
-                    })
-            
-            # Assign member to best available OC
-            assigned = False
+            # Get appropriate OC list based on activity
             oc_list = ocs_for_active if member['is_active'] else ocs_for_inactive
             
-            for qualified_oc_info in qualified_ocs:
-                oc = qualified_oc_info['oc']
+            # Try to assign member to first available OC
+            for oc in oc_list:
                 oc_id = oc['oc_id']
-                qualified_positions = qualified_oc_info['qualified_positions']
                 
-                # Check if OC has space and member hasn't been assigned
+                # Check if OC has space
                 if oc_id not in assignments:
                     assignments[oc_id] = []
                 
-                # Count current assignments for this OC
-                current_count = sum(len(a.get('qualified_positions', [])) for a in assignments[oc_id])
+                # Check available slots (total slots minus filled slots)
+                total_slots = oc.get('total_slots', 0)
+                filled_slots = oc.get('filled_slots', 0)
+                assigned_count = len(assignments[oc_id])
+                available_slots = total_slots - filled_slots - assigned_count
                 
-                # Assign one member per OC (no limit on members per OC)
-                if current_count < oc.get('total_slots', 1):
-                    assignments[oc_id].append({
-                        'member_name': member_name,
-                        'qualified_positions': qualified_positions
-                    })
-                    assigned = True
+                if available_slots > 0:
+                    assignments[oc_id].append(member_name)
+                    assigned_members.add(member_name)
                     break
-            
-            # Track members who need alternatives or spawn recommendations
-            if not assigned:
-                if qualified_combos:
-                    # Has qualifications but no available OC
-                    members_needing_alternatives.append({
-                        'member_name': member_name,
-                        'qualified_combos': qualified_combos
-                    })
-                else:
-                    # No valid qualifications at all
-                    members_needing_spawn.append(member_name)
 
         # Generate email text using form letter format
         email_lines = []
@@ -590,9 +555,7 @@ class OCEmailGenerator:
                 email_lines.append(f"Lv {level} - {oc_name} - {oc_url}")
                 
                 # Member list (one per line, no bullets)
-                for assignment in level_assignments[oc_id]:
-                    member_name = assignment['member_name']
-                    # Don't show positions in the email (per user's example)
+                for member_name in level_assignments[oc_id]:
                     email_lines.append(member_name)
                 
                 email_lines.append("")
