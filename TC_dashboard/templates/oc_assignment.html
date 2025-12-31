@@ -819,7 +819,19 @@
             // Render rows in sorted order
             pivotRows.forEach(rowData => {
                 const row = document.createElement('tr');
+                const maxOcLevel = rowData.max_recommended_oc || null;
+                const maxOcClass = maxOcLevel && maxOcLevel >= 1 && maxOcLevel <= 10 ? `oc-level-${maxOcLevel}` : '';
+                const maxOcDisplay = maxOcLevel !== null ? maxOcLevel : '—';
+                
+                // Determine In OC cell styling: red if not in OC and days_in_faction > 3
+                const inOcValue = rowData.is_in_oc ? '✓' : '✗';
+                const inOcBgColor = (!rowData.is_in_oc && rowData.days_in_faction > 3) ? '#ffcdd2' : 'white';
+                
                 row.innerHTML = `<td style="padding: 6px; border: 1px solid #ddd; border-right: 1px solid #ddd; position: sticky; left: 0; background-color: white; font-weight: bold;">${rowData.member_name}</td>`;
+                row.innerHTML += `<td style="padding: 6px; border: 1px solid #ddd; border-right: 1px solid #ddd; position: sticky; left: 80px; background-color: white; text-align: center; font-weight: bold;">${rowData.oc_count_30d || 0}</td>`;
+                row.innerHTML += `<td style="padding: 6px; border: 1px solid #ddd; border-right: 1px solid #ddd; position: sticky; left: 140px; background-color: white; text-align: center; font-weight: bold;">${rowData.oc_count_7d || 0}</td>`;
+                row.innerHTML += `<td style="padding: 6px; border: 1px solid #ddd; border-right: 1px solid #ddd; position: sticky; left: 200px; background-color: ${inOcBgColor}; text-align: center; font-weight: bold;">${inOcValue}</td>`;
+                row.innerHTML += `<td class="${maxOcClass}" style="padding: 6px; border: 1px solid #ddd; border-right: 1px solid #ddd; position: sticky; left: 260px; background-color: white; text-align: center; font-weight: bold;">${maxOcDisplay}</td>`;
                 
                 rowData.cells.forEach((checkpointRate, idx) => {
                     if (checkpointRate !== undefined && checkpointRate !== null) {
