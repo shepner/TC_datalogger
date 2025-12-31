@@ -217,7 +217,8 @@
             
             document.getElementById('error').style.display = 'none';
             document.getElementById('success').style.display = 'none';
-            document.getElementById('email-output').style.display = 'none';
+            document.getElementById('email-output').style.display = 'block';
+            document.getElementById('email-text').value = 'Generating email...';
 
             try {
                 const response = await fetch('/api/oc-assignment/generate', {
