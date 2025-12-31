@@ -959,12 +959,22 @@
                 currentSort.direction = 'asc';
             }
 
-            const ocLevelFilter = document.getElementById('oc_level_filter').value;
+            // Get checked difficulty levels
+            const checkedLevels = new Set();
+            document.querySelectorAll('#oc_level_checkboxes input[type="checkbox"]:checked').forEach(cb => {
+                checkedLevels.add(parseInt(cb.value, 10));
+            });
+            
             const memberFilterValue = document.getElementById('member_filter').value;
             let filteredData = performanceData;
-            
-            if (ocLevelFilter) {
-                filteredData = filteredData.filter(r => r.oc_level == ocLevelFilter);
+
+            // If at least one checkbox is checked, filter by checked levels
+            if (checkedLevels.size > 0) {
+                filteredData = filteredData.filter(r => {
+                    const ocLevel = r.oc_level || r.difficulty;
+                    const ocLevelNum = typeof ocLevel === 'string' ? parseInt(ocLevel, 10) : ocLevel;
+                    return checkedLevels.has(ocLevelNum);
+                });
             }
             if (memberFilterValue) {
                 filteredData = filteredData.filter(r => r.member_name === memberFilterValue);
