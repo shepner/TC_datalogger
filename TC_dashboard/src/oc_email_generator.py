@@ -360,9 +360,13 @@ class OCEmailGenerator:
         
         # Get members who have never participated in any OC (for Level 1 assignment only)
         members_with_oc_history = self.get_members_with_oc_history()
+        
+        logger.info(f"Found {len(members)} members not in OC (after 72-hour filter)")
+        logger.info(f"Found {len(ocs)} available OCs")
+        logger.info(f"Found {len(members_with_oc_history)} members with OC history")
 
         if not members:
-            return "No members available for OC assignment (all members are already in OCs)."
+            return "No members available for OC assignment (all members are already in OCs or have been in faction for less than 72 hours)."
 
         if not ocs:
             # If no OCs found, check if it's due to a query error
