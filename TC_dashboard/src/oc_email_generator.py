@@ -342,6 +342,114 @@ class OCEmailGenerator:
             else:
                 raise
 
+    def get_member_max_oc_and_rates(self, days_back: int = 90) -> Dict[str, Dict[str, Any]]:
+        """
+        Calculate max recommended OC and best rates per difficulty level for each member.
+        
+        Args:
+            days_back: Number of days to look back (default 90)
+            
+        Returns:
+            Dictionary mapping member_name -> {
+                'max_recommended_oc': int or None,
+                'level_rates': {difficulty: best_checkpoint_rate},
+                'has_80_plus': bool
+            }
+        """
+        performance = self.get_oc_performance_by_role(days_back=days_back)
+        
+        member_data = {}  # member_name -> {max_recommended_oc, level_rates, has_80_plus}
+        member_highest_level = {}  # member_name -> highest difficulty
+        member_highest_level_rate = {}  # member_name -> rate at highest level
+        
+        # First pass: track highest level and rates
+        for record in performance:
+            member_name = record.get('member_name')
+            difficulty_raw = record.get('difficulty') or record.get('oc_level')
+            checkpoint_rate_raw = record.get('checkpoint_pass_rate', 0)
+            
+            if not member_name or difficulty_raw is None:
+                continue
+            
+            try:
+                difficulty = int(difficulty_raw)
+                checkpoint_rate = float(checkpoint_rate_raw)
+                if 0 <= checkpoint_rate <= 1:
+                    checkpoint_rate = checkpoint_rate * 100
+            except (ValueError, TypeError):
+                continue
+            
+            if member_name not in member_data:
+                member_data[member_name] = {
+                    'level_rates': {},
+                    'has_80_plus': False,
+                    'max_recommended_oc': None
+                }
+            
+            # Track best rate per level
+            if difficulty not in member_data[member_name]['level_rates']:
+                member_data[member_name]['level_rates'][difficulty] = checkpoint_rate
+            else:
+                if checkpoint_rate > member_data[member_name]['level_rates'][difficulty]:
+                    member_data[member_name]['level_rates'][difficulty] = checkpoint_rate
+            
+            # Track highest level
+            if member_name not in member_highest_level:
+                member_highest_level[member_name] = difficulty
+                member_highest_level_rate[member_name] = checkpoint_rate
+            else:
+                if difficulty > member_highest_level[member_name]:
+                    member_highest_level[member_name] = difficulty
+                    member_highest_level_rate[member_name] = checkpoint_rate
+                elif difficulty == member_highest_level[member_name]:
+                    if checkpoint_rate > member_highest_level_rate[member_name]:
+                        member_highest_level_rate[member_name] = checkpoint_rate
+            
+            if checkpoint_rate >= 80:
+                member_data[member_name]['has_80_plus'] = True
+        
+        # Second pass: calculate max_recommended_oc
+        for member_name, data in member_data.items():
+            level_rates = data['level_rates']
+            
+            # Find levels with rates in 80-90 range
+            valid_levels = []
+            for level, rate in level_rates.items():
+                if 80 <= rate <= 90:
+                    valid_levels.append((level, rate))
+            
+            if not valid_levels:
+                # No 80-90 range, check if has 90+ at highest level
+                if (member_name in member_highest_level_rate and 
+                    member_highest_level_rate[member_name] >= 90):
+                    highest_rate = member_highest_level_rate[member_name]
+                    highest_level = member_highest_level[member_name]
+                    if highest_rate >= 94:
+                        data['max_recommended_oc'] = highest_level + 2
+                    else:
+                        data['max_recommended_oc'] = highest_level + 1
+                elif not data['has_80_plus']:
+                    # No 80+ at all, recommend Level 1
+                    data['max_recommended_oc'] = 1
+                continue
+            
+            # Sort by level descending
+            valid_levels.sort(key=lambda x: x[0], reverse=True)
+            highest_level, highest_rate = valid_levels[0]
+            
+            if highest_rate <= 82:
+                # Check for lower level with good rate (85+)
+                for level, rate in valid_levels[1:]:
+                    if rate >= 85:
+                        data['max_recommended_oc'] = level
+                        break
+                else:
+                    data['max_recommended_oc'] = highest_level
+            else:
+                data['max_recommended_oc'] = highest_level
+        
+        return member_data
+
     def generate_email(self, exclude_no_reserve: bool = True) -> str:
         """
         Generate OC assignment email text using the form letter template.
@@ -356,7 +464,7 @@ class OCEmailGenerator:
         members = self.get_members_not_in_oc()
         participation = self.get_oc_participation_counts()
         ocs = self.get_available_ocs()
-        checkpoint_rates = self.get_member_checkpoint_rates()  # member_name -> oc_name_position_id -> rate
+        member_performance = self.get_member_max_oc_and_rates()  # member_name -> {max_recommended_oc, level_rates, has_80_plus}
         
         # Get members who have never participated in any OC (for Level 1 assignment only)
         members_with_oc_history = self.get_members_with_oc_history()
@@ -525,16 +633,52 @@ class OCEmailGenerator:
             member_id = member['member_id']
             has_oc_history = member_id in members_with_oc_history
             
+            # Get member's performance data
+            member_perf = member_performance.get(member_name, {})
+            member_max_oc = member_perf.get('max_recommended_oc')
+            member_level_rates = member_perf.get('level_rates', {})
+            
             # Try to assign member to first available OC (excluding No Reserve)
             for oc in oc_list:
                 # Skip No Reserve OC
                 if is_no_reserve_oc(oc):
                     continue
                 
+                oc_difficulty = oc.get('difficulty')
+                if oc_difficulty is None:
+                    continue
+                
+                try:
+                    oc_difficulty = int(oc_difficulty)
+                except (ValueError, TypeError):
+                    continue
+                
                 # Members with no OC history can only join Level 1 OCs
                 if not has_oc_history:
-                    difficulty = oc.get('difficulty')
-                    if difficulty is None or int(difficulty) != 1:
+                    if oc_difficulty != 1:
+                        continue
+                else:
+                    # Check if member has valid checkpoint_pass_rate for this difficulty level
+                    # Member must have a position with checkpoint_pass_rate in 80-90 range for this level
+                    level_rate = member_level_rates.get(oc_difficulty)
+                    if level_rate is None:
+                        # Member has no history at this difficulty level
+                        continue
+                    
+                    # Ensure rate is in percentage format
+                    try:
+                        rate_num = float(level_rate)
+                        if 0 <= rate_num <= 1:
+                            rate_num = rate_num * 100
+                    except (ValueError, TypeError):
+                        continue
+                    
+                    # Check if rate is in valid range (80-90)
+                    if not (80 <= rate_num <= 90):
+                        continue
+                    
+                    # Check if OC difficulty is <= max_recommended_oc
+                    if member_max_oc is not None and oc_difficulty > member_max_oc:
                         continue
                 
                 oc_id = oc['oc_id']
@@ -552,14 +696,49 @@ class OCEmailGenerator:
                 if available_slots > 0:
                     assignments[oc_id].append(member_name)
                     assigned_members.add(member_name)
+                    logger.debug(f"Assigned {member_name} to OC {oc_id} (Level {oc_difficulty})")
                     break
             
             # If member wasn't assigned and has OC history, try all OCs (not just activity-based list)
             if member_name not in assigned_members and has_oc_history:
                 # Fallback: try all OCs regardless of activity status
+                member_perf = member_performance.get(member_name, {})
+                member_max_oc = member_perf.get('max_recommended_oc')
+                member_level_rates = member_perf.get('level_rates', {})
+                
                 for oc in ocs:
                     # Skip No Reserve OC
                     if is_no_reserve_oc(oc):
+                        continue
+                    
+                    oc_difficulty = oc.get('difficulty')
+                    if oc_difficulty is None:
+                        continue
+                    
+                    try:
+                        oc_difficulty = int(oc_difficulty)
+                    except (ValueError, TypeError):
+                        continue
+                    
+                    # Check if member has valid checkpoint_pass_rate for this difficulty level
+                    level_rate = member_level_rates.get(oc_difficulty)
+                    if level_rate is None:
+                        continue
+                    
+                    # Ensure rate is in percentage format
+                    try:
+                        rate_num = float(level_rate)
+                        if 0 <= rate_num <= 1:
+                            rate_num = rate_num * 100
+                    except (ValueError, TypeError):
+                        continue
+                    
+                    # Check if rate is in valid range (80-90)
+                    if not (80 <= rate_num <= 90):
+                        continue
+                    
+                    # Check if OC difficulty is <= max_recommended_oc
+                    if member_max_oc is not None and oc_difficulty > member_max_oc:
                         continue
                     
                     oc_id = oc['oc_id']
@@ -577,6 +756,7 @@ class OCEmailGenerator:
                     if available_slots > 0:
                         assignments[oc_id].append(member_name)
                         assigned_members.add(member_name)
+                        logger.debug(f"Fallback: Assigned {member_name} to OC {oc_id} (Level {oc_difficulty})")
                         break
             
             # If still not assigned and no OC history, try all Level 1 OCs
