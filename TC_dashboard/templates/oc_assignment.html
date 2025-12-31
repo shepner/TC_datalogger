@@ -136,7 +136,7 @@
             
             <div style="margin-bottom: 15px;">
                 <label for="performance_days">Days Back:</label>
-                <input type="number" id="performance_days" value="90" min="7" max="365" style="width: 100px; margin-left: 10px;">
+                <input type="number" id="performance_days" value="90" min="7" max="365" step="1" style="width: 100px; margin-left: 10px;" onchange="validateDaysBack()">
                 <button onclick="loadPerformance()" style="margin-left: 10px;">Load Performance Data</button>
             </div>
 
