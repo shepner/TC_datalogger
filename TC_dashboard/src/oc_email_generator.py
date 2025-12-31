@@ -104,6 +104,30 @@ class OCEmailGenerator:
         
         return participation
 
+    def get_members_with_oc_history(self) -> set:
+        """
+        Get set of member IDs who have participated in at least one OC (ever).
+        
+        Returns:
+            Set of member_id integers
+        """
+        query = """
+        SELECT DISTINCT
+          slot.user.id AS member_id
+        FROM
+          `torncity-402423.torn_data.v2_faction_40832_crimes-raw` AS crime,
+          UNNEST(crime.slots) AS slot
+        WHERE
+          slot.user.id IS NOT NULL
+          AND crime.executed_at IS NOT NULL
+        """
+        try:
+            results = self.bq.execute_query(query)
+            return {row['member_id'] for row in results if row.get('member_id')}
+        except Exception as e:
+            logger.warning(f"Error getting members with OC history: {e}")
+            return set()
+
     def get_oc_participation_counts_30d(self) -> List[Dict[str, Any]]:
         """
         Get OC participation counts for all members in the last 30 days.
@@ -333,6 +357,9 @@ class OCEmailGenerator:
         participation = self.get_oc_participation_counts()
         ocs = self.get_available_ocs()
         checkpoint_rates = self.get_member_checkpoint_rates()  # member_name -> oc_name_position_id -> rate
+        
+        # Get members who have never participated in any OC (for Level 1 assignment only)
+        members_with_oc_history = self.get_members_with_oc_history()
 
         if not members:
             return "No members available for OC assignment (all members are already in OCs)."
