@@ -41,7 +41,14 @@ WITH member_info AS (
 oc_participation AS (
   SELECT
     slot.user.id AS member_id,
-    COUNT(DISTINCT crime.id) AS oc_count_30d
+    COUNT(DISTINCT CASE 
+      WHEN TIMESTAMP_SECONDS(SAFE_CAST(crime.executed_at AS INT64)) >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 30 DAY)
+      THEN crime.id
+    END) AS oc_count_30d,
+    COUNT(DISTINCT CASE 
+      WHEN TIMESTAMP_SECONDS(SAFE_CAST(crime.executed_at AS INT64)) >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 7 DAY)
+      THEN crime.id
+    END) AS oc_count_7d
   FROM
     `torncity-402423.torn_data.v2_faction_40832_crimes-raw` AS crime,
     UNNEST(crime.slots) AS slot
@@ -110,6 +117,7 @@ SELECT
   m.days_in_faction,
   m.days_inactive,
   COALESCE(oc.oc_count_30d, 0) AS oc_count_30d,
+  COALESCE(oc.oc_count_7d, 0) AS oc_count_7d,
   COALESCE(oc.oc_count_30d, 0) >= 3 AS oc_requirement_met,
   COALESCE(t.trading_count_30d, 0) AS trading_count_30d,
   COALESCE(t.trading_count_30d, 0) > 480 AS trading_requirement_met,
