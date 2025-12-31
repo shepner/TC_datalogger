@@ -113,6 +113,13 @@ def get_oc_performance():
     try:
         days_back = int(request.args.get("days_back", 90))
         
+        # Validate and clamp days_back to prevent BigQuery overflow errors
+        # BigQuery has limits on TIMESTAMP_SUB, so we cap at 365 days
+        if days_back < 7:
+            days_back = 7
+        elif days_back > 365:
+            days_back = 365
+        
         performance = oc_email_generator.get_oc_performance_by_role(days_back=days_back)
         
         return jsonify({"performance": performance})
