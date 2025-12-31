@@ -224,8 +224,17 @@ def get_oc_performance():
             # Find all levels with rates in 80-90 range, sorted by level (descending)
             valid_levels = []
             for level, rate in level_rates.items():
-                if 80 <= rate <= 90:
-                    valid_levels.append((level, rate))
+                # Ensure rate is a number and in percentage format (0-100)
+                try:
+                    rate_num = float(rate)
+                    # If rate is between 0 and 1, assume it's a decimal and convert to percentage
+                    if 0 <= rate_num <= 1:
+                        rate_num = rate_num * 100
+                    
+                    if 80 <= rate_num <= 90:
+                        valid_levels.append((level, rate_num))
+                except (ValueError, TypeError):
+                    continue
             
             if not valid_levels:
                 continue
