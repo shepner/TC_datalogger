@@ -748,12 +748,14 @@
                                     // Add hover tooltip with historical data
                                     let tooltipTimeout = null;
                                     cell.addEventListener('mouseenter', (e) => {
+                                        console.log('Mouse enter on cell, history length:', history ? history.length : 0);
                                         // Small delay to prevent tooltip flicker
                                         tooltipTimeout = setTimeout(() => {
                                             showHistoryTooltip(e.target, history, difficulty, ocName, ocGroup.get(positionId).position);
-                                        }, 100);
+                                        }, 200);
                                     });
                                     cell.addEventListener('mouseleave', () => {
+                                        console.log('Mouse leave on cell');
                                         if (tooltipTimeout) {
                                             clearTimeout(tooltipTimeout);
                                             tooltipTimeout = null;
@@ -1181,8 +1183,11 @@
             hideHistoryTooltip();
             
             if (!history || history.length === 0) {
+                console.log('No history data available');
                 return;
             }
+            
+            console.log('Showing tooltip with', history.length, 'records');
             
             // Sort history by executed_at (most recent first)
             const sortedHistory = [...history].sort((a, b) => {
@@ -1195,6 +1200,9 @@
             const tooltip = document.createElement('div');
             tooltip.className = 'history-tooltip';
             tooltip.id = 'history-tooltip-popup';
+            tooltip.style.display = 'block';
+            tooltip.style.visibility = 'visible';
+            tooltip.style.opacity = '1';
             
             let html = `<div style="font-weight: bold; margin-bottom: 8px; color: #4CAF50;">Level ${difficulty} ${ocName} (${positionName})</div>`;
             html += `<table>`;
@@ -1239,7 +1247,11 @@
             let left = rect.right + 10;
             let top = rect.top;
             
-            // Wait for tooltip to be rendered to get its dimensions
+            // Set initial position
+            tooltip.style.left = left + 'px';
+            tooltip.style.top = top + 'px';
+            
+            // Wait for tooltip to be rendered to get its dimensions, then adjust
             setTimeout(() => {
                 const tooltipRect = tooltip.getBoundingClientRect();
                 
@@ -1259,7 +1271,9 @@
                 
                 tooltip.style.left = left + 'px';
                 tooltip.style.top = top + 'px';
-            }, 0);
+                
+                console.log('Tooltip positioned at', left, top, 'size:', tooltipRect.width, tooltipRect.height);
+            }, 10);
             
             currentTooltip = tooltip;
         }
