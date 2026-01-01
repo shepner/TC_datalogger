@@ -1275,8 +1275,40 @@ class OCEmailGenerator:
         # Build list of needed OCs (for UI display)
         needed_ocs = []  # List of {level: int, oc_names: [str]}
         
+        # Check for members assigned below their max recommended level
+        # This identifies OCs that should be spawned so members can be assigned to higher levels
+        members_assigned_below_max = {}  # level -> [member_names]
+        
+        for oc in ocs:
+            oc_id = oc['oc_id']
+            if oc_id not in assignments or not assignments[oc_id]:
+                continue
+            
+            oc_difficulty = oc.get('difficulty')
+            if oc_difficulty is None:
+                continue
+            try:
+                oc_difficulty = int(oc_difficulty)
+            except (ValueError, TypeError):
+                continue
+            
+            # Check each assigned member
+            for member_name in assignments[oc_id]:
+                member_perf = member_performance.get(member_name, {})
+                member_max_oc = member_perf.get('max_recommended_oc')
+                
+                # If member is assigned to a level below their max, suggest spawning at max level
+                if member_max_oc is not None and oc_difficulty < member_max_oc:
+                    if member_max_oc not in members_assigned_below_max:
+                        members_assigned_below_max[member_max_oc] = []
+                    if member_name not in members_assigned_below_max[member_max_oc]:
+                        members_assigned_below_max[member_max_oc].append(member_name)
+        
+        # Merge with spawn_suggestions (for unassigned members)
+        all_needed_levels = set(spawn_suggestions.keys()) | set(members_assigned_below_max.keys())
+        
         # Add spawn suggestions if any
-        if spawn_suggestions:
+        if spawn_suggestions or members_assigned_below_max:
             email_lines.append("")
             email_lines.append("OC Spawn Suggestions:")
             email_lines.append("")
