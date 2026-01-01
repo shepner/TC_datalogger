@@ -746,6 +746,10 @@ class OCEmailGenerator:
             member_max_oc = member_perf.get('max_recommended_oc')
             member_level_rates = member_perf.get('level_rates', {})
             
+            # Debug logging for specific members
+            if member_name in ["Adilon_Scorpian", "Hiyori"]:
+                logger.info(f"DEBUG {member_name}: Starting assignment, member_max_oc = {member_max_oc}, level_rates = {member_level_rates}")
+            
             # Try to assign member to highest level OC they can do (OCs are already sorted by difficulty descending)
             # This ensures members get assigned to their max recommended level, not just the first available
             for oc in oc_list:
