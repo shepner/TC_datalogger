@@ -2024,7 +2024,7 @@
                 title.textContent = `Full Historical Data: ${memberName} - Level ${difficulty} ${ocName} (All Positions)`;
             }
             
-            // Sort data: date descending, then OC name ascending
+            // Sort data: date descending, then OC name ascending (grouped)
             const sortedData = [...allData].sort((a, b) => {
                 // First sort by date (descending - most recent first)
                 const dateA = a.executed_at ? new Date(a.executed_at).getTime() : 0;
@@ -2032,10 +2032,17 @@
                 if (dateB !== dateA) {
                     return dateB - dateA; // Descending
                 }
-                // If dates are equal, sort by OC name (ascending)
+                // If dates are equal, sort by OC name (ascending) to group them
                 const ocNameA = (a.ocName || '').toLowerCase();
                 const ocNameB = (b.ocName || '').toLowerCase();
-                return ocNameA.localeCompare(ocNameB);
+                const ocCompare = ocNameA.localeCompare(ocNameB);
+                if (ocCompare !== 0) {
+                    return ocCompare;
+                }
+                // If same date and same OC name, sort by position for consistency
+                const posA = (a.position || a.positionId || '').toLowerCase();
+                const posB = (b.position || b.positionId || '').toLowerCase();
+                return posA.localeCompare(posB);
             });
             
             let html = `<table style="width: 100%; border-collapse: collapse; margin-top: 10px;">`;
