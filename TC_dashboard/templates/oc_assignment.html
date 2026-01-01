@@ -1008,9 +1008,13 @@
                             
                             const cell = document.createElement('td');
                             cell.className = cellClass;
-                            cell.style.cssText = `padding: 2px 4px; border: 1px solid #ddd; border-right: 1px solid #ddd; text-align: center; font-weight: bold;`;
+                            cell.style.cssText = `padding: 2px 4px; border: 1px solid #ddd; border-right: 1px solid #ddd; text-align: center; font-weight: bold; cursor: pointer; position: relative;`;
                             cell.textContent = rangeText;
                             cell.setAttribute('data-difficulty', difficulty);
+                            cell.setAttribute('data-member', member.member_name);
+                            cell.setAttribute('data-is-level-collapsed', 'true');
+                            // Create a synthetic column key for this level
+                            cell.setAttribute('data-column-key', `level_${difficulty}`);
                             row.appendChild(cell);
                         } else {
                             row.innerHTML += '<td style="padding: 2px 4px; border: 1px solid #ddd; border-right: 1px solid #ddd; text-align: center; color: #ccc;">—</td>';
@@ -1041,10 +1045,14 @@
                                     
                                     const cell = document.createElement('td');
                                     cell.className = cellClass;
-                                    cell.style.cssText = `padding: 2px 4px; border: 1px solid #ddd; border-right: 1px solid #ddd; text-align: center; font-weight: bold;`;
+                                    cell.style.cssText = `padding: 2px 4px; border: 1px solid #ddd; border-right: 1px solid #ddd; text-align: center; font-weight: bold; cursor: pointer; position: relative;`;
                                     cell.textContent = rangeText;
                                     cell.setAttribute('data-difficulty', difficulty);
                                     cell.setAttribute('data-oc-name', ocName);
+                                    cell.setAttribute('data-member', member.member_name);
+                                    cell.setAttribute('data-is-oc-collapsed', 'true');
+                                    // Create a synthetic column key for this OC
+                                    cell.setAttribute('data-column-key', `${difficulty}_${ocName}_all`);
                                     row.appendChild(cell);
                                 } else {
                                     row.innerHTML += '<td style="padding: 2px 4px; border: 1px solid #ddd; border-right: 1px solid #ddd; text-align: center; color: #ccc;">—</td>';
@@ -1148,22 +1156,45 @@
                 const ocName = cell.getAttribute('data-oc-name');
                 const positionId = cell.getAttribute('data-position-id');
                 const positionName = cell.getAttribute('data-position');
+                const isLevelCollapsed = cell.getAttribute('data-is-level-collapsed') === 'true';
+                const isOCCollapsed = cell.getAttribute('data-is-oc-collapsed') === 'true';
                 
                 if (!memberName || !columnKey || !membersMap) return;
                 
                 const member = membersMap.get(memberName);
                 if (!member || !member.history) return;
                 
-                const history = member.history.get(columnKey);
-                if (!history || history.length === 0) return;
-                
-                console.log('MOUSE OVER (delegation) on cell:', memberName, columnKey, 'with', history.length, 'records');
-                
-                // Store timeout on the cell element
-                const timeout = setTimeout(() => {
-                    showHistoryTooltip(cell, history, difficulty, ocName, positionName);
-                }, 200);
-                cell.setAttribute('data-tooltip-timeout', timeout);
+                // Check if this is a summarized cell
+                if (isLevelCollapsed) {
+                    // Collect all OC name summaries for this level
+                    const levelSummaryData = collectLevelSummaryData(member, difficulty);
+                    if (!levelSummaryData || levelSummaryData.length === 0) return;
+                    
+                    const timeout = setTimeout(() => {
+                        showSummaryTooltip(cell, levelSummaryData, difficulty, null, 'level');
+                    }, 200);
+                    cell.setAttribute('data-tooltip-timeout', timeout);
+                } else if (isOCCollapsed) {
+                    // Collect all position-level data for this OC
+                    const ocSummaryData = collectOCSummaryData(member, difficulty, ocName);
+                    if (!ocSummaryData || ocSummaryData.length === 0) return;
+                    
+                    const timeout = setTimeout(() => {
+                        showSummaryTooltip(cell, ocSummaryData, difficulty, ocName, 'oc');
+                    }, 200);
+                    cell.setAttribute('data-tooltip-timeout', timeout);
+                } else {
+                    // Regular cell - show position-level history
+                    const history = member.history.get(columnKey);
+                    if (!history || history.length === 0) return;
+                    
+                    console.log('MOUSE OVER (delegation) on cell:', memberName, columnKey, 'with', history.length, 'records');
+                    
+                    const timeout = setTimeout(() => {
+                        showHistoryTooltip(cell, history, difficulty, ocName, positionName);
+                    }, 200);
+                    cell.setAttribute('data-tooltip-timeout', timeout);
+                }
             }, true);
             
             newTbody.addEventListener('mouseout', function(e) {
@@ -1211,14 +1242,13 @@
                 const ocName = cell.getAttribute('data-oc-name');
                 const positionId = cell.getAttribute('data-position-id');
                 const positionName = cell.getAttribute('data-position');
+                const isLevelCollapsed = cell.getAttribute('data-is-level-collapsed') === 'true';
+                const isOCCollapsed = cell.getAttribute('data-is-oc-collapsed') === 'true';
                 
                 if (!memberName || !columnKey || !membersMap) return;
                 
                 const member = membersMap.get(memberName);
                 if (!member || !member.history) return;
-                
-                const history = member.history.get(columnKey);
-                if (!history || history.length === 0) return;
                 
                 console.log('CLICK (delegation) on cell:', memberName, columnKey);
                 e.stopPropagation();
@@ -1229,7 +1259,22 @@
                     cell.removeAttribute('data-tooltip-timeout');
                 }
                 hideHistoryTooltip();
-                showHistoryModal(memberName, columnKey, difficulty, ocName, positionId, positionName, history);
+                
+                // Check if this is a summarized cell
+                if (isLevelCollapsed) {
+                    // Show all detailed data for this level
+                    const allLevelData = collectAllLevelData(member, difficulty);
+                    showSummaryModal(memberName, difficulty, null, 'level', allLevelData);
+                } else if (isOCCollapsed) {
+                    // Show all detailed data for this OC
+                    const allOCData = collectAllOCData(member, difficulty, ocName);
+                    showSummaryModal(memberName, difficulty, ocName, 'oc', allOCData);
+                } else {
+                    // Regular cell - show position-level history
+                    const history = member.history.get(columnKey);
+                    if (!history || history.length === 0) return;
+                    showHistoryModal(memberName, columnKey, difficulty, ocName, positionId, positionName, history);
+                }
             }, true);
         }
         
@@ -1762,6 +1807,266 @@
                 currentTooltip.remove();
                 currentTooltip = null;
             }
+        }
+        
+        // Helper functions for summary data collection
+        function collectLevelSummaryData(member, difficulty) {
+            // Collect OC name summaries for this level
+            const summaryData = [];
+            const aggregated = window.aggregatedData && window.aggregatedData[member.member_name] 
+                ? window.aggregatedData[member.member_name].oc_ranges 
+                : {};
+            
+            // Get all OC names for this difficulty level
+            const ocKeys = Object.keys(aggregated).filter(key => key.startsWith(`${difficulty}_`));
+            
+            ocKeys.forEach(ocKey => {
+                const ocName = ocKey.replace(`${difficulty}_`, '');
+                const ocData = aggregated[ocKey];
+                if (ocData && ocData.range) {
+                    summaryData.push({
+                        ocName: ocName,
+                        range: ocData.range,
+                        min: ocData.min,
+                        max: ocData.max,
+                        values: ocData.values || []
+                    });
+                }
+            });
+            
+            return summaryData.sort((a, b) => a.ocName.localeCompare(b.ocName));
+        }
+        
+        function collectOCSummaryData(member, difficulty, ocName) {
+            // Collect position-level data for this OC
+            const summaryData = [];
+            
+            // Get all position histories for this OC
+            const prefix = `${difficulty}_${ocName}_`;
+            member.history.forEach((history, columnKey) => {
+                if (columnKey.startsWith(prefix)) {
+                    const positionId = columnKey.replace(prefix, '');
+                    if (history && history.length > 0) {
+                        // Calculate range for this position
+                        const rates = history.map(r => r.checkpoint_pass_rate || 0);
+                        const min = Math.min(...rates);
+                        const max = Math.max(...rates);
+                        const range = min === max ? min.toString() : `${min}-${max}`;
+                        
+                        // Get position name from first record
+                        const positionName = history[0].position || positionId;
+                        
+                        summaryData.push({
+                            positionId: positionId,
+                            positionName: positionName,
+                            range: range,
+                            min: min,
+                            max: max,
+                            history: history
+                        });
+                    }
+                }
+            });
+            
+            return summaryData.sort((a, b) => a.positionId.localeCompare(b.positionId));
+        }
+        
+        function collectAllLevelData(member, difficulty) {
+            // Collect ALL detailed data for this level (all OCs, all positions)
+            const allData = [];
+            
+            member.history.forEach((history, columnKey) => {
+                if (columnKey.startsWith(`${difficulty}_`)) {
+                    // Parse column key: difficulty_ocName_positionId
+                    const parts = columnKey.split('_');
+                    if (parts.length >= 3) {
+                        const ocName = parts.slice(1, -1).join('_'); // Handle OC names with underscores
+                        const positionId = parts[parts.length - 1];
+                        
+                        if (history && history.length > 0) {
+                            history.forEach(record => {
+                                allData.push({
+                                    ...record,
+                                    ocName: ocName,
+                                    positionId: positionId,
+                                    position: record.position || positionId
+                                });
+                            });
+                        }
+                    }
+                }
+            });
+            
+            // Sort by executed_at (most recent first)
+            return allData.sort((a, b) => {
+                const dateA = a.executed_at ? new Date(a.executed_at).getTime() : 0;
+                const dateB = b.executed_at ? new Date(b.executed_at).getTime() : 0;
+                return dateB - dateA;
+            });
+        }
+        
+        function collectAllOCData(member, difficulty, ocName) {
+            // Collect ALL detailed data for this OC (all positions)
+            const allData = [];
+            const prefix = `${difficulty}_${ocName}_`;
+            
+            member.history.forEach((history, columnKey) => {
+                if (columnKey.startsWith(prefix)) {
+                    const positionId = columnKey.replace(prefix, '');
+                    if (history && history.length > 0) {
+                        history.forEach(record => {
+                            allData.push({
+                                ...record,
+                                positionId: positionId,
+                                position: record.position || positionId
+                            });
+                        });
+                    }
+                }
+            });
+            
+            // Sort by executed_at (most recent first)
+            return allData.sort((a, b) => {
+                const dateA = a.executed_at ? new Date(a.executed_at).getTime() : 0;
+                const dateB = b.executed_at ? new Date(b.executed_at).getTime() : 0;
+                return dateB - dateA;
+            });
+        }
+        
+        // Summary Tooltip Functions
+        function showSummaryTooltip(cell, summaryData, difficulty, ocName, summaryType) {
+            hideHistoryTooltip();
+            
+            if (!summaryData || summaryData.length === 0) {
+                console.log('No summary data available');
+                return;
+            }
+            
+            const tooltip = document.createElement('div');
+            tooltip.className = 'history-tooltip';
+            tooltip.id = 'history-tooltip-popup';
+            tooltip.style.display = 'block';
+            tooltip.style.visibility = 'visible';
+            tooltip.style.opacity = '1';
+            
+            let html = '';
+            if (summaryType === 'level') {
+                html = `<div style="font-weight: bold; margin-bottom: 8px; color: #4CAF50;">Level ${difficulty} - OC Summaries</div>`;
+                html += `<table>`;
+                html += `<thead><tr><th style="padding: 4px 6px;">OC Name</th><th style="padding: 4px 6px; text-align: center;">Range</th></tr></thead><tbody>`;
+                
+                summaryData.forEach(item => {
+                    const hasIssue = item.values && item.values.some(v => v < 80 || v > 90);
+                    const rowClass = hasIssue ? 'cell-red' : '';
+                    html += `<tr class="${rowClass}">`;
+                    html += `<td style="padding: 4px 6px;">${item.ocName}</td>`;
+                    html += `<td style="padding: 4px 6px; text-align: center; font-weight: bold;">${item.range}</td>`;
+                    html += `</tr>`;
+                });
+            } else if (summaryType === 'oc') {
+                html = `<div style="font-weight: bold; margin-bottom: 8px; color: #4CAF50;">Level ${difficulty} ${ocName} - Position Summaries</div>`;
+                html += `<table>`;
+                html += `<thead><tr><th style="padding: 4px 6px;">Position</th><th style="padding: 4px 6px; text-align: center;">Range</th></tr></thead><tbody>`;
+                
+                summaryData.forEach(item => {
+                    const hasIssue = item.values && item.values.some(v => v < 80 || v > 90);
+                    const rowClass = hasIssue ? 'cell-red' : '';
+                    html += `<tr class="${rowClass}">`;
+                    html += `<td style="padding: 4px 6px;">${item.positionName} (${item.positionId})</td>`;
+                    html += `<td style="padding: 4px 6px; text-align: center; font-weight: bold;">${item.range}</td>`;
+                    html += `</tr>`;
+                });
+            }
+            
+            html += `</tbody></table>`;
+            html += `<div style="margin-top: 8px; font-size: 11px; color: #666;">Click for full details</div>`;
+            html += `</div>`;
+            
+            tooltip.innerHTML = html;
+            document.body.appendChild(tooltip);
+            
+            // Position tooltip
+            const rect = cell.getBoundingClientRect();
+            let left = rect.right + 10;
+            let top = rect.top;
+            
+            tooltip.style.left = left + 'px';
+            tooltip.style.top = top + 'px';
+            
+            setTimeout(() => {
+                const tooltipRect = tooltip.getBoundingClientRect();
+                if (left + tooltipRect.width > window.innerWidth) {
+                    left = rect.left - tooltipRect.width - 10;
+                }
+                if (left < 0) left = 10;
+                if (top + tooltipRect.height > window.innerHeight) {
+                    top = window.innerHeight - tooltipRect.height - 10;
+                }
+                if (top < 0) top = 10;
+                
+                tooltip.style.left = left + 'px';
+                tooltip.style.top = top + 'px';
+            }, 10);
+            
+            currentTooltip = tooltip;
+        }
+        
+        // Summary Modal Functions
+        function showSummaryModal(memberName, difficulty, ocName, summaryType, allData) {
+            hideHistoryTooltip();
+            const modal = document.getElementById('historyModal');
+            const title = document.getElementById('historyModalTitle');
+            const content = document.getElementById('historyModalContent');
+            
+            if (summaryType === 'level') {
+                title.textContent = `Full Historical Data: ${memberName} - Level ${difficulty} (All OCs)`;
+            } else if (summaryType === 'oc') {
+                title.textContent = `Full Historical Data: ${memberName} - Level ${difficulty} ${ocName} (All Positions)`;
+            }
+            
+            let html = `<table style="width: 100%; border-collapse: collapse; margin-top: 10px;">`;
+            html += `<thead><tr style="background-color: #4CAF50; color: white;">`;
+            html += `<th style="padding: 10px; text-align: left; border: 1px solid #ddd;">OC Name</th>`;
+            html += `<th style="padding: 10px; text-align: left; border: 1px solid #ddd;">Position</th>`;
+            html += `<th style="padding: 10px; text-align: left; border: 1px solid #ddd;">Date</th>`;
+            html += `<th style="padding: 10px; text-align: center; border: 1px solid #ddd;">Checkpoint Rate</th>`;
+            html += `<th style="padding: 10px; text-align: center; border: 1px solid #ddd;">Status</th>`;
+            html += `<th style="padding: 10px; text-align: center; border: 1px solid #ddd;">OC ID</th>`;
+            html += `</tr></thead><tbody>`;
+            
+            if (allData.length === 0) {
+                html += `<tr><td colspan="6" style="padding: 20px; text-align: center; color: #999;">No historical data available</td></tr>`;
+            } else {
+                allData.forEach((record) => {
+                    const dateStr = record.executed_at ? new Date(record.executed_at).toLocaleString() : 'Unknown';
+                    const rate = record.checkpoint_pass_rate || 0;
+                    const rateClass = (rate < 80 || rate > 90) ? 'cell-red' : '';
+                    let status = record.status;
+                    if (!status && record.outcome) {
+                        status = record.outcome === 'Successful' ? 'Success' : 'Failure';
+                    }
+                    if (!status) status = 'Unknown';
+                    let crimeId = record.crime_id;
+                    if (!crimeId && record.id) crimeId = record.id;
+                    
+                    html += `<tr>`;
+                    html += `<td style="padding: 10px; border: 1px solid #ddd;">${record.ocName || '-'}</td>`;
+                    html += `<td style="padding: 10px; border: 1px solid #ddd;">${record.position || record.positionId || '-'}</td>`;
+                    html += `<td style="padding: 10px; border: 1px solid #ddd;">${dateStr}</td>`;
+                    html += `<td class="${rateClass}" style="padding: 10px; border: 1px solid #ddd; text-align: center; font-weight: bold;">${rate}</td>`;
+                    html += `<td style="padding: 10px; border: 1px solid #ddd; text-align: center;">${status}</td>`;
+                    if (crimeId) {
+                        html += `<td style="padding: 10px; border: 1px solid #ddd; text-align: center;"><a href="https://www.torn.com/factions.php?step=your#/tab=crimes&crimeId=${crimeId}" target="_blank" style="color: #4CAF50; text-decoration: none;">${crimeId}</a></td>`;
+                    } else {
+                        html += `<td style="padding: 10px; border: 1px solid #ddd; text-align: center;">—</td>`;
+                    }
+                    html += `</tr>`;
+                });
+            }
+            
+            html += `</tbody></table>`;
+            content.innerHTML = html;
+            modal.style.display = 'block';
         }
         
         // History Modal Functions
