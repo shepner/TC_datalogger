@@ -220,12 +220,15 @@ class OCEmailGenerator:
         base_path = Path(__file__).parent.parent.parent
         query_path = base_path / query_file
         
-        if query_path.exists():
-            query = query_path.read_text()
-            query = query.replace("INTERVAL 90 DAY", f"INTERVAL {days_back} DAY")
-            results = self.bq.execute_query(query)
-        else:
+        if not query_path.exists():
+            logger.warning(f"OC performance pivot SQL file not found at {query_path}")
             return {}
+        
+        query = query_path.read_text()
+        query = query.replace("INTERVAL 90 DAY", f"INTERVAL {days_back} DAY")
+        results = self.bq.execute_query(query)
+        
+        logger.info(f"get_member_checkpoint_rates() query returned {len(results)} records")
         
         # Build dictionary: member_name -> oc_name_position_id -> max_checkpoint_pass_rate
         member_rates = {}
@@ -246,6 +249,13 @@ class OCEmailGenerator:
             # Keep MAX checkpoint_pass_rate
             if key not in member_rates[member_name] or checkpoint_rate > member_rates[member_name][key]:
                 member_rates[member_name][key] = checkpoint_rate
+        
+        # Log sample of data for debugging
+        if member_rates:
+            sample_member = list(member_rates.keys())[0]
+            logger.info(f"Sample: {sample_member} has {len(member_rates[sample_member])} OC-specific rate entries")
+            if "DubZzZ" in member_rates:
+                logger.info(f"DubZzZ has {len(member_rates['DubZzZ'])} OC-specific rate entries: {list(member_rates['DubZzZ'].keys())[:5]}")
         
         return member_rates
 
@@ -477,6 +487,17 @@ class OCEmailGenerator:
         ocs = self.get_available_ocs()
         member_performance = self.get_member_max_oc_and_rates()  # member_name -> {max_recommended_oc, level_rates, has_80_plus}
         member_oc_rates = self.get_member_checkpoint_rates()  # member_name -> oc_name_position_id -> rate
+        
+        # Debug: Log if member_oc_rates is empty or missing data
+        if not member_oc_rates:
+            logger.warning("get_member_checkpoint_rates() returned empty dictionary - OC-specific rate checking will not work")
+        else:
+            logger.info(f"get_member_checkpoint_rates() returned data for {len(member_oc_rates)} members")
+            # Check if DubZzZ has data
+            if "DubZzZ" in member_oc_rates:
+                logger.info(f"DubZzZ has {len(member_oc_rates['DubZzZ'])} OC-specific rate entries")
+            else:
+                logger.warning("DubZzZ not found in member_oc_rates - will fall back to level-based checking")
         
         # Get members who have never participated in any OC (for Level 1 assignment only)
         members_with_oc_history = self.get_members_with_oc_history()
