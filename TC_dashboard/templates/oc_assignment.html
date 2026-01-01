@@ -94,8 +94,8 @@
         }
         /* History Tooltip */
         .history-tooltip {
-            position: absolute;
-            z-index: 1000;
+            position: fixed;
+            z-index: 10000;
             background-color: #333;
             color: white;
             padding: 12px;
@@ -1168,6 +1168,10 @@
             // Remove any existing tooltip
             hideHistoryTooltip();
             
+            if (!history || history.length === 0) {
+                return;
+            }
+            
             // Sort history by executed_at (most recent first)
             const sortedHistory = [...history].sort((a, b) => {
                 const dateA = a.executed_at ? new Date(a.executed_at) : new Date(0);
@@ -1178,6 +1182,7 @@
             // Create tooltip element
             const tooltip = document.createElement('div');
             tooltip.className = 'history-tooltip';
+            tooltip.id = 'history-tooltip-popup';
             
             let html = `<div style="font-weight: bold; margin-bottom: 8px; color: #4CAF50;">Level ${difficulty} ${ocName} (${positionName})</div>`;
             html += `<table>`;
@@ -1217,25 +1222,32 @@
             tooltip.innerHTML = html;
             document.body.appendChild(tooltip);
             
-            // Position tooltip near the cell
+            // Position tooltip near the cell - use getBoundingClientRect for accurate positioning
             const rect = cell.getBoundingClientRect();
-            const tooltipRect = tooltip.getBoundingClientRect();
             let left = rect.right + 10;
             let top = rect.top;
             
-            // Adjust if tooltip would go off screen
-            if (left + tooltipRect.width > window.innerWidth) {
-                left = rect.left - tooltipRect.width - 10;
-            }
-            if (top + tooltipRect.height > window.innerHeight) {
-                top = window.innerHeight - tooltipRect.height - 10;
-            }
-            if (top < 0) {
-                top = 10;
-            }
-            
-            tooltip.style.left = left + 'px';
-            tooltip.style.top = top + 'px';
+            // Wait for tooltip to be rendered to get its dimensions
+            setTimeout(() => {
+                const tooltipRect = tooltip.getBoundingClientRect();
+                
+                // Adjust if tooltip would go off screen
+                if (left + tooltipRect.width > window.innerWidth) {
+                    left = rect.left - tooltipRect.width - 10;
+                }
+                if (left < 0) {
+                    left = 10;
+                }
+                if (top + tooltipRect.height > window.innerHeight) {
+                    top = window.innerHeight - tooltipRect.height - 10;
+                }
+                if (top < 0) {
+                    top = 10;
+                }
+                
+                tooltip.style.left = left + 'px';
+                tooltip.style.top = top + 'px';
+            }, 0);
             
             currentTooltip = tooltip;
         }
