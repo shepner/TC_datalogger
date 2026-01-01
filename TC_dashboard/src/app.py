@@ -84,14 +84,25 @@ def oc_assignment():
 
 @app.route("/api/oc-assignment/oc-names", methods=["GET"])
 def get_oc_names():
-    """Get list of all unique OC names."""
+    """Get list of all unique OC names from historical data."""
     if not oc_email_generator:
         return jsonify({"error": "BigQuery client not available"}), 500
     
     try:
-        # Get all OCs to extract unique names
-        ocs = oc_email_generator.get_available_ocs()
-        oc_names = sorted(set(oc.get('oc_name', '') for oc in ocs if oc.get('oc_name')))
+        # Query for all unique OC names from historical crimes data
+        query = """
+        SELECT DISTINCT
+          name AS oc_name
+        FROM
+          `torncity-402423.torn_data.v2_faction_40832_crimes-raw`
+        WHERE
+          name IS NOT NULL
+          AND name != ''
+        ORDER BY
+          name ASC
+        """
+        results = oc_email_generator.bq.execute_query(query)
+        oc_names = [row.get('oc_name', '') for row in results if row.get('oc_name')]
         return jsonify({"oc_names": oc_names})
     except Exception as e:
         logger.error(f"Error getting OC names: {e}", exc_info=True)

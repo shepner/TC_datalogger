@@ -298,13 +298,13 @@
         <div id="error" class="error" style="display: none;"></div>
 
         <div id="email-output" class="email-output" style="display: block;">
-            <div id="oc-exclude-toolbar" style="margin-bottom: 15px; padding: 10px; background-color: #f5f5f5; border-radius: 4px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center;">
-                <label style="font-weight: bold; margin-right: 5px;">Exclude OCs:</label>
-                <div id="oc-checkboxes" style="display: flex; flex-wrap: wrap; gap: 10px;">
+            <div id="oc-exclude-toolbar" style="margin-bottom: 8px; padding: 6px 8px; background-color: #f5f5f5; border-radius: 4px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center;">
+                <label style="font-weight: bold; margin-right: 4px; font-size: 11px;">Exclude OCs:</label>
+                <div id="oc-checkboxes" style="display: flex; flex-wrap: wrap; gap: 6px;">
                     <!-- OC checkboxes will be populated here -->
                 </div>
             </div>
-            <h3>Generated Email:</h3>
+            <h3 style="margin-top: 8px; margin-bottom: 8px;">Generated Email:</h3>
             <textarea id="email-text" readonly>Generating email...</textarea>
             <button class="copy-button" onclick="copyEmail()">Copy to Clipboard</button>
     </div>
@@ -366,9 +366,17 @@
             }
             container.innerHTML = '';
             
+            if (allOcNames.length === 0) {
+                const noDataLabel = document.createElement('span');
+                noDataLabel.style.cssText = 'font-size: 11px; color: #999; font-style: italic;';
+                noDataLabel.textContent = 'Loading OC names...';
+                container.appendChild(noDataLabel);
+                return;
+            }
+            
             allOcNames.forEach(ocName => {
                 const label = document.createElement('label');
-                label.style.cssText = 'display: flex; align-items: center; cursor: pointer; white-space: nowrap;';
+                label.style.cssText = 'display: flex; align-items: center; cursor: pointer; white-space: nowrap; font-size: 11px;';
                 
                 const checkbox = document.createElement('input');
                 checkbox.type = 'checkbox';
@@ -376,7 +384,7 @@
                 checkbox.id = `oc-${ocName.replace(/\s+/g, '-')}`;
                 // Check "No Reserve" by default
                 checkbox.checked = ocName.toLowerCase().includes('no reserve');
-                checkbox.style.cssText = 'margin-right: 5px;';
+                checkbox.style.cssText = 'margin-right: 3px;';
                 checkbox.addEventListener('change', generateEmail);
                 
                 label.appendChild(checkbox);
