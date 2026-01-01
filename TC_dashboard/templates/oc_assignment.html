@@ -74,9 +74,12 @@
         .oc-level-8 { background-color: #c5cae9; }  /* Indigo - indigo */
         .oc-level-9 { background-color: #e1bee7; }  /* Violet - violet */
         .oc-level-10 { background-color: #f8bbd0; } /* Purple - purple */
-        /* Pivot table header styling */
+        /* Pivot table header styling - inspired by Wikipedia's sticky-header-multi */
+        #pivot-table-container {
+            position: relative;
+        }
         #pivot-table {
-            border-collapse: separate;
+            border-collapse: collapse;
             border-spacing: 0;
         }
         #pivot-header {
@@ -88,9 +91,19 @@
             border: 1px solid rgba(255, 255, 255, 0.3) !important;
             box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.2);
             background-color: #4CAF50 !important;
+            position: sticky;
         }
-        #pivot-table td {
-            border: 1px solid #ddd;
+        #pivot-header tr:first-child th {
+            top: 0;
+            z-index: 22;
+        }
+        #pivot-header tr:nth-child(2) th {
+            top: 0;
+            z-index: 21;
+        }
+        #pivot-header tr:nth-child(3) th {
+            top: 0;
+            z-index: 20;
         }
         #pivot-header th.sortable {
             cursor: pointer;
@@ -259,9 +272,9 @@
 
                 <!-- Pivot View -->
                 <div id="pivot-container">
-                    <div style="max-height: 70vh; overflow-y: auto; overflow-x: auto; border: 1px solid #ddd; margin-top: 5px;">
-                        <table id="pivot-table" style="width: 100%; border-collapse: separate; border-spacing: 0; font-size: 11px;">
-                            <thead id="pivot-header" style="position: sticky; top: 0; background-color: #4CAF50; color: white; z-index: 20;">
+                    <div id="pivot-table-container" style="max-height: 70vh; overflow-y: auto; overflow-x: auto; border: 1px solid #ddd; margin-top: 5px; position: relative;">
+                        <table id="pivot-table" style="width: 100%; border-collapse: collapse; border-spacing: 0; font-size: 11px;">
+                            <thead id="pivot-header" style="background-color: #4CAF50; color: white;">
                             </thead>
                             <tbody id="pivot-body">
                             </tbody>
