@@ -732,7 +732,7 @@
                                 }
                                 
                                 // Check if there's historical data for this cell
-                                const history = member.history.get(columnKey);
+                                const history = member.history ? member.history.get(columnKey) : null;
                                 const hasHistory = history && history.length > 0;
                                 const clickableStyle = hasHistory ? 'cursor: pointer; position: relative;' : '';
                                 
@@ -740,7 +740,9 @@
                                 cell.className = cellClass;
                                 cell.style.cssText = `padding: 6px; border: 1px solid #ddd; border-right: 1px solid #ddd; text-align: center; font-weight: bold; ${clickableStyle}`;
                                 cell.textContent = checkpointRate;
-                                if (hasHistory) {
+                                
+                                // Always add hover/click handlers if we have a checkpoint rate (even if no history yet)
+                                if (checkpointRate !== undefined) {
                                     cell.setAttribute('data-member', member.member_name);
                                     cell.setAttribute('data-column-key', columnKey);
                                     cell.setAttribute('data-difficulty', difficulty);
@@ -751,19 +753,27 @@
                                     // Add hover tooltip with historical data
                                     let tooltipTimeout = null;
                                     cell.addEventListener('mouseenter', (e) => {
-                                        console.log('Mouse enter on cell, history length:', history ? history.length : 0, 'history:', history);
-                                        // Small delay to prevent tooltip flicker
-                                        tooltipTimeout = setTimeout(() => {
-                                            if (history && history.length > 0) {
-                                                console.log('Calling showHistoryTooltip');
-                                                showHistoryTooltip(e.target, history, difficulty, ocName, ocGroup.get(positionId).position);
-                                            } else {
-                                                console.log('No history to show');
-                                            }
-                                        }, 200);
+                                        const cellHistory = member.history ? member.history.get(columnKey) : null;
+                                        console.log('Mouse enter on cell:', {
+                                            member: member.member_name,
+                                            columnKey: columnKey,
+                                            historyExists: !!cellHistory,
+                                            historyLength: cellHistory ? cellHistory.length : 0,
+                                            hasHistoryMap: !!member.history,
+                                            historyKeys: member.history ? Array.from(member.history.keys()) : []
+                                        });
+                                        
+                                        if (cellHistory && cellHistory.length > 0) {
+                                            // Small delay to prevent tooltip flicker
+                                            tooltipTimeout = setTimeout(() => {
+                                                console.log('Calling showHistoryTooltip with', cellHistory.length, 'records');
+                                                showHistoryTooltip(e.target, cellHistory, difficulty, ocName, ocGroup.get(positionId).position);
+                                            }, 200);
+                                        } else {
+                                            console.log('No history available for this cell');
+                                        }
                                     });
                                     cell.addEventListener('mouseleave', () => {
-                                        console.log('Mouse leave on cell');
                                         if (tooltipTimeout) {
                                             clearTimeout(tooltipTimeout);
                                             tooltipTimeout = null;
@@ -778,7 +788,10 @@
                                             clearTimeout(tooltipTimeout);
                                         }
                                         hideHistoryTooltip();
-                                        showHistoryModal(member.member_name, columnKey, difficulty, ocName, positionId, ocGroup.get(positionId).position, history);
+                                        const cellHistory = member.history ? member.history.get(columnKey) : null;
+                                        if (cellHistory && cellHistory.length > 0) {
+                                            showHistoryModal(member.member_name, columnKey, difficulty, ocName, positionId, ocGroup.get(positionId).position, cellHistory);
+                                        }
                                     });
                                 }
                                 row.appendChild(cell);
