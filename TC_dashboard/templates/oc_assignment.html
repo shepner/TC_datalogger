@@ -896,8 +896,86 @@
                 
                 sortedDifficulties.forEach(difficulty => {
                     const difficultyGroup = columnGroups.get(difficulty);
-                    const sortedOCNames = Array.from(difficultyGroup.keys()).sort();
-                    sortedOCNames.forEach(ocName => {
+                    const isLevelCollapsed = window.collapsedLevels && window.collapsedLevels.has(difficulty);
+                    
+                    if (isLevelCollapsed) {
+                        // Level is collapsed - show range for all values in this level
+                        const allValues = [];
+                        difficultyGroup.forEach((ocGroup, ocName) => {
+                            const sortedPositionIds = Array.from(ocGroup.keys()).sort();
+                            sortedPositionIds.forEach(positionId => {
+                                const columnKey = `${difficulty}_${ocName}_${positionId}`;
+                                const checkpointRate = member.data.get(columnKey);
+                                if (checkpointRate !== undefined) {
+                                    allValues.push(checkpointRate);
+                                }
+                            });
+                        });
+                        
+                        if (allValues.length > 0) {
+                            const minVal = Math.min(...allValues);
+                            const maxVal = Math.max(...allValues);
+                            const rangeText = minVal === maxVal ? minVal.toString() : `${minVal}-${maxVal}`;
+                            
+                            // Color coding: red if any value is < 80 or > 90
+                            let cellClass = '';
+                            if (allValues.some(v => v < 80 || v > 90)) {
+                                cellClass = 'cell-red';
+                            }
+                            
+                            const cell = document.createElement('td');
+                            cell.className = cellClass;
+                            cell.style.cssText = `padding: 2px 4px; border: 1px solid #ddd; border-right: 1px solid #ddd; text-align: center; font-weight: bold;`;
+                            cell.textContent = rangeText;
+                            cell.setAttribute('data-difficulty', difficulty);
+                            row.appendChild(cell);
+                        } else {
+                            row.innerHTML += '<td style="padding: 2px 4px; border: 1px solid #ddd; border-right: 1px solid #ddd; text-align: center; color: #ccc;">—</td>';
+                        }
+                    } else {
+                        // Level is not collapsed - show OC names and positions
+                        const sortedOCNames = Array.from(difficultyGroup.keys()).sort();
+                        sortedOCNames.forEach(ocName => {
+                            const ocGroup = difficultyGroup.get(ocName);
+                            const isOCCollapsed = window.collapsedOCNames && window.collapsedOCNames.has(`${difficulty}_${ocName}`);
+                            
+                            if (isOCCollapsed) {
+                                // OC is collapsed - show range for all values in this OC
+                                const allValues = [];
+                                const sortedPositionIds = Array.from(ocGroup.keys()).sort();
+                                sortedPositionIds.forEach(positionId => {
+                                    const columnKey = `${difficulty}_${ocName}_${positionId}`;
+                                    const checkpointRate = member.data.get(columnKey);
+                                    if (checkpointRate !== undefined) {
+                                        allValues.push(checkpointRate);
+                                    }
+                                });
+                                
+                                if (allValues.length > 0) {
+                                    const minVal = Math.min(...allValues);
+                                    const maxVal = Math.max(...allValues);
+                                    const rangeText = minVal === maxVal ? minVal.toString() : `${minVal}-${maxVal}`;
+                                    
+                                    // Color coding: red if any value is < 80 or > 90
+                                    let cellClass = '';
+                                    if (allValues.some(v => v < 80 || v > 90)) {
+                                        cellClass = 'cell-red';
+                                    }
+                                    
+                                    const cell = document.createElement('td');
+                                    cell.className = cellClass;
+                                    cell.style.cssText = `padding: 2px 4px; border: 1px solid #ddd; border-right: 1px solid #ddd; text-align: center; font-weight: bold;`;
+                                    cell.textContent = rangeText;
+                                    cell.setAttribute('data-difficulty', difficulty);
+                                    cell.setAttribute('data-oc-name', ocName);
+                                    row.appendChild(cell);
+                                } else {
+                                    row.innerHTML += '<td style="padding: 2px 4px; border: 1px solid #ddd; border-right: 1px solid #ddd; text-align: center; color: #ccc;">—</td>';
+                                }
+                            } else {
+                                // OC is not collapsed - show individual positions
+                                const sortedPositionIds = Array.from(ocGroup.keys()).sort();
+                                sortedPositionIds.forEach(positionId => {
                         const ocGroup = difficultyGroup.get(ocName);
                         const sortedPositionIds = Array.from(ocGroup.keys()).sort();
                         sortedPositionIds.forEach(positionId => {
