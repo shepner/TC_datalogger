@@ -76,13 +76,17 @@
         .oc-level-10 { background-color: #f8bbd0; } /* Purple - purple */
         /* Pivot table header styling */
         #pivot-table {
-            border-collapse: collapse;
+            border-collapse: separate;
             border-spacing: 0;
         }
         #pivot-header th {
             border: 1px solid rgba(255, 255, 255, 0.3) !important;
             box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.2);
             position: sticky !important;
+            background-color: #4CAF50 !important;
+        }
+        #pivot-table td {
+            border: 1px solid #ddd;
         }
         #pivot-header th.sortable {
             cursor: pointer;
