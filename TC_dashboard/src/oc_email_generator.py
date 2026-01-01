@@ -644,12 +644,15 @@ class OCEmailGenerator:
                 member['is_active'] = False
 
         # Sort members by priority:
-        # 1. Lower 30-day OC count = higher priority
-        # 2. Active members first
+        # 1. Higher 30-day OC count = higher priority (most active members first)
+        # 2. Higher 7-day OC count = higher priority (most recent activity)
+        # 3. Active members first
+        # This ensures members with highest participation get assigned to OCs that need fewer members
         members_sorted = sorted(
             members,
             key=lambda m: (
-                m['oc_count_30d'],  # Lower count first
+                -m['oc_count_30d'],  # Higher count first (negative for descending)
+                -m['oc_count_7d'],   # Higher count first (negative for descending)
                 not m['is_active'],  # Active members first
             )
         )
@@ -698,19 +701,31 @@ class OCEmailGenerator:
             else:
                 ocs_for_active.append(oc)
         
-        # Sort OCs by difficulty (descending) so we try higher levels first
-        # This ensures members get assigned to the highest level they can do
+        # Sort OCs by priority:
+        # 1. Difficulty (descending) - higher levels first
+        # 2. Members needed to start (ascending) - OCs that need fewer members first
+        # This ensures we fill OCs that are close to starting before creating new ones
         def sort_key(oc):
             difficulty = oc.get('difficulty')
             if difficulty is None:
-                return 0
-            try:
-                return int(difficulty)
-            except (ValueError, TypeError):
-                return 0
+                difficulty = 0
+            else:
+                try:
+                    difficulty = int(difficulty)
+                except (ValueError, TypeError):
+                    difficulty = 0
+            
+            # Calculate how many members are needed to start this OC
+            total_slots = oc.get('total_slots', 0)
+            filled_slots = oc.get('filled_slots', 0)
+            members_needed = max(0, total_slots - filled_slots)
+            
+            # Return tuple: (negative difficulty for descending, members_needed for ascending)
+            # This sorts by difficulty descending, then by members_needed ascending
+            return (-difficulty, members_needed)
         
-        ocs_for_active.sort(key=sort_key, reverse=True)
-        ocs_for_inactive.sort(key=sort_key, reverse=True)
+        ocs_for_active.sort(key=sort_key)
+        ocs_for_inactive.sort(key=sort_key)
 
         # Assign all members to available OCs
         # Structure: oc_id -> [member_name]
