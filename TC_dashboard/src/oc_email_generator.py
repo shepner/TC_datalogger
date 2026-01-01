@@ -708,7 +708,7 @@ class OCEmailGenerator:
                 
                 for oc in ocs:
                     # Skip No Reserve OC
-                    if is_no_reserve_oc(oc):
+                    if is_excluded_oc(oc):
                         continue
                     
                     oc_difficulty = oc.get('difficulty')
@@ -763,7 +763,7 @@ class OCEmailGenerator:
             if member_name not in assigned_members and not has_oc_history:
                 for oc in ocs:
                     # Skip No Reserve OC
-                    if is_no_reserve_oc(oc):
+                    if is_excluded_oc(oc):
                         continue
                     
                     difficulty = oc.get('difficulty')
