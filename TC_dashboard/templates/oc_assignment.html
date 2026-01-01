@@ -92,6 +92,48 @@
         #pivot-header th.sortable:hover {
             background-color: #45a049;
         }
+        /* History Tooltip */
+        .history-tooltip {
+            position: absolute;
+            z-index: 1000;
+            background-color: #333;
+            color: white;
+            padding: 12px;
+            border-radius: 6px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            max-width: 500px;
+            max-height: 400px;
+            overflow-y: auto;
+            font-size: 12px;
+            pointer-events: none;
+        }
+        .history-tooltip table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 8px;
+        }
+        .history-tooltip th {
+            background-color: #4CAF50;
+            color: white;
+            padding: 6px;
+            text-align: left;
+            border: 1px solid #555;
+            font-size: 11px;
+        }
+        .history-tooltip td {
+            padding: 6px;
+            border: 1px solid #555;
+            font-size: 11px;
+        }
+        .history-tooltip tr:nth-child(even) {
+            background-color: #444;
+        }
+        .history-tooltip .summary {
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid #555;
+            font-size: 11px;
+        }
         #pivot-header th.sortable::after {
             content: ' ↕';
             opacity: 0.5;
@@ -689,8 +731,7 @@
                                 // Check if there's historical data for this cell
                                 const history = member.history.get(columnKey);
                                 const hasHistory = history && history.length > 0;
-                                const clickableStyle = hasHistory ? 'cursor: pointer;' : '';
-                                const titleAttr = hasHistory ? `title="Click to view ${history.length} historical record(s)"` : '';
+                                const clickableStyle = hasHistory ? 'cursor: pointer; position: relative;' : '';
                                 
                                 const cell = document.createElement('td');
                                 cell.className = cellClass;
@@ -703,8 +744,20 @@
                                     cell.setAttribute('data-oc-name', ocName);
                                     cell.setAttribute('data-position-id', positionId);
                                     cell.setAttribute('data-position', ocGroup.get(positionId).position);
-                                    cell.title = `Click to view ${history.length} historical record(s)`;
-                                    cell.addEventListener('click', () => showHistoryModal(member.member_name, columnKey, difficulty, ocName, positionId, ocGroup.get(positionId).position, history));
+                                    
+                                    // Add hover tooltip with historical data
+                                    cell.addEventListener('mouseenter', (e) => {
+                                        showHistoryTooltip(e.target, history, difficulty, ocName, ocGroup.get(positionId).position);
+                                    });
+                                    cell.addEventListener('mouseleave', () => {
+                                        hideHistoryTooltip();
+                                    });
+                                    
+                                    // Add click handler for full modal
+                                    cell.addEventListener('click', (e) => {
+                                        e.stopPropagation();
+                                        showHistoryModal(member.member_name, columnKey, difficulty, ocName, positionId, ocGroup.get(positionId).position, history);
+                                    });
                                 }
                                 row.appendChild(cell);
                             } else {
@@ -1108,8 +1161,96 @@
             });
         }
 
+        // History Tooltip Functions
+        let currentTooltip = null;
+        
+        function showHistoryTooltip(cell, history, difficulty, ocName, positionName) {
+            // Remove any existing tooltip
+            hideHistoryTooltip();
+            
+            // Sort history by executed_at (most recent first)
+            const sortedHistory = [...history].sort((a, b) => {
+                const dateA = a.executed_at ? new Date(a.executed_at) : new Date(0);
+                const dateB = b.executed_at ? new Date(b.executed_at) : new Date(0);
+                return dateB - dateA;
+            });
+            
+            // Create tooltip element
+            const tooltip = document.createElement('div');
+            tooltip.className = 'history-tooltip';
+            
+            let html = `<div style="font-weight: bold; margin-bottom: 8px; color: #4CAF50;">Level ${difficulty} ${ocName} (${positionName})</div>`;
+            html += `<table>`;
+            html += `<thead><tr><th style="padding: 4px 6px;">Date</th><th style="padding: 4px 6px; text-align: center;">Rate</th><th style="padding: 4px 6px; text-align: center;">Status</th></tr></thead><tbody>`;
+            
+            // Show up to 5 most recent records
+            const displayHistory = sortedHistory.slice(0, 5);
+            displayHistory.forEach((record) => {
+                const dateStr = record.executed_at ? new Date(record.executed_at).toLocaleDateString() : 'Unknown';
+                const rate = record.checkpoint_pass_rate || 0;
+                const rateClass = (rate < 80 || rate > 90) ? 'cell-red' : '';
+                const status = record.status || 'Unknown';
+                
+                html += `<tr>`;
+                html += `<td style="padding: 4px 6px;">${dateStr}</td>`;
+                html += `<td class="${rateClass}" style="padding: 4px 6px; text-align: center; font-weight: bold;">${rate}</td>`;
+                html += `<td style="padding: 4px 6px; text-align: center;">${status}</td>`;
+                html += `</tr>`;
+            });
+            
+            html += `</tbody></table>`;
+            
+            // Add summary
+            if (sortedHistory.length > 0) {
+                const rates = sortedHistory.map(r => r.checkpoint_pass_rate || 0);
+                const avgRate = (rates.reduce((a, b) => a + b, 0) / rates.length).toFixed(1);
+                const minRate = Math.min(...rates);
+                const maxRate = Math.max(...rates);
+                html += `<div class="summary">`;
+                html += `<strong>Total:</strong> ${sortedHistory.length} | <strong>Avg:</strong> ${avgRate}% | <strong>Min:</strong> ${minRate}% | <strong>Max:</strong> ${maxRate}%`;
+                if (sortedHistory.length > 5) {
+                    html += `<br><em>Showing 5 most recent. Click for full details.</em>`;
+                }
+                html += `</div>`;
+            }
+            
+            tooltip.innerHTML = html;
+            document.body.appendChild(tooltip);
+            
+            // Position tooltip near the cell
+            const rect = cell.getBoundingClientRect();
+            const tooltipRect = tooltip.getBoundingClientRect();
+            let left = rect.right + 10;
+            let top = rect.top;
+            
+            // Adjust if tooltip would go off screen
+            if (left + tooltipRect.width > window.innerWidth) {
+                left = rect.left - tooltipRect.width - 10;
+            }
+            if (top + tooltipRect.height > window.innerHeight) {
+                top = window.innerHeight - tooltipRect.height - 10;
+            }
+            if (top < 0) {
+                top = 10;
+            }
+            
+            tooltip.style.left = left + 'px';
+            tooltip.style.top = top + 'px';
+            
+            currentTooltip = tooltip;
+        }
+        
+        function hideHistoryTooltip() {
+            if (currentTooltip) {
+                currentTooltip.remove();
+                currentTooltip = null;
+            }
+        }
+        
         // History Modal Functions
         function showHistoryModal(memberName, columnKey, difficulty, ocName, positionId, positionName, history) {
+            // Hide tooltip when opening modal
+            hideHistoryTooltip();
             const modal = document.getElementById('historyModal');
             const title = document.getElementById('historyModalTitle');
             const content = document.getElementById('historyModalContent');
