@@ -1156,6 +1156,7 @@
             header.appendChild(headerRow3);
             
             // For multi-row sticky headers, calculate top offsets based on row heights
+            // This approach is similar to Wikipedia's sticky-header-multi implementation
             const setStickyTop = () => {
                 const rows = Array.from(header.querySelectorAll('tr'));
                 if (rows.length === 0) {
@@ -1163,33 +1164,37 @@
                     return;
                 }
                 
-                console.log('Setting sticky top for', rows.length, 'header rows');
+                // Calculate cumulative top values for each row
                 let cumulativeTop = 0;
                 rows.forEach((row, index) => {
                     if (index > 0) {
-                        // Get height of previous row
+                        // Get the actual rendered height of the previous row
                         const prevRow = rows[index - 1];
-                        const prevHeight = prevRow.offsetHeight || prevRow.getBoundingClientRect().height || 20;
-                        cumulativeTop += prevHeight;
-                        console.log(`Row ${index}: cumulativeTop = ${cumulativeTop}px (prev row height: ${prevHeight}px)`);
-                    } else {
-                        console.log(`Row ${index}: cumulativeTop = 0px`);
+                        // Use getBoundingClientRect for accurate height measurement
+                        const prevRect = prevRow.getBoundingClientRect();
+                        cumulativeTop += prevRect.height;
                     }
                     
                     // Apply sticky positioning to all th in this row
                     row.querySelectorAll('th').forEach(th => {
                         th.style.position = 'sticky';
                         th.style.top = cumulativeTop + 'px';
+                        // Ensure background color is set
                         th.style.backgroundColor = '#4CAF50';
-                        console.log(`  Set th top to ${cumulativeTop}px`);
                     });
                 });
             };
             
-            // Set sticky positioning after DOM is ready
-            setTimeout(setStickyTop, 100);
-            setTimeout(setStickyTop, 300);
+            // Set sticky positioning - use multiple attempts to ensure it works
+            // Wait for table to be fully rendered
+            setTimeout(setStickyTop, 50);
+            setTimeout(setStickyTop, 200);
             setTimeout(setStickyTop, 500);
+            
+            // Also recalculate when window resizes
+            window.addEventListener('resize', () => {
+                setTimeout(setStickyTop, 100);
+            });
             
             // Attach sort handlers to all sortable headers
             attachPivotSortHandlers();
