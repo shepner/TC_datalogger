@@ -131,6 +131,11 @@
         #pivot-body tr:hover td.oc-level-10 {
             background-color: #f48fb1 !important; /* Slightly darker purple */
         }
+        /* Preserve red background for cells with cell-red class (checkpoint_pass_rate < 80 or > 90) */
+        #pivot-body tr:hover td.cell-red,
+        #performance-body tr:hover td.cell-red {
+            background-color: #ffcdd2 !important; /* Keep red background on hover */
+        }
         /* Preserve red background for In OC cells that are red */
         #pivot-body tr:hover td[style*="background-color: #ffcdd2"],
         #pivot-body tr:hover td[style*="background-color:#ffcdd2"] {
