@@ -258,7 +258,7 @@
                         <table id="performance-table" style="width: 100%; border-collapse: collapse; font-size: 10px;">
                             <thead style="position: sticky; top: 0; background-color: #4CAF50; color: white; z-index: 10;">
                                 <tr>
-                                    <th class="sortable" data-column="member_name" style="padding: 4px 6px; border: 1px solid #ddd; cursor: pointer; position: sticky; left: 0; z-index: 11;">Member ↕</th>
+                                    <th class="sortable" data-column="member_name" style="padding: 4px 6px; border: 1px solid #ddd; cursor: pointer; position: sticky; left: 0; z-index: 20;">Member ↕</th>
                                     <th class="sortable" data-column="oc_level" style="padding: 4px 6px; border: 1px solid #ddd; cursor: pointer;">OC Level ↕</th>
                                     <th class="sortable" data-column="oc_name" style="padding: 4px 6px; border: 1px solid #ddd; cursor: pointer;">OC Name ↕</th>
                                     <th class="sortable" data-column="position" style="padding: 4px 6px; border: 1px solid #ddd; cursor: pointer;">Position ↕</th>
@@ -702,11 +702,11 @@
             
             // First row: difficulty headers (with colspan) - sortable
             const headerRow1 = document.createElement('tr');
-            headerRow1.innerHTML = '<th rowspan="3" class="sortable" data-column="member" data-type="member" style="padding: 4px 6px; position: sticky; left: 0; background-color: #4CAF50; z-index: 11; text-align: left; cursor: pointer; width: 100px; min-width: 100px; max-width: 100px;">Member</th>';
-            headerRow1.innerHTML += '<th rowspan="3" class="sortable" data-column="oc_30d" data-type="oc_30d" style="padding: 4px 6px; position: sticky; left: 100px; background-color: #4CAF50; z-index: 11; text-align: center; cursor: pointer; width: 50px; min-width: 50px; max-width: 50px;">OC 30d</th>';
-            headerRow1.innerHTML += '<th rowspan="3" class="sortable" data-column="oc_7d" data-type="oc_7d" style="padding: 4px 6px; position: sticky; left: 150px; background-color: #4CAF50; z-index: 11; text-align: center; cursor: pointer; width: 50px; min-width: 50px; max-width: 50px;">OC 7d</th>';
-            headerRow1.innerHTML += '<th rowspan="3" class="sortable" data-column="in_oc" data-type="in_oc" style="padding: 4px 6px; position: sticky; left: 200px; background-color: #4CAF50; z-index: 11; text-align: center; cursor: pointer; width: 50px; min-width: 50px; max-width: 50px;">In OC</th>';
-            headerRow1.innerHTML += '<th rowspan="3" class="sortable" data-column="max_oc" data-type="max_oc" style="padding: 4px 6px; position: sticky; left: 250px; background-color: #4CAF50; z-index: 11; text-align: center; cursor: pointer; width: 50px; min-width: 50px; max-width: 50px;">Max OC</th>';
+            headerRow1.innerHTML = '<th rowspan="3" class="sortable" data-column="member" data-type="member" style="padding: 4px 6px; position: sticky; left: 0; background-color: #4CAF50; z-index: 20; text-align: left; cursor: pointer; width: 100px; min-width: 100px; max-width: 100px;">Member</th>';
+            headerRow1.innerHTML += '<th rowspan="3" class="sortable" data-column="oc_30d" data-type="oc_30d" style="padding: 4px 6px; position: sticky; left: 100px; background-color: #4CAF50; z-index: 20; text-align: center; cursor: pointer; width: 50px; min-width: 50px; max-width: 50px;">OC 30d</th>';
+            headerRow1.innerHTML += '<th rowspan="3" class="sortable" data-column="oc_7d" data-type="oc_7d" style="padding: 4px 6px; position: sticky; left: 150px; background-color: #4CAF50; z-index: 20; text-align: center; cursor: pointer; width: 50px; min-width: 50px; max-width: 50px;">OC 7d</th>';
+            headerRow1.innerHTML += '<th rowspan="3" class="sortable" data-column="in_oc" data-type="in_oc" style="padding: 4px 6px; position: sticky; left: 200px; background-color: #4CAF50; z-index: 20; text-align: center; cursor: pointer; width: 50px; min-width: 50px; max-width: 50px;">In OC</th>';
+            headerRow1.innerHTML += '<th rowspan="3" class="sortable" data-column="max_oc" data-type="max_oc" style="padding: 4px 6px; position: sticky; left: 250px; background-color: #4CAF50; z-index: 20; text-align: center; cursor: pointer; width: 50px; min-width: 50px; max-width: 50px;">Max OC</th>';
             
             const sortedDifficulties = Array.from(columnGroups.keys()).filter(d => d != null && typeof d === 'number').sort((a, b) => {
                 return b - a; // Higher difficulty first
