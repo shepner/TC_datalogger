@@ -328,8 +328,17 @@
         
         // Load OC names and generate email when page loads
         window.addEventListener('DOMContentLoaded', async function() {
-            await loadOcNames();
-            generateEmail();
+            try {
+                await loadOcNames();
+                // Wait a bit for checkboxes to be rendered
+                setTimeout(() => {
+                    generateEmail();
+                }, 100);
+            } catch (error) {
+                console.error('Error initializing:', error);
+                // Still try to generate email even if OC names fail to load
+                generateEmail();
+            }
         });
 
         async function loadOcNames() {
@@ -390,11 +399,18 @@
             emailOutput.style.display = 'block';
             emailText.value = 'Generating email...';
 
-            // Get excluded OC names from checkboxes
-            const checkboxes = document.querySelectorAll('#oc-checkboxes input[type="checkbox"]:checked');
-            const excludedOcNames = Array.from(checkboxes)
-                .map(cb => cb ? cb.value : null)
-                .filter(val => val !== null);
+            // Get excluded OC names from checkboxes (if they exist)
+            let excludedOcNames = [];
+            const checkboxContainer = document.getElementById('oc-checkboxes');
+            if (checkboxContainer) {
+                const checkboxes = checkboxContainer.querySelectorAll('input[type="checkbox"]:checked');
+                excludedOcNames = Array.from(checkboxes)
+                    .map(cb => cb ? cb.value : null)
+                    .filter(val => val !== null);
+            } else {
+                // Fallback: if checkboxes don't exist yet, exclude "No Reserve" by default
+                excludedOcNames = ['No Reserve OC'];
+            }
 
             try {
                 const response = await fetch('/api/oc-assignment/generate', {
