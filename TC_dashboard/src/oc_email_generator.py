@@ -737,6 +737,11 @@ class OCEmailGenerator:
             # Get appropriate OC list based on activity
             oc_list = ocs_for_active if member['is_active'] else ocs_for_inactive
             
+            # Debug logging for specific members
+            if member_name in ["Adilon_Scorpian", "Hiyori"]:
+                logger.info(f"DEBUG {member_name}: is_active = {member.get('is_active')}, using {'ocs_for_active' if member['is_active'] else 'ocs_for_inactive'}")
+                logger.info(f"DEBUG {member_name}: ocs_for_active has {len(ocs_for_active)} OCs, ocs_for_inactive has {len(ocs_for_inactive)} OCs")
+            
             # Check if member has any OC history
             member_id = member['member_id']
             has_oc_history = member_id in members_with_oc_history
