@@ -752,6 +752,14 @@ class OCEmailGenerator:
             
             # Try to assign member to highest level OC they can do (OCs are already sorted by difficulty descending)
             # This ensures members get assigned to their max recommended level, not just the first available
+            if member_name in ["Adilon_Scorpian", "Hiyori"]:
+                logger.info(f"DEBUG {member_name}: Starting OC loop, oc_list has {len(oc_list)} OCs")
+                level_counts = {}
+                for oc in oc_list:
+                    diff = oc.get('difficulty')
+                    if diff:
+                        level_counts[diff] = level_counts.get(diff, 0) + 1
+                logger.info(f"DEBUG {member_name}: OC list breakdown by level: {level_counts}")
             for oc in oc_list:
                 # Skip excluded OCs
                 if is_excluded_oc(oc):
