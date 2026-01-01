@@ -1,6 +1,7 @@
 """OC Assignment Email Generator for Torn City faction management."""
 
 import logging
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
@@ -550,12 +551,28 @@ class OCEmailGenerator:
         """
         if excluded_oc_names is None:
             excluded_oc_names = ["No Reserve OC"]
-        # Get data
-        members = self.get_members_not_in_oc()
-        participation = self.get_oc_participation_counts()
-        ocs = self.get_available_ocs()
-        member_performance = self.get_member_max_oc_and_rates()  # member_name -> {max_recommended_oc, level_rates, has_80_plus}
-        member_oc_rates = self.get_member_checkpoint_rates()  # member_name -> oc_name_position_id -> rate
+        
+        # Run independent queries in parallel for better performance
+        logger.info("Starting parallel query execution...")
+        with ThreadPoolExecutor(max_workers=5) as executor:
+            # Submit all independent queries
+            future_members = executor.submit(self.get_members_not_in_oc)
+            future_participation = executor.submit(self.get_oc_participation_counts)
+            future_ocs = executor.submit(self.get_available_ocs)
+            future_performance = executor.submit(self.get_member_max_oc_and_rates)
+            future_oc_rates = executor.submit(self.get_member_checkpoint_rates)
+            future_oc_history = executor.submit(self.get_members_with_oc_history)
+            
+            # Wait for all queries to complete
+            logger.info("Waiting for parallel queries to complete...")
+            members = future_members.result()
+            participation = future_participation.result()
+            ocs = future_ocs.result()
+            member_performance = future_performance.result()  # member_name -> {max_recommended_oc, level_rates, has_80_plus}
+            member_oc_rates = future_oc_rates.result()  # member_name -> oc_name_position_id -> rate
+            members_with_oc_history = future_oc_history.result()
+        
+        logger.info("All parallel queries completed")
         
         # Debug: Log if member_oc_rates is empty or missing data
         if not member_oc_rates:
