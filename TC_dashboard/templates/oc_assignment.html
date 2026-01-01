@@ -243,6 +243,16 @@
 
                 <!-- Pivot View -->
                 <div id="pivot-container">
+                    <div style="margin-bottom: 10px; display: flex; gap: 20px; align-items: center;">
+                        <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; font-weight: normal;">
+                            <input type="checkbox" id="collapse-all-levels" onchange="toggleAllLevelsCollapse(this.checked);" style="cursor: pointer;">
+                            <span>Summarize at OC Level</span>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; font-weight: normal;">
+                            <input type="checkbox" id="collapse-all-ocs" onchange="toggleAllOCsCollapse(this.checked);" style="cursor: pointer;">
+                            <span>Summarize by OC Name</span>
+                        </label>
+                    </div>
                     <div style="max-height: 70vh; overflow-y: auto; overflow-x: auto; border: 1px solid #ddd; margin-top: 20px;">
                         <table id="pivot-table" style="width: 100%; border-collapse: collapse; border-spacing: 0; font-size: 11px;">
                             <thead id="pivot-header" style="position: sticky; top: 0; background-color: #4CAF50; color: white; z-index: 10;">
@@ -417,6 +427,19 @@
         let membersMap = null; // Store the members Map so renderPivotTableBody can access it
 
         function toggleView() {
+            // Store performance data globally for toggle functions
+            window.performanceData = performanceData;
+            
+            // Update checkbox states based on current collapse state
+            const collapseAllLevels = document.getElementById('collapse-all-levels');
+            const collapseAllOCs = document.getElementById('collapse-all-ocs');
+            if (collapseAllLevels) {
+                collapseAllLevels.checked = window.collapsedLevels && window.collapsedLevels.size > 0;
+            }
+            if (collapseAllOCs) {
+                collapseAllOCs.checked = window.collapsedOCNames && window.collapsedOCNames.size > 0;
+            }
+            
             const viewMode = document.querySelector('input[name="view_mode"]:checked').value;
             if (viewMode === 'pivot') {
                 document.getElementById('pivot-container').style.display = 'block';
@@ -516,34 +539,53 @@
             document.getElementById('performance-container').style.display = 'block';
         }
 
-        // Toggle functions for collapsing levels and OCs
-        function toggleLevelCollapse(difficulty) {
+        // Toggle functions for global collapsing
+        function toggleAllLevelsCollapse(collapse) {
             if (!window.collapsedLevels) window.collapsedLevels = new Set();
-            if (window.collapsedLevels.has(difficulty)) {
-                window.collapsedLevels.delete(difficulty);
+            if (!window.collapsedOCNames) window.collapsedOCNames = new Set();
+            
+            if (collapse) {
+                // Collapse all levels - get all difficulties from the current data
+                if (window.performanceData && window.performanceData.length > 0) {
+                    const allDifficulties = new Set();
+                    window.performanceData.forEach(record => {
+                        if (record.difficulty != null) {
+                            allDifficulties.add(record.difficulty);
+                        }
+                    });
+                    allDifficulties.forEach(difficulty => {
+                        window.collapsedLevels.add(difficulty);
+                    });
+                }
+                // Clear all OC collapses when collapsing all levels
+                window.collapsedOCNames.clear();
             } else {
-                window.collapsedLevels.add(difficulty);
-                // Also remove any collapsed OCs under this level
-                if (!window.collapsedOCNames) window.collapsedOCNames = new Set();
-                const keysToRemove = [];
-                window.collapsedOCNames.forEach(key => {
-                    if (key.startsWith(`${difficulty}_`)) {
-                        keysToRemove.push(key);
-                    }
-                });
-                keysToRemove.forEach(key => window.collapsedOCNames.delete(key));
+                // Expand all levels
+                window.collapsedLevels.clear();
             }
             // Reload the performance data to rebuild the table
             loadPerformance();
         }
         
-        function toggleOCCollapse(difficulty, ocName) {
+        function toggleAllOCsCollapse(collapse) {
             if (!window.collapsedOCNames) window.collapsedOCNames = new Set();
-            const key = `${difficulty}_${ocName}`;
-            if (window.collapsedOCNames.has(key)) {
-                window.collapsedOCNames.delete(key);
+            
+            if (collapse) {
+                // Collapse all OC names - get all OC names from the current data
+                if (window.performanceData && window.performanceData.length > 0) {
+                    const allOCKeys = new Set();
+                    window.performanceData.forEach(record => {
+                        if (record.difficulty != null && record.oc_name) {
+                            allOCKeys.add(`${record.difficulty}_${record.oc_name}`);
+                        }
+                    });
+                    allOCKeys.forEach(key => {
+                        window.collapsedOCNames.add(key);
+                    });
+                }
             } else {
-                window.collapsedOCNames.add(key);
+                // Expand all OC names
+                window.collapsedOCNames.clear();
             }
             // Reload the performance data to rebuild the table
             loadPerformance();
@@ -761,8 +803,7 @@
                 if (totalCols > 0) {
                     const isCollapsed = window.collapsedLevels.has(difficulty);
                     const actualCols = isCollapsed ? 1 : totalCols;
-                    const checkbox = `<input type="checkbox" class="collapse-level-checkbox" data-difficulty="${difficulty}" ${isCollapsed ? 'checked' : ''} style="margin-right: 6px; cursor: pointer; vertical-align: middle;" onclick="event.stopPropagation(); toggleLevelCollapse(${difficulty});">`;
-                    headerRow1.innerHTML += `<th class="sortable" data-column="${startColIndex}" data-type="difficulty" data-difficulty="${difficulty}" colspan="${actualCols}" style="padding: 3px 6px; text-align: left; background-color: #4CAF50; color: white; cursor: pointer;">${checkbox}<span style="vertical-align: middle;">Level ${difficulty}</span></th>`;
+                    headerRow1.innerHTML += `<th class="sortable" data-column="${startColIndex}" data-type="difficulty" data-difficulty="${difficulty}" colspan="${actualCols}" style="padding: 3px 6px; text-align: center; background-color: #4CAF50; color: white; cursor: pointer;">Level ${difficulty}</th>`;
                     // Store metadata for all columns in this difficulty group
                     if (!isCollapsed) {
                         difficultyGroup.forEach((ocGroup, ocName) => {
@@ -808,9 +849,7 @@
                     const startColIndex = columnIndex;
                     const isCollapsed = window.collapsedOCNames.has(`${difficulty}_${ocName}`);
                     const actualCols = isCollapsed ? 1 : sortedPositionIds.length;
-                    const escapedOCName = ocName.replace(/'/g, "\\'").replace(/"/g, '&quot;');
-                    const checkbox = `<input type="checkbox" class="collapse-oc-checkbox" data-difficulty="${difficulty}" data-oc-name="${escapedOCName}" ${isCollapsed ? 'checked' : ''} style="margin-right: 6px; cursor: pointer; vertical-align: middle;" onclick="event.stopPropagation(); toggleOCCollapse(${difficulty}, '${escapedOCName}');">`;
-                    headerRow2.innerHTML += `<th class="sortable" data-column="${startColIndex}" data-type="oc_name" data-difficulty="${difficulty}" data-oc-name="${ocName.replace(/"/g, '&quot;')}" colspan="${actualCols}" style="padding: 3px 6px; text-align: left; background-color: #4CAF50; color: white; cursor: pointer;">${checkbox}<span style="vertical-align: middle;">${ocName}</span></th>`;
+                    headerRow2.innerHTML += `<th class="sortable" data-column="${startColIndex}" data-type="oc_name" data-difficulty="${difficulty}" data-oc-name="${ocName.replace(/"/g, '&quot;')}" colspan="${actualCols}" style="padding: 3px 6px; text-align: center; background-color: #4CAF50; color: white; cursor: pointer;">${ocName}</th>`;
                     columnIndex += actualCols;
                 });
             });
