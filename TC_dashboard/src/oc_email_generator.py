@@ -932,10 +932,15 @@ class OCEmailGenerator:
               os.oc_name,
               os.position,
               os.position_id,
+              os.crime_id,
               os.executed_at,
               os.executed_date,
               os.progress,
               os.outcome,
+              CASE
+                WHEN os.outcome = 'Successful' THEN 'Success'
+                ELSE 'Failure'
+              END AS status,
               os.checkpoint_pass_rate
             FROM
               oc_slots AS os
