@@ -774,6 +774,8 @@
                 }
                 const maxOcClass = maxOcLevel && maxOcLevel >= 1 && maxOcLevel <= 10 ? `oc-level-${maxOcLevel}` : '';
                 const maxOcDisplay = maxOcLevel !== null ? maxOcLevel : '—';
+                // Only set background-color: white if there's no class (so class can apply its own background)
+                const maxOcBgColor = maxOcClass ? '' : 'background-color: white;';
                 
                 // Determine In OC cell styling: red if not in OC and days_in_faction > 3
                 const inOcValue = member.is_in_oc ? '✓' : '✗';
@@ -787,7 +789,7 @@
                 if (member.member_name === 'Acnar' || member.member_name === 'makers_mark_man' || member.member_name === 'Raptor_RSA') {
                     console.log(`  FINAL (displayPivotView): Inserting Max OC cell with maxOcDisplay = "${maxOcDisplay}" for ${member.member_name}, member.max_recommended_oc = ${member.max_recommended_oc}`);
                 }
-                row.innerHTML += `<td class="${maxOcClass}" style="padding: 6px; border: 1px solid #ddd; border-right: 1px solid #ddd; position: sticky; left: 300px; background-color: white; text-align: center; font-weight: bold; width: 60px; min-width: 60px; max-width: 60px;">${maxOcDisplay}</td>`;
+                row.innerHTML += `<td class="${maxOcClass}" style="padding: 6px; border: 1px solid #ddd; border-right: 1px solid #ddd; position: sticky; left: 300px; ${maxOcBgColor} text-align: center; font-weight: bold; width: 60px; min-width: 60px; max-width: 60px;">${maxOcDisplay}</td>`;
                 
                 sortedDifficulties.forEach(difficulty => {
                     const difficultyGroup = columnGroups.get(difficulty);
