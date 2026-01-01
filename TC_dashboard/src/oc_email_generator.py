@@ -1010,6 +1010,59 @@ class OCEmailGenerator:
                     email_lines.append(f"- {member_name}")
                 
                 email_lines.append("")
+        
+        # Add spawn suggestions if any
+        if spawn_suggestions:
+            email_lines.append("")
+            email_lines.append("OC Spawn Suggestions:")
+            email_lines.append("")
+            
+            # Get OC names for each level that should be spawned
+            # For each level, suggest common OC names at that level
+            level_oc_names = {}  # level -> [oc_names]
+            for oc in ocs:
+                if is_excluded_oc(oc):
+                    continue
+                difficulty = oc.get('difficulty')
+                if difficulty is None:
+                    continue
+                try:
+                    level = int(difficulty)
+                except (ValueError, TypeError):
+                    continue
+                
+                oc_name = oc.get('oc_name')
+                if oc_name:
+                    if level not in level_oc_names:
+                        level_oc_names[level] = []
+                    if oc_name not in level_oc_names[level]:
+                        level_oc_names[level].append(oc_name)
+            
+            # Sort levels descending
+            for level in sorted(spawn_suggestions.keys(), reverse=True):
+                member_names = spawn_suggestions[level]
+                if not member_names:
+                    continue
+                
+                # Get OC names for this level (prefer common ones)
+                suggested_oc_names = level_oc_names.get(level, [])
+                if not suggested_oc_names:
+                    # Fallback: use generic names based on level
+                    if level == 6:
+                        suggested_oc_names = ["Counter Offer", "Guardian Angels", "Bidding War"]
+                    elif level == 5:
+                        suggested_oc_names = ["Leave No Trace", "Snow Blind"]
+                    elif level == 4:
+                        suggested_oc_names = ["Market Forces", "Mob Mentality"]
+                    else:
+                        suggested_oc_names = [f"Level {level} OC"]
+                
+                # Take first 2-3 OC names as suggestions
+                suggested_oc_names = suggested_oc_names[:3]
+                oc_names_str = " or ".join(suggested_oc_names)
+                
+                email_lines.append(f"Please spawn {oc_names_str} (Level {level}) for: {', '.join(member_names)}")
+                email_lines.append("")
 
 
         return "\n".join(email_lines)
