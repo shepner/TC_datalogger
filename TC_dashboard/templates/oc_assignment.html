@@ -553,6 +553,7 @@
                 if (!members.has(record.member_name)) {
                     members.set(record.member_name, {
                         member_name: record.member_name,
+                        member_id: record.member_id || null,
                         oc_count_30d: record.oc_count_30d || 0,
                         oc_count_7d: record.oc_count_7d || 0,
                         is_in_oc: record.is_in_oc || false,
@@ -759,7 +760,8 @@
                     console.log(`Creating row for ${member.member_name}: member.max_recommended_oc = ${member.max_recommended_oc}, type: ${typeof member.max_recommended_oc}`);
                 }
                 const rowData = { 
-                    member_name: member.member_name, 
+                    member_name: member.member_name,
+                    member_id: member.member_id || null,
                     member: member, // Store full member object for history access
                     oc_count_30d: member.oc_count_30d || 0, 
                     oc_count_7d: member.oc_count_7d || 0, 
@@ -783,7 +785,11 @@
                 const inOcValue = member.is_in_oc ? '✓' : '✗';
                 const inOcBgColor = (!member.is_in_oc && member.days_in_faction > 3) ? '#ffcdd2' : 'white';
                 
-                row.innerHTML = `<td style="padding: 6px; border: 1px solid #ddd; border-right: 1px solid #ddd; position: sticky; left: 0; background-color: white; font-weight: bold; width: 120px; min-width: 120px; max-width: 120px;">${member.member_name}</td>`;
+                // Create member name as link to Torn City profile if member_id is available
+                const memberNameCell = member.member_id 
+                    ? `<a href="https://www.torn.com/profiles.php?XID=${member.member_id}" target="_blank" style="color: #4CAF50; text-decoration: none; font-weight: bold;">${member.member_name}</a>`
+                    : member.member_name;
+                row.innerHTML = `<td style="padding: 6px; border: 1px solid #ddd; border-right: 1px solid #ddd; position: sticky; left: 0; background-color: white; font-weight: bold; width: 120px; min-width: 120px; max-width: 120px;">${memberNameCell}</td>`;
                 row.innerHTML += `<td style="padding: 6px; border: 1px solid #ddd; border-right: 1px solid #ddd; position: sticky; left: 120px; background-color: white; text-align: center; font-weight: bold; width: 60px; min-width: 60px; max-width: 60px;">${member.oc_count_30d || 0}</td>`;
                 row.innerHTML += `<td style="padding: 6px; border: 1px solid #ddd; border-right: 1px solid #ddd; position: sticky; left: 180px; background-color: white; text-align: center; font-weight: bold; width: 60px; min-width: 60px; max-width: 60px;">${member.oc_count_7d || 0}</td>`;
                 row.innerHTML += `<td style="padding: 6px; border: 1px solid #ddd; border-right: 1px solid #ddd; position: sticky; left: 240px; background-color: ${inOcBgColor}; text-align: center; font-weight: bold; width: 60px; min-width: 60px; max-width: 60px;">${inOcValue}</td>`;
@@ -1152,7 +1158,11 @@
                 const inOcValue = rowData.is_in_oc ? '✓' : '✗';
                 const inOcBgColor = (!rowData.is_in_oc && rowData.days_in_faction > 3) ? '#ffcdd2' : 'white';
                 
-                row.innerHTML = `<td style="padding: 6px; border: 1px solid #ddd; border-right: 1px solid #ddd; position: sticky; left: 0; background-color: white; font-weight: bold; width: 120px; min-width: 120px; max-width: 120px;">${rowData.member_name}</td>`;
+                // Create member name as link to Torn City profile if member_id is available
+                const memberNameCell = rowData.member_id 
+                    ? `<a href="https://www.torn.com/profiles.php?XID=${rowData.member_id}" target="_blank" style="color: #4CAF50; text-decoration: none; font-weight: bold;">${rowData.member_name}</a>`
+                    : rowData.member_name;
+                row.innerHTML = `<td style="padding: 6px; border: 1px solid #ddd; border-right: 1px solid #ddd; position: sticky; left: 0; background-color: white; font-weight: bold; width: 120px; min-width: 120px; max-width: 120px;">${memberNameCell}</td>`;
                 row.innerHTML += `<td style="padding: 6px; border: 1px solid #ddd; border-right: 1px solid #ddd; position: sticky; left: 120px; background-color: white; text-align: center; font-weight: bold; width: 60px; min-width: 60px; max-width: 60px;">${rowData.oc_count_30d || 0}</td>`;
                 row.innerHTML += `<td style="padding: 6px; border: 1px solid #ddd; border-right: 1px solid #ddd; position: sticky; left: 180px; background-color: white; text-align: center; font-weight: bold; width: 60px; min-width: 60px; max-width: 60px;">${rowData.oc_count_7d || 0}</td>`;
                 row.innerHTML += `<td style="padding: 6px; border: 1px solid #ddd; border-right: 1px solid #ddd; position: sticky; left: 240px; background-color: ${inOcBgColor}; text-align: center; font-weight: bold; width: 60px; min-width: 60px; max-width: 60px;">${inOcValue}</td>`;
