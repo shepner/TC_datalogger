@@ -82,6 +82,7 @@
         #pivot-header th {
             border: 1px solid rgba(255, 255, 255, 0.3) !important;
             box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.2);
+            position: sticky !important;
         }
         #pivot-header th.sortable {
             cursor: pointer;
@@ -1136,34 +1137,35 @@
             
             // Calculate and set top offsets for each header row to make them stick properly
             // We need to wait for the DOM to fully render to get accurate row heights
-            requestAnimationFrame(() => {
-                requestAnimationFrame(() => {
-                    const rows = header.querySelectorAll('tr');
-                    let cumulativeTop = 0;
-                    rows.forEach((row, index) => {
-                        if (index === 0) {
-                            // First row sticks at top: 0
-                            cumulativeTop = 0;
-                        } else {
-                            // Subsequent rows stick below previous rows
-                            const prevRow = rows[index - 1];
-                            cumulativeTop += prevRow.offsetHeight;
-                        }
-                        row.querySelectorAll('th').forEach(th => {
-                            // Always set position sticky and top value
-                            th.style.position = 'sticky';
-                            // For sticky left columns, preserve left but update top
-                            if (th.style.left) {
-                                // This is a sticky left column, keep left and set top
-                                th.style.top = cumulativeTop + 'px';
-                            } else {
-                                // Regular column, just set top
-                                th.style.top = cumulativeTop + 'px';
-                            }
-                        });
+            const setStickyTop = () => {
+                const rows = Array.from(header.querySelectorAll('tr'));
+                if (rows.length === 0) {
+                    // If rows aren't ready yet, try again
+                    setTimeout(setStickyTop, 10);
+                    return;
+                }
+                
+                let cumulativeTop = 0;
+                rows.forEach((row, index) => {
+                    if (index > 0) {
+                        // Subsequent rows stick below previous rows
+                        const prevRow = rows[index - 1];
+                        cumulativeTop += prevRow.offsetHeight || 20; // fallback to 20px if height not available
+                    }
+                    
+                    row.querySelectorAll('th').forEach(th => {
+                        // Set top value for sticky positioning
+                        th.style.top = cumulativeTop + 'px';
+                        // Ensure position is sticky
+                        th.style.position = 'sticky';
                     });
                 });
-            });
+            };
+            
+            // Try multiple times to ensure it works
+            setStickyTop();
+            setTimeout(setStickyTop, 50);
+            setTimeout(setStickyTop, 100);
             
             // Attach sort handlers to all sortable headers
             attachPivotSortHandlers();
