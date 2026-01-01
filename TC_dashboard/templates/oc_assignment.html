@@ -1108,6 +1108,83 @@
             });
         }
 
+        // History Modal Functions
+        function showHistoryModal(memberName, columnKey, difficulty, ocName, positionId, positionName, history) {
+            const modal = document.getElementById('historyModal');
+            const title = document.getElementById('historyModalTitle');
+            const content = document.getElementById('historyModalContent');
+            
+            title.textContent = `Historical Data: ${memberName} - Level ${difficulty} ${ocName} (${positionName})`;
+            
+            // Sort history by executed_at (most recent first)
+            const sortedHistory = [...history].sort((a, b) => {
+                const dateA = a.executed_at ? new Date(a.executed_at) : new Date(0);
+                const dateB = b.executed_at ? new Date(b.executed_at) : new Date(0);
+                return dateB - dateA;
+            });
+            
+            let html = `<table style="width: 100%; border-collapse: collapse; margin-top: 10px;">`;
+            html += `<thead><tr style="background-color: #4CAF50; color: white;">`;
+            html += `<th style="padding: 10px; text-align: left; border: 1px solid #ddd;">Date</th>`;
+            html += `<th style="padding: 10px; text-align: center; border: 1px solid #ddd;">Checkpoint Rate</th>`;
+            html += `<th style="padding: 10px; text-align: center; border: 1px solid #ddd;">Status</th>`;
+            html += `<th style="padding: 10px; text-align: center; border: 1px solid #ddd;">OC ID</th>`;
+            html += `</tr></thead><tbody>`;
+            
+            if (sortedHistory.length === 0) {
+                html += `<tr><td colspan="4" style="padding: 20px; text-align: center; color: #999;">No historical data available</td></tr>`;
+            } else {
+                sortedHistory.forEach((record, index) => {
+                    const dateStr = record.executed_at ? new Date(record.executed_at).toLocaleString() : 'Unknown';
+                    const rate = record.checkpoint_pass_rate || 0;
+                    const rateClass = (rate < 80 || rate > 90) ? 'cell-red' : '';
+                    const status = record.status || 'Unknown';
+                    const crimeId = record.crime_id || '—';
+                    
+                    html += `<tr style="background-color: ${index % 2 === 0 ? '#f9f9f9' : 'white'};">`;
+                    html += `<td style="padding: 8px; border: 1px solid #ddd;">${dateStr}</td>`;
+                    html += `<td class="${rateClass}" style="padding: 8px; border: 1px solid #ddd; text-align: center; font-weight: bold;">${rate}</td>`;
+                    html += `<td style="padding: 8px; border: 1px solid #ddd; text-align: center;">${status}</td>`;
+                    html += `<td style="padding: 8px; border: 1px solid #ddd; text-align: center; font-family: monospace; font-size: 0.9em;">${crimeId}</td>`;
+                    html += `</tr>`;
+                });
+            }
+            
+            html += `</tbody></table>`;
+            html += `<div style="margin-top: 15px; padding: 10px; background-color: #f0f0f0; border-radius: 4px;">`;
+            html += `<strong>Total Attempts:</strong> ${sortedHistory.length}`;
+            if (sortedHistory.length > 0) {
+                const rates = sortedHistory.map(r => r.checkpoint_pass_rate || 0);
+                const avgRate = (rates.reduce((a, b) => a + b, 0) / rates.length).toFixed(2);
+                const minRate = Math.min(...rates);
+                const maxRate = Math.max(...rates);
+                html += ` | <strong>Average:</strong> ${avgRate}% | <strong>Min:</strong> ${minRate}% | <strong>Max:</strong> ${maxRate}%`;
+            }
+            html += `</div>`;
+            
+            content.innerHTML = html;
+            modal.style.display = 'block';
+        }
+        
+        function closeHistoryModal() {
+            document.getElementById('historyModal').style.display = 'none';
+        }
+        
+        // Close modal when clicking outside of it
+        window.onclick = function(event) {
+            const modal = document.getElementById('historyModal');
+            if (event.target === modal) {
+                closeHistoryModal();
+            }
+        }
+        
+        // Close modal with Escape key
+        document.addEventListener('keydown', function(event) {
+            if (event.key === 'Escape') {
+                closeHistoryModal();
+            }
+        });
+
         // Load performance data on page load
         window.addEventListener('DOMContentLoaded', () => {
             loadPerformance();
