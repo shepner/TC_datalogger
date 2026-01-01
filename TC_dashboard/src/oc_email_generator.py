@@ -651,9 +651,9 @@ class OCEmailGenerator:
         members_sorted = sorted(
             members,
             key=lambda m: (
-                -m['oc_count_30d'],  # Higher count first (negative for descending)
-                -m['oc_count_7d'],   # Higher count first (negative for descending)
-                not m['is_active'],  # Active members first
+                -m.get('oc_count_30d', 0),  # Higher count first (negative for descending)
+                -m.get('oc_count_7d', 0),   # Higher count first (negative for descending)
+                not m.get('is_active', False),  # Active members first
             )
         )
 
