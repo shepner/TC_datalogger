@@ -94,6 +94,24 @@
         #pivot-header th.sortable:hover {
             background-color: #45a049;
         }
+        /* Row hover effect for better readability */
+        #pivot-body tr:hover td,
+        #performance-body tr:hover td {
+            background-color: #f5f5f5 !important;
+        }
+        /* Preserve special cell colors on hover (Max OC, In OC red, etc.) */
+        #pivot-body tr:hover td.oc-level-1,
+        #pivot-body tr:hover td.oc-level-2,
+        #pivot-body tr:hover td.oc-level-3,
+        #pivot-body tr:hover td.oc-level-4,
+        #pivot-body tr:hover td.oc-level-5,
+        #pivot-body tr:hover td.oc-level-6,
+        #pivot-body tr:hover td.oc-level-7,
+        #pivot-body tr:hover td.oc-level-8,
+        #pivot-body tr:hover td.oc-level-9,
+        #pivot-body tr:hover td.oc-level-10 {
+            background-color: inherit !important;
+        }
         /* History Tooltip */
         .history-tooltip {
             position: fixed !important;
