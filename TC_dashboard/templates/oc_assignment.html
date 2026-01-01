@@ -217,25 +217,37 @@
             <div style="margin-top: 20px; margin-bottom: 30px; border-bottom: 2px solid #ddd; padding-bottom: 20px;">
             <h2 style="margin-bottom: 10px;">OC Performance Dashboard</h2>
             
-            <div style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap; margin-bottom: 15px;">
-                <div style="display: flex; align-items: center; gap: 5px;">
-                    <label for="performance_days" style="margin: 0; white-space: nowrap;">Days Back:</label>
-                    <input type="number" id="performance_days" value="90" min="7" max="365" step="1" style="width: 70px; padding: 4px;" onchange="validateDaysBack()">
+            <div style="display: flex; align-items: center; gap: 10px; flex-wrap: nowrap; margin-bottom: 10px; padding: 5px 0; border-bottom: 1px solid #ddd;">
+                <div style="display: flex; align-items: center; gap: 4px;">
+                    <label for="performance_days" style="margin: 0; white-space: nowrap; font-size: 11px;">Days:</label>
+                    <input type="number" id="performance_days" value="90" min="7" max="365" step="1" style="width: 50px; padding: 2px 4px; font-size: 11px;" onchange="validateDaysBack()">
                 </div>
-                <button onclick="loadPerformance()" style="padding: 4px 8px; font-size: 11px;">Load Performance Data</button>
-                <div id="view-controls" style="display: none; flex-direction: row; align-items: center; gap: 8px; flex-shrink: 0;">
-                    <label style="margin: 0; white-space: nowrap; display: flex; align-items: center;">
-                        <input type="radio" name="view_mode" value="pivot" checked onchange="toggleView()" style="margin-right: 4px;"> Pivot
+                <button onclick="loadPerformance()" style="padding: 2px 6px; font-size: 11px;">Load</button>
+                <div id="view-controls" style="display: none; flex-direction: row; align-items: center; gap: 6px; flex-shrink: 0; margin-left: 5px; padding-left: 5px; border-left: 1px solid #ccc;">
+                    <label style="margin: 0; white-space: nowrap; display: flex; align-items: center; font-size: 11px;">
+                        <input type="radio" name="view_mode" value="pivot" checked onchange="toggleView()" style="margin-right: 3px;"> Pivot
                     </label>
-                    <label style="margin: 0; white-space: nowrap; display: flex; align-items: center;">
-                        <input type="radio" name="view_mode" value="detail" onchange="toggleView()" style="margin-right: 4px;"> Detail
+                    <label style="margin: 0; white-space: nowrap; display: flex; align-items: center; font-size: 11px;">
+                        <input type="radio" name="view_mode" value="detail" onchange="toggleView()" style="margin-right: 3px;"> Detail
                     </label>
                 </div>
-                <div id="filter-controls" style="display: none; flex-direction: row; align-items: center; gap: 5px; flex-shrink: 0;">
-                    <label style="margin: 0; white-space: nowrap;">Level:</label>
-                    <div id="oc_level_checkboxes" style="display: flex; flex-direction: row; align-items: center; gap: 8px; flex-wrap: wrap;">
+                <div id="filter-controls" style="display: none; flex-direction: row; align-items: center; gap: 4px; flex-shrink: 0; margin-left: 5px; padding-left: 5px; border-left: 1px solid #ccc;">
+                    <label style="margin: 0; white-space: nowrap; font-size: 11px;">Level:</label>
+                    <div id="oc_level_checkboxes" style="display: flex; flex-direction: row; align-items: center; gap: 4px; flex-wrap: nowrap;">
                         <!-- Checkboxes will be populated here -->
                     </div>
+                </div>
+                <div id="summarize-controls" style="display: none; flex-direction: row; align-items: center; gap: 6px; flex-shrink: 0; margin-left: 5px; padding-left: 5px; border-left: 1px solid #ccc;">
+                    <label style="margin: 0; white-space: nowrap; font-size: 11px;">Summarize:</label>
+                    <label style="margin: 0; white-space: nowrap; display: flex; align-items: center; font-size: 11px; cursor: pointer;">
+                        <input type="radio" name="summarize_mode" value="none" checked onchange="handleSummarizeMode('none')" style="margin-right: 3px;"> None
+                    </label>
+                    <label style="margin: 0; white-space: nowrap; display: flex; align-items: center; font-size: 11px; cursor: pointer;">
+                        <input type="radio" name="summarize_mode" value="level" onchange="handleSummarizeMode('level')" style="margin-right: 3px;"> Level
+                    </label>
+                    <label style="margin: 0; white-space: nowrap; display: flex; align-items: center; font-size: 11px; cursor: pointer;">
+                        <input type="radio" name="summarize_mode" value="oc" onchange="handleSummarizeMode('oc')" style="margin-right: 3px;"> OC Name
+                    </label>
                 </div>
             </div>
 
@@ -243,17 +255,7 @@
 
                 <!-- Pivot View -->
                 <div id="pivot-container">
-                    <div style="margin-bottom: 10px; display: flex; gap: 20px; align-items: center;">
-                        <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; font-weight: normal;">
-                            <input type="checkbox" id="collapse-all-levels" onchange="toggleAllLevelsCollapse(this.checked);" style="cursor: pointer;">
-                            <span>Summarize at OC Level</span>
-                        </label>
-                        <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; font-weight: normal;">
-                            <input type="checkbox" id="collapse-all-ocs" onchange="toggleAllOCsCollapse(this.checked);" style="cursor: pointer;">
-                            <span>Summarize by OC Name</span>
-                        </label>
-                    </div>
-                    <div style="max-height: 70vh; overflow-y: auto; overflow-x: auto; border: 1px solid #ddd; margin-top: 20px;">
+                    <div style="max-height: 70vh; overflow-y: auto; overflow-x: auto; border: 1px solid #ddd; margin-top: 5px;">
                         <table id="pivot-table" style="width: 100%; border-collapse: collapse; border-spacing: 0; font-size: 11px;">
                             <thead id="pivot-header" style="position: sticky; top: 0; background-color: #4CAF50; color: white; z-index: 10;">
                             </thead>
@@ -434,6 +436,13 @@
             // Store performance data globally for toggle functions
             window.performanceData = performanceData;
             
+            // Show/hide summarize controls based on view mode
+            const summarizeControls = document.getElementById('summarize-controls');
+            const viewMode = document.querySelector('input[name="view_mode"]:checked').value;
+            if (summarizeControls) {
+                summarizeControls.style.display = viewMode === 'pivot' ? 'flex' : 'none';
+            }
+            
             // Update checkbox states based on current collapse state
             const collapseAllLevels = document.getElementById('collapse-all-levels');
             const collapseAllOCs = document.getElementById('collapse-all-ocs');
@@ -532,11 +541,16 @@
             // Show view and filter controls
             const viewControls = document.getElementById('view-controls');
             const filterControls = document.getElementById('filter-controls');
+            const summarizeControls = document.getElementById('summarize-controls');
             if (viewControls) {
                 viewControls.style.display = 'flex';
             }
             if (filterControls) {
                 filterControls.style.display = 'flex';
+            }
+            if (summarizeControls) {
+                const viewMode = document.querySelector('input[name="view_mode"]:checked').value;
+                summarizeControls.style.display = viewMode === 'pivot' ? 'flex' : 'none';
             }
             
             toggleView();
@@ -544,11 +558,15 @@
         }
 
         // Toggle functions for global collapsing
-        function toggleAllLevelsCollapse(collapse) {
+        function handleSummarizeMode(mode) {
             if (!window.collapsedLevels) window.collapsedLevels = new Set();
             if (!window.collapsedOCNames) window.collapsedOCNames = new Set();
             
-            if (collapse) {
+            // Clear both first
+            window.collapsedLevels.clear();
+            window.collapsedOCNames.clear();
+            
+            if (mode === 'level') {
                 // Collapse all levels - get all difficulties from the current data
                 if (window.performanceData && window.performanceData.length > 0) {
                     const allDifficulties = new Set();
@@ -561,20 +579,7 @@
                         window.collapsedLevels.add(difficulty);
                     });
                 }
-                // Clear all OC collapses when collapsing all levels
-                window.collapsedOCNames.clear();
-            } else {
-                // Expand all levels
-                window.collapsedLevels.clear();
-            }
-            // Reload the performance data to rebuild the table
-            loadPerformance();
-        }
-        
-        function toggleAllOCsCollapse(collapse) {
-            if (!window.collapsedOCNames) window.collapsedOCNames = new Set();
-            
-            if (collapse) {
+            } else if (mode === 'oc') {
                 // Collapse all OC names - get all OC names from the current data
                 if (window.performanceData && window.performanceData.length > 0) {
                     const allOCKeys = new Set();
@@ -587,12 +592,34 @@
                         window.collapsedOCNames.add(key);
                     });
                 }
-            } else {
-                // Expand all OC names
-                window.collapsedOCNames.clear();
             }
+            // mode === 'none' means both are already cleared above
+            
             // Reload the performance data to rebuild the table
-            loadPerformance();
+            if (window.performanceData) {
+                displayPivotView(window.performanceData);
+            }
+        }
+        
+        // Keep old functions for backwards compatibility (if needed)
+        function toggleAllLevelsCollapse(collapse) {
+            if (collapse) {
+                document.querySelector('input[name="summarize_mode"][value="level"]').checked = true;
+                handleSummarizeMode('level');
+            } else {
+                document.querySelector('input[name="summarize_mode"][value="none"]').checked = true;
+                handleSummarizeMode('none');
+            }
+        }
+        
+        function toggleAllOCsCollapse(collapse) {
+            if (collapse) {
+                document.querySelector('input[name="summarize_mode"][value="oc"]').checked = true;
+                handleSummarizeMode('oc');
+            } else {
+                document.querySelector('input[name="summarize_mode"][value="none"]').checked = true;
+                handleSummarizeMode('none');
+            }
         }
         
         function displayPivotView(data) {
