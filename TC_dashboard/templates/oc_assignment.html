@@ -603,9 +603,17 @@
                 if (!crimeId && record.id) {
                     crimeId = record.id;
                 }
+                // Also check if it's nested or has a different name
+                if (!crimeId && record.crime && record.crime.id) {
+                    crimeId = record.crime.id;
+                }
                 // Debug: Log first few records to see what fields are available
                 if (memberData.history.get(columnKey).length === 0) {
-                    console.log('Storing history for', record.member_name, columnKey, 'Record fields:', Object.keys(record), 'status:', record.status, 'outcome:', record.outcome, 'crime_id:', record.crime_id, 'id:', record.id);
+                    console.log('Storing history for', record.member_name, columnKey);
+                    console.log('  Record fields:', Object.keys(record));
+                    console.log('  status:', record.status, 'outcome:', record.outcome);
+                    console.log('  crime_id:', record.crime_id, 'id:', record.id);
+                    console.log('  Full record:', JSON.stringify(record, null, 2).substring(0, 500));
                 }
                 memberData.history.get(columnKey).push({
                     checkpoint_pass_rate: checkpointRate,
