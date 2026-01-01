@@ -1271,14 +1271,17 @@ class OCEmailGenerator:
                 
                 email_lines.append("")
         
+        # Build list of needed OCs (for UI display)
+        needed_ocs = []  # List of {level: int, oc_names: [str]}
+        
         # Add spawn suggestions if any
         if spawn_suggestions:
             email_lines.append("")
             email_lines.append("OC Spawn Suggestions:")
             email_lines.append("")
             
-            # Get OC names for each level that should be spawned
-            # For each level, suggest common OC names at that level
+            # Get OC names for each level from historical data
+            # Query for common OC names at each level that needs spawning
             level_oc_names = {}  # level -> [oc_names]
             for oc in ocs:
                 if is_excluded_oc(oc):
@@ -1298,14 +1301,52 @@ class OCEmailGenerator:
                     if oc_name not in level_oc_names[level]:
                         level_oc_names[level].append(oc_name)
             
-            # Sort levels descending
-            for level in sorted(spawn_suggestions.keys(), reverse=True):
+            # For levels that need spawning, get OC names from historical data
+            needed_levels = sorted(spawn_suggestions.keys(), reverse=True)
+            for level in needed_levels:
                 member_names = spawn_suggestions[level]
                 if not member_names:
                     continue
                 
-                # Get OC names for this level (prefer common ones)
-                suggested_oc_names = level_oc_names.get(level, [])
+                # Get OC names for this level from historical data
+                # Query for distinct OC names at this level
+                try:
+                    query = f"""
+                    SELECT DISTINCT
+                      name AS oc_name
+                    FROM
+                      `torncity-402423.torn_data.v2_faction_40832_crimes-raw`
+                    WHERE
+                      difficulty = {level}
+                      AND name IS NOT NULL
+                      AND name != ''
+                      AND name NOT IN ('No Reserve OC', 'No Reserve')
+                    ORDER BY
+                      name ASC
+                    LIMIT 10
+                    """
+                    historical_ocs = self.bq.execute_query(query)
+                    suggested_oc_names = [row['oc_name'] for row in historical_ocs if row.get('oc_name')]
+                    
+                    # If we have historical OCs, use them; otherwise use from current OCs
+                    if not suggested_oc_names:
+                        suggested_oc_names = level_oc_names.get(level, [])
+                    
+                    # Store for UI display
+                    if suggested_oc_names:
+                        needed_ocs.append({
+                            'level': level,
+                            'oc_names': suggested_oc_names[:2]  # Limit to 2 most common
+                        })
+                except Exception as e:
+                    logger.warning(f"Error querying historical OCs for level {level}: {e}")
+                    suggested_oc_names = level_oc_names.get(level, [])
+                    if suggested_oc_names:
+                        needed_ocs.append({
+                            'level': level,
+                            'oc_names': suggested_oc_names[:2]
+                        })
+                
                 if not suggested_oc_names:
                     # Fallback: use generic names based on level
                     if level == 6:
@@ -1325,7 +1366,13 @@ class OCEmailGenerator:
                 email_lines.append("")
 
 
-        return "\n".join(email_lines)
+        email_text = "\n".join(email_lines)
+        
+        # Return both email text and needed OCs
+        return {
+            'email_text': email_text,
+            'needed_ocs': needed_ocs
+        }
 
     def get_oc_performance_by_role(self, days_back: int = 90) -> List[Dict[str, Any]]:
         """

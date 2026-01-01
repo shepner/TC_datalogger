@@ -119,9 +119,20 @@ def generate_oc_email():
         excluded_oc_names = data.get('excluded_oc_names', [])
         
         # Generate email using default form letter template
-        email_text = oc_email_generator.generate_email(excluded_oc_names=excluded_oc_names)
+        result = oc_email_generator.generate_email(excluded_oc_names=excluded_oc_names)
         
-        return jsonify({"email_text": email_text})
+        # Handle both old format (string) and new format (dict)
+        if isinstance(result, dict):
+            return jsonify({
+                "email_text": result.get('email_text', ''),
+                "needed_ocs": result.get('needed_ocs', [])
+            })
+        else:
+            # Backward compatibility: if it returns a string, wrap it
+            return jsonify({
+                "email_text": result,
+                "needed_ocs": []
+            })
     except Exception as e:
         logger.error(f"Error generating OC email: {e}", exc_info=True)
         return jsonify({"error": str(e)}), 500

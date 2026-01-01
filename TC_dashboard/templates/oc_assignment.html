@@ -305,6 +305,12 @@
                     </svg>
                 </button>
             </div>
+            <div id="needed-ocs-section" style="margin-top: 15px; padding: 12px; background-color: #f9f9f9; border: 1px solid #ddd; border-radius: 4px; display: none;">
+                <h3 style="margin: 0 0 10px 0; font-size: 14px; font-weight: 600; color: #333;">OCs Needed:</h3>
+                <div id="needed-ocs-list" style="font-family: monospace; font-size: 13px; color: #555;">
+                    <!-- Needed OCs will be populated here -->
+                </div>
+            </div>
     </div>
 </div>
 
@@ -441,12 +447,41 @@
                 if (emailOutput) {
                     emailOutput.style.display = 'block';
                 }
+                
+                // Display needed OCs below the email text
+                displayNeededOCs(data.needed_ocs || []);
             } catch (error) {
                 if (errorEl) {
                     errorEl.textContent = error.message;
                     errorEl.style.display = 'block';
                 }
             }
+        }
+
+        function displayNeededOCs(neededOCs) {
+            const section = document.getElementById('needed-ocs-section');
+            const list = document.getElementById('needed-ocs-list');
+            
+            if (!section || !list) {
+                return;
+            }
+            
+            if (!neededOCs || neededOCs.length === 0) {
+                section.style.display = 'none';
+                return;
+            }
+            
+            // Sort by level descending
+            neededOCs.sort((a, b) => b.level - a.level);
+            
+            let html = '';
+            neededOCs.forEach(item => {
+                const ocNamesStr = item.oc_names.join(' or ');
+                html += `<div style="margin-bottom: 6px;">Level ${item.level} - ${ocNamesStr}</div>`;
+            });
+            
+            list.innerHTML = html;
+            section.style.display = 'block';
         }
 
         async function copyEmail(event) {
