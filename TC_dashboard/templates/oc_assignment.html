@@ -351,6 +351,10 @@
 
         function populateOcCheckboxes() {
             const container = document.getElementById('oc-checkboxes');
+            if (!container) {
+                console.error('OC checkboxes container not found');
+                return;
+            }
             container.innerHTML = '';
             
             allOcNames.forEach(ocName => {
@@ -373,13 +377,24 @@
         }
 
         async function generateEmail() {
-            document.getElementById('error').style.display = 'none';
-            document.getElementById('email-output').style.display = 'block';
-            document.getElementById('email-text').value = 'Generating email...';
+            const errorEl = document.getElementById('error');
+            const emailOutput = document.getElementById('email-output');
+            const emailText = document.getElementById('email-text');
+            
+            if (!errorEl || !emailOutput || !emailText) {
+                console.error('Required elements not found');
+                return;
+            }
+            
+            errorEl.style.display = 'none';
+            emailOutput.style.display = 'block';
+            emailText.value = 'Generating email...';
 
             // Get excluded OC names from checkboxes
-            const excludedOcNames = Array.from(document.querySelectorAll('#oc-checkboxes input[type="checkbox"]:checked'))
-                .map(cb => cb.value);
+            const checkboxes = document.querySelectorAll('#oc-checkboxes input[type="checkbox"]:checked');
+            const excludedOcNames = Array.from(checkboxes)
+                .map(cb => cb ? cb.value : null)
+                .filter(val => val !== null);
 
             try {
                 const response = await fetch('/api/oc-assignment/generate', {
@@ -398,11 +413,17 @@
                     throw new Error(data.error || 'Failed to generate email');
                 }
 
-                document.getElementById('email-text').value = data.email_text;
-                document.getElementById('email-output').style.display = 'block';
+                if (emailText) {
+                    emailText.value = data.email_text;
+                }
+                if (emailOutput) {
+                    emailOutput.style.display = 'block';
+                }
             } catch (error) {
-                document.getElementById('error').textContent = error.message;
-                document.getElementById('error').style.display = 'block';
+                if (errorEl) {
+                    errorEl.textContent = error.message;
+                    errorEl.style.display = 'block';
+                }
             }
         }
 
