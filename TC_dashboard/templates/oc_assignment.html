@@ -82,14 +82,6 @@
         #pivot-header th {
             border: 1px solid rgba(255, 255, 255, 0.3) !important;
             box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.2);
-            position: sticky;
-            top: 0;
-        }
-        #pivot-header tr:nth-child(2) th {
-            top: 0;
-        }
-        #pivot-header tr:nth-child(3) th {
-            top: 0;
         }
         #pivot-header th.sortable {
             cursor: pointer;
@@ -1102,7 +1094,7 @@
                         const isOCCollapsed = window.collapsedOCNames.has(`${difficulty}_${ocName}`);
                         const actualCols = isOCCollapsed ? 1 : sortedPositionIds.length;
                         const rowspan = isOCCollapsed ? '2' : '1';
-                        headerRow2.innerHTML += `<th class="sortable" data-column="${startColIndex}" data-type="oc_name" data-difficulty="${difficulty}" data-oc-name="${ocName.replace(/"/g, '&quot;')}" colspan="${actualCols}" rowspan="${rowspan}" style="padding: 3px 6px; position: sticky; top: 0; text-align: center; background-color: #4CAF50; color: white; cursor: pointer;">${ocName}</th>`;
+                        headerRow2.innerHTML += `<th class="sortable" data-column="${startColIndex}" data-type="oc_name" data-difficulty="${difficulty}" data-oc-name="${ocName.replace(/"/g, '&quot;')}" colspan="${actualCols}" rowspan="${rowspan}" style="padding: 3px 6px; position: sticky; text-align: center; background-color: #4CAF50; color: white; cursor: pointer;">${ocName}</th>`;
                         columnIndex += actualCols;
                     });
                 }
@@ -1134,13 +1126,41 @@
                             const posInfo = ocGroup.get(positionId);
                             const columnKey = `${difficulty}_${ocName}_${positionId}`;
                             pivotColumnMap.set(columnIndex, columnKey);
-                            headerRow3.innerHTML += `<th class="sortable" data-column="${columnIndex}" data-type="position_id" data-difficulty="${difficulty}" data-oc-name="${ocName.replace(/"/g, '&quot;')}" data-position-id="${positionId}" style="padding: 3px 6px; position: sticky; top: 0; text-align: center; background-color: #4CAF50; color: white; cursor: pointer;">${positionId}</th>`;
+                            headerRow3.innerHTML += `<th class="sortable" data-column="${columnIndex}" data-type="position_id" data-difficulty="${difficulty}" data-oc-name="${ocName.replace(/"/g, '&quot;')}" data-position-id="${positionId}" style="padding: 3px 6px; position: sticky; text-align: center; background-color: #4CAF50; color: white; cursor: pointer;">${positionId}</th>`;
                             columnIndex++;
                         });
                     });
                 }
             });
             header.appendChild(headerRow3);
+            
+            // Calculate and set top offsets for each header row to make them stick properly
+            // First, we need to measure the actual row heights after they're rendered
+            setTimeout(() => {
+                const rows = header.querySelectorAll('tr');
+                let cumulativeTop = 0;
+                rows.forEach((row, index) => {
+                    if (index === 0) {
+                        // First row sticks at top: 0
+                        cumulativeTop = 0;
+                    } else {
+                        // Subsequent rows stick below previous rows
+                        const prevRow = rows[index - 1];
+                        cumulativeTop += prevRow.offsetHeight;
+                    }
+                    row.querySelectorAll('th').forEach(th => {
+                        const currentTop = th.style.top;
+                        // Only update if it doesn't already have a specific top value (for sticky left columns)
+                        if (!currentTop || currentTop === '0px') {
+                            th.style.top = cumulativeTop + 'px';
+                        } else {
+                            // For sticky left columns, combine top and left
+                            const leftValue = th.style.left;
+                            th.style.top = cumulativeTop + 'px';
+                        }
+                    });
+                });
+            }, 0);
             
             // Attach sort handlers to all sortable headers
             attachPivotSortHandlers();
