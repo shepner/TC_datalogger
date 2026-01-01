@@ -421,9 +421,10 @@ class OCEmailGenerator:
             level_rates = data['level_rates']
             
             # Find levels with rates in 80-90 range
+            # Filter out None values (levels where member doesn't meet requirements)
             valid_levels = []
             for level, rate in level_rates.items():
-                if 80 <= rate <= 90:
+                if rate is not None and 80 <= rate <= 90:
                     valid_levels.append((level, rate))
             
             if not valid_levels:
@@ -670,7 +671,8 @@ class OCEmailGenerator:
                     # Member must have a position with checkpoint_pass_rate in 80-90 range for this level
                     level_rate = member_level_rates.get(oc_difficulty)
                     if level_rate is None:
-                        # Member has no history at this difficulty level
+                        # Member has no valid rate (either no history or all rates below 80)
+                        logger.debug(f"Skipping {member_name} for Level {oc_difficulty} OC {oc.get('oc_name')}: no valid rate in 80-90 range")
                         continue
                     
                     # Ensure rate is in percentage format
@@ -679,10 +681,11 @@ class OCEmailGenerator:
                         if 0 <= rate_num <= 1:
                             rate_num = rate_num * 100
                     except (ValueError, TypeError):
+                        logger.debug(f"Skipping {member_name} for Level {oc_difficulty} OC {oc.get('oc_name')}: invalid rate format")
                         continue
                     
                     # STRICT CHECK: Rate must be in valid range (80-90)
-                    # If rate is below 80, member cannot do this level
+                    # This should always pass since we only store rates in 80-90, but double-check
                     if not (80 <= rate_num <= 90):
                         logger.debug(f"Skipping {member_name} for Level {oc_difficulty} OC {oc.get('oc_name')}: rate {rate_num} not in 80-90 range")
                         continue
