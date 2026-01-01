@@ -862,6 +862,8 @@ class OCEmailGenerator:
                     assignments[oc_id].append(member_name)
                     assigned_members.add(member_name)
                     logger.info(f"Assigned {member_name} to OC {oc_id} ({oc.get('oc_name')}, Level {oc_difficulty})")
+                    if member_name in ["Adilon_Scorpian", "Hiyori"]:
+                        logger.info(f"DEBUG {member_name}: ASSIGNED to Level {oc_difficulty} OC '{oc.get('oc_name')}' - stopping search")
                     break
                 else:
                     if member_name in ["Adilon_Scorpian", "Hiyori", "DubZzZ"]:
