@@ -210,8 +210,13 @@
 <body>
     <div class="container">
         <header>
-            <h1>OC Assignment Email Generator</h1>
-            <p>Generate email text for OC assignments with member prioritization</p>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <div>
+                    <h1>OC Assignment Email Generator</h1>
+                    <p>Generate email text for OC assignments with member prioritization</p>
+                </div>
+                <a href="/"><button class="secondary">Back to Dashboard</button></a>
+            </div>
         </header>
 
             <div style="margin-top: 20px; margin-bottom: 30px; border-bottom: 2px solid #ddd; padding-bottom: 20px;">
@@ -290,19 +295,15 @@
             </div>
         </div>
 
-        <div class="form-group" style="margin-top: 20px;">
-            <label style="display: flex; align-items: center; cursor: pointer;">
-                <input type="checkbox" id="exclude_no_reserve" checked style="margin-right: 8px; width: auto;">
-                <span>Exclude No Reserve OC (default: excluded)</span>
-            </label>
-        </div>
-
-        <a href="/"><button class="secondary">Back to Dashboard</button></a>
-
         <div id="error" class="error" style="display: none;"></div>
-        <div id="success" class="success" style="display: none;"></div>
 
         <div id="email-output" class="email-output" style="display: block;">
+            <div id="oc-exclude-toolbar" style="margin-bottom: 15px; padding: 10px; background-color: #f5f5f5; border-radius: 4px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center;">
+                <label style="font-weight: bold; margin-right: 5px;">Exclude OCs:</label>
+                <div id="oc-checkboxes" style="display: flex; flex-wrap: wrap; gap: 10px;">
+                    <!-- OC checkboxes will be populated here -->
+                </div>
+            </div>
             <h3>Generated Email:</h3>
             <textarea id="email-text" readonly>Generating email...</textarea>
             <button class="copy-button" onclick="copyEmail()">Copy to Clipboard</button>
@@ -323,18 +324,62 @@
 </div>
 
 <script>
-        // Auto-generate email when page loads
-        window.addEventListener('DOMContentLoaded', function() {
+        let allOcNames = [];
+        
+        // Load OC names and generate email when page loads
+        window.addEventListener('DOMContentLoaded', async function() {
+            await loadOcNames();
             generateEmail();
         });
 
+        async function loadOcNames() {
+            try {
+                const response = await fetch('/api/oc-assignment/oc-names');
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(data.error || 'Failed to load OC names');
+                }
+                
+                allOcNames = data.oc_names || [];
+                populateOcCheckboxes();
+            } catch (error) {
+                console.error('Error loading OC names:', error);
+                // Continue without OC names - will use default behavior
+            }
+        }
+
+        function populateOcCheckboxes() {
+            const container = document.getElementById('oc-checkboxes');
+            container.innerHTML = '';
+            
+            allOcNames.forEach(ocName => {
+                const label = document.createElement('label');
+                label.style.cssText = 'display: flex; align-items: center; cursor: pointer; white-space: nowrap;';
+                
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.value = ocName;
+                checkbox.id = `oc-${ocName.replace(/\s+/g, '-')}`;
+                // Check "No Reserve" by default
+                checkbox.checked = ocName.toLowerCase().includes('no reserve');
+                checkbox.style.cssText = 'margin-right: 5px;';
+                checkbox.addEventListener('change', generateEmail);
+                
+                label.appendChild(checkbox);
+                label.appendChild(document.createTextNode(ocName));
+                container.appendChild(label);
+            });
+        }
+
         async function generateEmail() {
             document.getElementById('error').style.display = 'none';
-            document.getElementById('success').style.display = 'none';
             document.getElementById('email-output').style.display = 'block';
             document.getElementById('email-text').value = 'Generating email...';
 
-            const excludeNoReserve = document.getElementById('exclude_no_reserve').checked;
+            // Get excluded OC names from checkboxes
+            const excludedOcNames = Array.from(document.querySelectorAll('#oc-checkboxes input[type="checkbox"]:checked'))
+                .map(cb => cb.value);
 
             try {
                 const response = await fetch('/api/oc-assignment/generate', {
@@ -343,7 +388,7 @@
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify({
-                        exclude_no_reserve: excludeNoReserve
+                        excluded_oc_names: excludedOcNames
                     })
                 });
 
@@ -355,8 +400,6 @@
 
                 document.getElementById('email-text').value = data.email_text;
                 document.getElementById('email-output').style.display = 'block';
-                document.getElementById('success').textContent = 'Email generated successfully!';
-                document.getElementById('success').style.display = 'block';
             } catch (error) {
                 document.getElementById('error').textContent = error.message;
                 document.getElementById('error').style.display = 'block';

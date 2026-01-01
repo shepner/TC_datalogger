@@ -82,6 +82,21 @@ def oc_assignment():
     return render_template("oc_assignment.html")
 
 
+@app.route("/api/oc-assignment/oc-names", methods=["GET"])
+def get_oc_names():
+    """Get list of all unique OC names."""
+    if not oc_email_generator:
+        return jsonify({"error": "BigQuery client not available"}), 500
+    
+    try:
+        # Get all OCs to extract unique names
+        ocs = oc_email_generator.get_available_ocs()
+        oc_names = sorted(set(oc.get('oc_name', '') for oc in ocs if oc.get('oc_name')))
+        return jsonify({"oc_names": oc_names})
+    except Exception as e:
+        logger.error(f"Error getting OC names: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
 @app.route("/api/oc-assignment/generate", methods=["POST"])
 def generate_oc_email():
     """Generate OC assignment email."""
@@ -90,10 +105,10 @@ def generate_oc_email():
     
     try:
         data = request.get_json() or {}
-        exclude_no_reserve = data.get('exclude_no_reserve', True)  # Default to True (exclude)
+        excluded_oc_names = data.get('excluded_oc_names', [])
         
         # Generate email using default form letter template
-        email_text = oc_email_generator.generate_email(exclude_no_reserve=exclude_no_reserve)
+        email_text = oc_email_generator.generate_email(excluded_oc_names=excluded_oc_names)
         
         return jsonify({"email_text": email_text})
     except Exception as e:

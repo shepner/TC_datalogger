@@ -450,16 +450,18 @@ class OCEmailGenerator:
         
         return member_data
 
-    def generate_email(self, exclude_no_reserve: bool = True) -> str:
+    def generate_email(self, excluded_oc_names: Optional[List[str]] = None) -> str:
         """
         Generate OC assignment email text using the form letter template.
 
         Args:
-            exclude_no_reserve: If True, exclude "No Reserve OC" from assignments (default: True)
+            excluded_oc_names: List of OC names to exclude from assignments (default: ["No Reserve OC"])
 
         Returns:
             Email text ready for copy/paste
         """
+        if excluded_oc_names is None:
+            excluded_oc_names = ["No Reserve OC"]
         # Get data
         members = self.get_members_not_in_oc()
         participation = self.get_oc_participation_counts()
@@ -609,13 +611,11 @@ class OCEmailGenerator:
         # Track which members have been assigned
         assigned_members = set()
         
-        # Filter out "No Reserve OC" if requested - it's a 2-part OC with "Bidding War" followup
-        # that has poor success rates, costing faction Respect and members Money/CE
-        def is_no_reserve_oc(oc):
-            if not exclude_no_reserve:
-                return False
+        # Filter out excluded OC names
+        excluded_oc_names_lower = [name.lower() for name in excluded_oc_names]
+        def is_excluded_oc(oc):
             oc_name = oc.get('oc_name', '').lower()
-            return 'no reserve' in oc_name
+            return any(excluded_name in oc_name for excluded_name in excluded_oc_names_lower)
         
         # Assign members to OCs based on priority:
         # 1. Active members → OCs starting soonest (if already has members) or OCs that won't expire for >1 day
@@ -638,10 +638,10 @@ class OCEmailGenerator:
             member_max_oc = member_perf.get('max_recommended_oc')
             member_level_rates = member_perf.get('level_rates', {})
             
-            # Try to assign member to first available OC (excluding No Reserve)
+            # Try to assign member to first available OC (excluding excluded OCs)
             for oc in oc_list:
-                # Skip No Reserve OC
-                if is_no_reserve_oc(oc):
+                # Skip excluded OCs
+                if is_excluded_oc(oc):
                     continue
                 
                 oc_difficulty = oc.get('difficulty')
