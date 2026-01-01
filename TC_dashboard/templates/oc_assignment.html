@@ -760,49 +760,54 @@
                                     cell.setAttribute('data-position-id', positionId);
                                     cell.setAttribute('data-position', ocGroup.get(positionId).position);
                                     
+                                    // Store history reference in closure
+                                    const cellHistory = member.history ? member.history.get(columnKey) : null;
+                                    const positionName = ocGroup.get(positionId).position;
+                                    
+                                    // Debug: Log when attaching handlers
+                                    if (cellHistory && cellHistory.length > 0) {
+                                        console.log('Attaching handlers to cell:', member.member_name, columnKey, 'with', cellHistory.length, 'history records');
+                                    }
+                                    
                                     // Add hover tooltip with historical data
                                     let tooltipTimeout = null;
-                                    cell.addEventListener('mouseenter', (e) => {
-                                        const cellHistory = member.history ? member.history.get(columnKey) : null;
-                                        console.log('Mouse enter on cell:', {
-                                            member: member.member_name,
-                                            columnKey: columnKey,
-                                            historyExists: !!cellHistory,
-                                            historyLength: cellHistory ? cellHistory.length : 0,
-                                            hasHistoryMap: !!member.history,
-                                            historyKeys: member.history ? Array.from(member.history.keys()) : []
-                                        });
+                                    cell.addEventListener('mouseenter', function(e) {
+                                        console.log('MOUSE ENTER EVENT FIRED!', member.member_name, columnKey);
+                                        e.stopPropagation();
                                         
                                         if (cellHistory && cellHistory.length > 0) {
+                                            console.log('History found:', cellHistory.length, 'records');
                                             // Small delay to prevent tooltip flicker
                                             tooltipTimeout = setTimeout(() => {
                                                 console.log('Calling showHistoryTooltip with', cellHistory.length, 'records');
-                                                showHistoryTooltip(e.target, cellHistory, difficulty, ocName, ocGroup.get(positionId).position);
+                                                showHistoryTooltip(e.target, cellHistory, difficulty, ocName, positionName);
                                             }, 200);
                                         } else {
                                             console.log('No history available for this cell');
                                         }
-                                    });
-                                    cell.addEventListener('mouseleave', () => {
+                                    }, true); // Use capture phase
+                                    
+                                    cell.addEventListener('mouseleave', function() {
+                                        console.log('MOUSE LEAVE EVENT FIRED!');
                                         if (tooltipTimeout) {
                                             clearTimeout(tooltipTimeout);
                                             tooltipTimeout = null;
                                         }
                                         hideHistoryTooltip();
-                                    });
+                                    }, true);
                                     
                                     // Add click handler for full modal
-                                    cell.addEventListener('click', (e) => {
+                                    cell.addEventListener('click', function(e) {
                                         e.stopPropagation();
+                                        console.log('CLICK EVENT FIRED!');
                                         if (tooltipTimeout) {
                                             clearTimeout(tooltipTimeout);
                                         }
                                         hideHistoryTooltip();
-                                        const cellHistory = member.history ? member.history.get(columnKey) : null;
                                         if (cellHistory && cellHistory.length > 0) {
-                                            showHistoryModal(member.member_name, columnKey, difficulty, ocName, positionId, ocGroup.get(positionId).position, cellHistory);
+                                            showHistoryModal(member.member_name, columnKey, difficulty, ocName, positionId, positionName, cellHistory);
                                         }
-                                    });
+                                    }, true);
                                 }
                                 row.appendChild(cell);
                             } else {
