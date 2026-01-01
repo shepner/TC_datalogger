@@ -612,9 +612,14 @@ class OCEmailGenerator:
                 return "No available OCs found. Please create new OCs first."
 
         # Enrich members with participation data and activity status
+        # Get 7-day counts separately and merge them
+        participation_7d = self.get_oc_participation_counts_7d()
+        participation_7d_dict = {row['member_id']: row.get('oc_count_7d', 0) for row in participation_7d}
+        
         for member in members:
             member_id = member['member_id']
             member['oc_count_30d'] = participation.get(member_id, {}).get('oc_count_30d', 0)
+            member['oc_count_7d'] = participation_7d_dict.get(member_id, 0)
             
             # Determine if active (within 24 hours)
             last_action = member.get('last_action_timestamp')
