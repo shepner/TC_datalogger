@@ -1150,30 +1150,33 @@
                     return;
                 }
                 
+                console.log('Setting sticky top for', rows.length, 'header rows');
                 let cumulativeTop = 0;
                 rows.forEach((row, index) => {
                     if (index > 0) {
                         // Get height of previous row
                         const prevRow = rows[index - 1];
-                        cumulativeTop += prevRow.offsetHeight || prevRow.getBoundingClientRect().height || 20;
+                        const prevHeight = prevRow.offsetHeight || prevRow.getBoundingClientRect().height || 20;
+                        cumulativeTop += prevHeight;
+                        console.log(`Row ${index}: cumulativeTop = ${cumulativeTop}px (prev row height: ${prevHeight}px)`);
+                    } else {
+                        console.log(`Row ${index}: cumulativeTop = 0px`);
                     }
                     
                     // Apply sticky positioning to all th in this row
                     row.querySelectorAll('th').forEach(th => {
                         th.style.position = 'sticky';
                         th.style.top = cumulativeTop + 'px';
+                        th.style.backgroundColor = '#4CAF50';
+                        console.log(`  Set th top to ${cumulativeTop}px`);
                     });
                 });
             };
             
             // Set sticky positioning after DOM is ready
-            if (document.readyState === 'loading') {
-                document.addEventListener('DOMContentLoaded', () => {
-                    setTimeout(setStickyTop, 100);
-                });
-            } else {
-                setTimeout(setStickyTop, 100);
-            }
+            setTimeout(setStickyTop, 100);
+            setTimeout(setStickyTop, 300);
+            setTimeout(setStickyTop, 500);
             
             // Attach sort handlers to all sortable headers
             attachPivotSortHandlers();
