@@ -245,10 +245,10 @@
                 <div id="summarize-controls" style="display: none; flex-direction: row; align-items: center; gap: 6px; flex-shrink: 0; margin-left: 5px; padding-left: 5px; border-left: 1px solid #ccc;">
                     <label style="margin: 0; white-space: nowrap; font-size: 11px;">Summarize:</label>
                     <label style="margin: 0; white-space: nowrap; display: flex; align-items: center; font-size: 11px; cursor: pointer;">
-                        <input type="radio" name="summarize_mode" value="none" checked onchange="handleSummarizeMode('none')" style="margin-right: 3px;"> None
+                        <input type="radio" name="summarize_mode" value="none" onchange="handleSummarizeMode('none')" style="margin-right: 3px;"> None
                     </label>
                     <label style="margin: 0; white-space: nowrap; display: flex; align-items: center; font-size: 11px; cursor: pointer;">
-                        <input type="radio" name="summarize_mode" value="level" onchange="handleSummarizeMode('level')" style="margin-right: 3px;"> Level
+                        <input type="radio" name="summarize_mode" value="level" checked onchange="handleSummarizeMode('level')" style="margin-right: 3px;"> Level
                     </label>
                     <label style="margin: 0; white-space: nowrap; display: flex; align-items: center; font-size: 11px; cursor: pointer;">
                         <input type="radio" name="summarize_mode" value="oc" onchange="handleSummarizeMode('oc')" style="margin-right: 3px;"> OC Name
@@ -654,6 +654,13 @@
             
             toggleView();
             document.getElementById('performance-container').style.display = 'block';
+            
+            // Set default summarize mode to "Level" when data is first loaded
+            const levelRadio = document.querySelector('input[name="summarize_mode"][value="level"]');
+            if (levelRadio && !document.querySelector('input[name="summarize_mode"]:checked')) {
+                levelRadio.checked = true;
+                handleSummarizeMode('level');
+            }
         }
 
         // Toggle functions for global collapsing
@@ -699,6 +706,18 @@
                 displayPivotView(window.performanceData);
             }
         }
+        
+        // Initialize with "Level" mode as default when page loads
+        window.addEventListener('DOMContentLoaded', function() {
+            // Set default to "Level" if performance data is loaded
+            if (window.performanceData && window.performanceData.length > 0) {
+                const levelRadio = document.querySelector('input[name="summarize_mode"][value="level"]');
+                if (levelRadio && !levelRadio.checked) {
+                    levelRadio.checked = true;
+                    handleSummarizeMode('level');
+                }
+            }
+        });
         
         // Keep old functions for backwards compatibility (if needed)
         function toggleAllLevelsCollapse(collapse) {
