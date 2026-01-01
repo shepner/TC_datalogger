@@ -792,7 +792,7 @@
             if (!window.collapsedLevels) window.collapsedLevels = new Set();
             if (!window.collapsedOCNames) window.collapsedOCNames = new Set();
             
-            const sortedDifficulties = Array.from(columnGroups.keys()).filter(d => d != null && typeof d === 'number').sort((a, b) => {
+            sortedDifficulties = Array.from(columnGroups.keys()).filter(d => d != null && typeof d === 'number').sort((a, b) => {
                 return b - a; // Higher difficulty first
             });
             pivotHeaderMetadata = []; // Reset metadata
@@ -1464,35 +1464,142 @@
                 row.innerHTML += `<td style="padding: 2px 4px; border: 1px solid #ddd; border-right: 1px solid #ddd; position: sticky; left: 200px; background-color: ${inOcBgColor}; text-align: center; font-weight: bold; width: 50px; min-width: 50px; max-width: 50px; z-index: 5;">${inOcValue}</td>`;
                 row.innerHTML += `<td class="${maxOcClass}" style="padding: 2px 4px; border: 1px solid #ddd; border-right: 1px solid #ddd; position: sticky; left: 250px; ${maxOcBgColor} text-align: center; font-weight: bold; width: 50px; min-width: 50px; max-width: 50px; z-index: 5;">${maxOcDisplay}</td>`;
                 
-                rowData.cells.forEach((checkpointRate, idx) => {
-                    if (checkpointRate !== undefined && checkpointRate !== null) {
-                        // Color coding: red for < 80 or > 90, no color for 80-90 range
-                        let cellClass = '';
-                        if (checkpointRate < 80 || checkpointRate > 90) {
-                            cellClass = 'cell-red';
+                // Re-render cells based on current collapse states (same logic as displayPivotView)
+                if (columnGroups && sortedDifficulties && rowData.member) {
+                    const member = rowData.member;
+                    sortedDifficulties.forEach(difficulty => {
+                        const difficultyGroup = columnGroups.get(difficulty);
+                        if (!difficultyGroup) return;
+                        
+                        const isLevelCollapsed = window.collapsedLevels && window.collapsedLevels.has(difficulty);
+                        
+                        if (isLevelCollapsed) {
+                            // Level is collapsed - show ONE cell for the entire level with pre-generated range
+                            const aggregated = window.aggregatedData && window.aggregatedData[member.member_name] 
+                                ? window.aggregatedData[member.member_name].level_ranges[difficulty] 
+                                : null;
+                            
+                            if (aggregated && aggregated.range) {
+                                const rangeText = aggregated.range;
+                                let cellClass = '';
+                                if (aggregated.values && aggregated.values.some(v => v < 80 || v > 90)) {
+                                    cellClass = 'cell-red';
+                                }
+                                
+                                const cell = document.createElement('td');
+                                cell.className = cellClass;
+                                cell.style.cssText = `padding: 2px 4px; border: 1px solid #ddd; border-right: 1px solid #ddd; text-align: center; font-weight: bold; cursor: pointer; position: relative;`;
+                                cell.textContent = rangeText;
+                                cell.setAttribute('data-difficulty', difficulty);
+                                cell.setAttribute('data-member', member.member_name);
+                                cell.setAttribute('data-is-level-collapsed', 'true');
+                                cell.setAttribute('data-column-key', `level_${difficulty}`);
+                                row.appendChild(cell);
+                            } else {
+                                row.innerHTML += '<td style="padding: 2px 4px; border: 1px solid #ddd; border-right: 1px solid #ddd; text-align: center; color: #ccc;">—</td>';
+                            }
+                        } else {
+                            // Level is not collapsed - show OC names and positions
+                            const sortedOCNames = Array.from(difficultyGroup.keys()).sort();
+                            sortedOCNames.forEach(ocName => {
+                                const ocGroup = difficultyGroup.get(ocName);
+                                const isOCCollapsed = window.collapsedOCNames && window.collapsedOCNames.has(`${difficulty}_${ocName}`);
+                                
+                                if (isOCCollapsed) {
+                                    // OC is collapsed - show pre-generated range
+                                    const ocKey = `${difficulty}_${ocName}`;
+                                    const aggregated = window.aggregatedData && window.aggregatedData[member.member_name] 
+                                        ? window.aggregatedData[member.member_name].oc_ranges[ocKey] 
+                                        : null;
+                                    
+                                    if (aggregated && aggregated.range) {
+                                        const rangeText = aggregated.range;
+                                        let cellClass = '';
+                                        if (aggregated.values && aggregated.values.some(v => v < 80 || v > 90)) {
+                                            cellClass = 'cell-red';
+                                        }
+                                        
+                                        const cell = document.createElement('td');
+                                        cell.className = cellClass;
+                                        cell.style.cssText = `padding: 2px 4px; border: 1px solid #ddd; border-right: 1px solid #ddd; text-align: center; font-weight: bold; cursor: pointer; position: relative;`;
+                                        cell.textContent = rangeText;
+                                        cell.setAttribute('data-difficulty', difficulty);
+                                        cell.setAttribute('data-oc-name', ocName);
+                                        cell.setAttribute('data-member', member.member_name);
+                                        cell.setAttribute('data-is-oc-collapsed', 'true');
+                                        cell.setAttribute('data-column-key', `${difficulty}_${ocName}_all`);
+                                        row.appendChild(cell);
+                                    } else {
+                                        row.innerHTML += '<td style="padding: 2px 4px; border: 1px solid #ddd; border-right: 1px solid #ddd; text-align: center; color: #ccc;">—</td>';
+                                    }
+                                } else {
+                                    // OC is not collapsed - show individual positions
+                                    const sortedPositionIds = Array.from(ocGroup.keys()).sort();
+                                    sortedPositionIds.forEach(positionId => {
+                                        const columnKey = `${difficulty}_${ocName}_${positionId}`;
+                                        const checkpointRate = member.data.get(columnKey);
+                                        
+                                        if (checkpointRate !== undefined && checkpointRate !== null) {
+                                            let cellClass = '';
+                                            if (checkpointRate < 80 || checkpointRate > 90) {
+                                                cellClass = 'cell-red';
+                                            }
+                                            
+                                            const history = member.history ? member.history.get(columnKey) : null;
+                                            const hasHistory = history && history.length > 0;
+                                            const clickableStyle = hasHistory ? 'cursor: pointer; position: relative;' : '';
+                                            
+                                            const cell = document.createElement('td');
+                                            cell.className = cellClass;
+                                            cell.style.cssText = `padding: 2px 4px; border: 1px solid #ddd; border-right: 1px solid #ddd; text-align: center; font-weight: bold; ${clickableStyle}`;
+                                            cell.textContent = checkpointRate;
+                                            
+                                            cell.setAttribute('data-member', member.member_name);
+                                            cell.setAttribute('data-column-key', columnKey);
+                                            cell.setAttribute('data-difficulty', difficulty);
+                                            cell.setAttribute('data-oc-name', ocName);
+                                            cell.setAttribute('data-position-id', positionId);
+                                            cell.setAttribute('data-position', ocGroup.get(positionId).position);
+                                            
+                                            row.appendChild(cell);
+                                        } else {
+                                            row.innerHTML += '<td style="padding: 2px 4px; border: 1px solid #ddd; border-right: 1px solid #ddd; text-align: center; color: #ccc;">—</td>';
+                                        }
+                                    });
+                                }
+                            });
                         }
-                        
-                        const cell = document.createElement('td');
-                        cell.className = cellClass;
-                        cell.style.cssText = 'padding: 2px 4px; border: 1px solid #ddd; border-right: 1px solid #ddd; text-align: center; font-weight: bold; cursor: pointer; position: relative;';
-                        cell.textContent = checkpointRate;
-                        
-                        // Get cell metadata and set data attributes for event delegation
-                        const metadata = rowData.cellMetadata[idx];
-                        if (metadata) {
-                            cell.setAttribute('data-member', rowData.member_name);
-                            cell.setAttribute('data-column-key', metadata.columnKey);
-                            cell.setAttribute('data-difficulty', metadata.difficulty);
-                            cell.setAttribute('data-oc-name', metadata.ocName);
-                            cell.setAttribute('data-position-id', metadata.positionId);
-                            cell.setAttribute('data-position', metadata.position);
+                    });
+                } else {
+                    // Fallback: use stored cells if columnGroups is not available
+                    rowData.cells.forEach((checkpointRate, idx) => {
+                        if (checkpointRate !== undefined && checkpointRate !== null) {
+                            let cellClass = '';
+                            if (checkpointRate < 80 || checkpointRate > 90) {
+                                cellClass = 'cell-red';
+                            }
+                            
+                            const cell = document.createElement('td');
+                            cell.className = cellClass;
+                            cell.style.cssText = 'padding: 2px 4px; border: 1px solid #ddd; border-right: 1px solid #ddd; text-align: center; font-weight: bold; cursor: pointer; position: relative;';
+                            cell.textContent = checkpointRate;
+                            
+                            const metadata = rowData.cellMetadata[idx];
+                            if (metadata) {
+                                cell.setAttribute('data-member', rowData.member_name);
+                                cell.setAttribute('data-column-key', metadata.columnKey);
+                                cell.setAttribute('data-difficulty', metadata.difficulty);
+                                cell.setAttribute('data-oc-name', metadata.ocName);
+                                cell.setAttribute('data-position-id', metadata.positionId);
+                                cell.setAttribute('data-position', metadata.position);
+                            }
+                            
+                            row.appendChild(cell);
+                        } else {
+                            row.innerHTML += '<td style="padding: 2px 4px; border: 1px solid #ddd; border-right: 1px solid #ddd; text-align: center; color: #ccc;">—</td>';
                         }
-                        
-                        row.appendChild(cell);
-                    } else {
-                        row.innerHTML += '<td style="padding: 2px 4px; border: 1px solid #ddd; border-right: 1px solid #ddd; text-align: center; color: #ccc;">—</td>';
-                    }
-                });
+                    });
+                }
                 
                 tbody.appendChild(row);
             });
