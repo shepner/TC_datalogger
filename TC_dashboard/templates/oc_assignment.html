@@ -49,10 +49,9 @@
             background-color: #0b7dda;
         }
         .email-output {
-            margin-top: 10px;
-            padding: 10px;
-            background-color: #f5f5f5;
-            border-radius: 4px;
+            margin-top: 15px;
+            padding: 0;
+            background-color: transparent;
         }
         .copy-button {
             margin-top: 10px;
@@ -214,39 +213,39 @@
             <a href="/" style="text-decoration: none; font-size: 12px; color: #666; padding: 4px 8px; border: 1px solid #ccc; border-radius: 3px; background-color: #f5f5f5;">← Back to Dashboard</a>
         </div>
 
-            <div style="margin-top: 20px; margin-bottom: 20px; border-bottom: 2px solid #ddd; padding-bottom: 10px;">
-            <h2 style="margin-bottom: 10px;">OC Performance Dashboard</h2>
+            <div style="margin-top: 15px; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #ddd;">
+            <h2 style="margin: 0 0 10px 0; font-size: 16px; font-weight: 600; color: #333;">OC Performance Dashboard</h2>
             
-            <div style="display: flex; align-items: center; gap: 10px; flex-wrap: nowrap; margin-bottom: 10px; padding: 5px 0; border-bottom: 1px solid #ddd;">
+            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: nowrap; margin-bottom: 8px; padding: 4px 0; border-bottom: 1px solid #eee;">
                 <div style="display: flex; align-items: center; gap: 4px;">
-                    <label for="performance_days" style="margin: 0; white-space: nowrap; font-size: 11px;">Days:</label>
-                    <input type="number" id="performance_days" value="90" min="7" max="365" step="1" style="width: 50px; padding: 2px 4px; font-size: 11px;" onchange="validateDaysBack()">
+                    <label for="performance_days" style="margin: 0; white-space: nowrap; font-size: 12px; color: #333;">Days:</label>
+                    <input type="number" id="performance_days" value="90" min="7" max="365" step="1" style="width: 50px; padding: 3px 5px; font-size: 12px; border: 1px solid #ccc; border-radius: 3px;" onchange="validateDaysBack()">
                 </div>
-                <button onclick="loadPerformance()" style="padding: 2px 6px; font-size: 11px;">Load</button>
+                <button onclick="loadPerformance()" style="padding: 3px 8px; font-size: 12px; background-color: #4CAF50; color: white; border: none; border-radius: 3px; cursor: pointer;">Load</button>
                 <div id="view-controls" style="display: none; flex-direction: row; align-items: center; gap: 6px; flex-shrink: 0; margin-left: 5px; padding-left: 5px; border-left: 1px solid #ccc;">
-                    <label style="margin: 0; white-space: nowrap; display: flex; align-items: center; font-size: 11px;">
-                        <input type="radio" name="view_mode" value="pivot" checked onchange="toggleView()" style="margin-right: 3px;"> Pivot
+                    <label style="margin: 0; white-space: nowrap; display: flex; align-items: center; font-size: 12px; color: #333;">
+                        <input type="radio" name="view_mode" value="pivot" checked onchange="toggleView()" style="margin-right: 4px;"> Pivot
                     </label>
-                    <label style="margin: 0; white-space: nowrap; display: flex; align-items: center; font-size: 11px;">
-                        <input type="radio" name="view_mode" value="detail" onchange="toggleView()" style="margin-right: 3px;"> Detail
+                    <label style="margin: 0; white-space: nowrap; display: flex; align-items: center; font-size: 12px; color: #333;">
+                        <input type="radio" name="view_mode" value="detail" onchange="toggleView()" style="margin-right: 4px;"> Detail
                     </label>
                 </div>
                 <div id="filter-controls" style="display: none; flex-direction: row; align-items: center; gap: 4px; flex-shrink: 0; margin-left: 5px; padding-left: 5px; border-left: 1px solid #ccc;">
-                    <label style="margin: 0; white-space: nowrap; font-size: 11px;">Level:</label>
+                    <label style="margin: 0; white-space: nowrap; font-size: 12px; color: #333;">Level:</label>
                     <div id="oc_level_checkboxes" style="display: flex; flex-direction: row; align-items: center; gap: 4px; flex-wrap: nowrap;">
                         <!-- Checkboxes will be populated here -->
                     </div>
                 </div>
                 <div id="summarize-controls" style="display: none; flex-direction: row; align-items: center; gap: 6px; flex-shrink: 0; margin-left: 5px; padding-left: 5px; border-left: 1px solid #ccc;">
-                    <label style="margin: 0; white-space: nowrap; font-size: 11px;">Summarize:</label>
-                    <label style="margin: 0; white-space: nowrap; display: flex; align-items: center; font-size: 11px; cursor: pointer;">
-                        <input type="radio" name="summarize_mode" value="none" onchange="handleSummarizeMode('none')" style="margin-right: 3px;"> None
+                    <label style="margin: 0; white-space: nowrap; font-size: 12px; color: #333;">Summarize:</label>
+                    <label style="margin: 0; white-space: nowrap; display: flex; align-items: center; font-size: 12px; color: #333; cursor: pointer;">
+                        <input type="radio" name="summarize_mode" value="none" onchange="handleSummarizeMode('none')" style="margin-right: 4px;"> None
                     </label>
-                    <label style="margin: 0; white-space: nowrap; display: flex; align-items: center; font-size: 11px; cursor: pointer;">
-                        <input type="radio" name="summarize_mode" value="level" checked onchange="handleSummarizeMode('level')" style="margin-right: 3px;"> Level
+                    <label style="margin: 0; white-space: nowrap; display: flex; align-items: center; font-size: 12px; color: #333; cursor: pointer;">
+                        <input type="radio" name="summarize_mode" value="level" checked onchange="handleSummarizeMode('level')" style="margin-right: 4px;"> Level
                     </label>
-                    <label style="margin: 0; white-space: nowrap; display: flex; align-items: center; font-size: 11px; cursor: pointer;">
-                        <input type="radio" name="summarize_mode" value="oc" onchange="handleSummarizeMode('oc')" style="margin-right: 3px;"> OC Name
+                    <label style="margin: 0; white-space: nowrap; display: flex; align-items: center; font-size: 12px; color: #333; cursor: pointer;">
+                        <input type="radio" name="summarize_mode" value="oc" onchange="handleSummarizeMode('oc')" style="margin-right: 4px;"> OC Name
                     </label>
                 </div>
             </div>
@@ -292,14 +291,14 @@
 
         <div id="error" class="error" style="display: none;"></div>
 
-        <div id="email-output" class="email-output" style="display: block; margin-top: 5px;">
-            <div id="oc-exclude-toolbar" style="margin-bottom: 8px; padding: 6px 8px; background-color: #f5f5f5; border-radius: 4px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center;">
-                <label style="font-weight: bold; margin-right: 4px; font-size: 11px;">Exclude OCs:</label>
-                <div id="oc-checkboxes" style="display: flex; flex-wrap: wrap; gap: 6px;">
+        <div id="email-output" class="email-output" style="display: block; margin-top: 15px; padding-top: 15px; border-top: 1px solid #ddd;">
+            <div id="oc-exclude-toolbar" style="margin-bottom: 10px; padding: 8px 10px; background-color: #f9f9f9; border: 1px solid #eee; border-radius: 3px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center;">
+                <label style="font-weight: 600; margin-right: 4px; font-size: 12px; color: #333;">Exclude OCs:</label>
+                <div id="oc-checkboxes" style="display: flex; flex-wrap: wrap; gap: 8px;">
                     <!-- OC checkboxes will be populated here -->
                 </div>
             </div>
-            <h3 style="margin-top: 8px; margin-bottom: 8px;">Generated Email:</h3>
+            <h3 style="margin: 0 0 8px 0; font-size: 14px; font-weight: 600; color: #333;">Generated Email:</h3>
             <textarea id="email-text" readonly>Generating email...</textarea>
             <button class="copy-button" onclick="copyEmail()">Copy to Clipboard</button>
     </div>
@@ -371,7 +370,7 @@
             
             allOcNames.forEach(ocName => {
                 const label = document.createElement('label');
-                label.style.cssText = 'display: flex; align-items: center; cursor: pointer; white-space: nowrap; font-size: 11px;';
+                label.style.cssText = 'display: flex; align-items: center; cursor: pointer; white-space: nowrap; font-size: 12px; color: #333;';
                 
                 const checkbox = document.createElement('input');
                 checkbox.type = 'checkbox';
