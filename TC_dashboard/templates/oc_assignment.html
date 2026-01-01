@@ -844,7 +844,7 @@
                 if (member.member_name === 'Acnar' || member.member_name === 'makers_mark_man' || member.member_name === 'Raptor_RSA') {
                     console.log(`  FINAL (displayPivotView): Inserting Max OC cell with maxOcDisplay = "${maxOcDisplay}" for ${member.member_name}, member.max_recommended_oc = ${member.max_recommended_oc}`);
                 }
-                row.innerHTML += `<td class="${maxOcClass}" style="padding: 2px 4px; border: 1px solid #ddd; border-right: 1px solid #ddd; position: sticky; left: 250px; ${maxOcBgColor} text-align: center; font-weight: bold; width: 50px; min-width: 50px; max-width: 50px; z-index: 10;">${maxOcDisplay}</td>`;
+                row.innerHTML += `<td class="${maxOcClass}" style="padding: 2px 4px; border: 1px solid #ddd; border-right: 1px solid #ddd; position: sticky; left: 250px; ${maxOcBgColor} text-align: center; font-weight: bold; width: 50px; min-width: 50px; max-width: 50px; z-index: 5;">${maxOcDisplay}</td>`;
                 
                 sortedDifficulties.forEach(difficulty => {
                     const difficultyGroup = columnGroups.get(difficulty);
