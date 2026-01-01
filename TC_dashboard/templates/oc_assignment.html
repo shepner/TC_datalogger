@@ -427,6 +427,8 @@
         let pivotRows = []; // Store row data for sorting
         let pivotHeaderMetadata = []; // Store metadata for each column: { difficulty, oc_name, position_id, columnIndex }
         let membersMap = null; // Store the members Map so renderPivotTableBody can access it
+        let columnGroups = null; // Store columnGroups globally so renderPivotTableBody can access it
+        let sortedDifficulties = []; // Store sorted difficulties globally
 
         function toggleView() {
             // Store performance data globally for toggle functions
@@ -627,7 +629,7 @@
 
             // Build hierarchical column structure: difficulty -> oc_name -> position_id
             // Group data by difficulty -> oc_name -> position_id
-            const columnGroups = new Map(); // key: difficulty, value: Map of oc_name -> Map of position_id -> {position, position_id}
+            columnGroups = new Map(); // key: difficulty, value: Map of oc_name -> Map of position_id -> {position, position_id}
             const members = new Map(); // key: member_name, value: {member_name, data: Map of "difficulty_oc_name_position_id" -> max checkpoint_pass_rate}
 
             filteredData.forEach(record => {
