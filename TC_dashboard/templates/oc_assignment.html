@@ -797,15 +797,22 @@
                 const difficultyGroup = columnGroups.get(difficulty);
                 let totalCols = 0;
                 const startColIndex = columnIndex;
-                difficultyGroup.forEach(ocGroup => {
-                    totalCols += ocGroup.size;
-                });
+                const isLevelCollapsed = window.collapsedLevels.has(difficulty);
+                
+                if (isLevelCollapsed) {
+                    // When level is collapsed, count OC names (not positions) for proper alignment
+                    totalCols = difficultyGroup.size;
+                } else {
+                    difficultyGroup.forEach(ocGroup => {
+                        totalCols += ocGroup.size;
+                    });
+                }
+                
                 if (totalCols > 0) {
-                    const isCollapsed = window.collapsedLevels.has(difficulty);
-                    const actualCols = isCollapsed ? 1 : totalCols;
-                    headerRow1.innerHTML += `<th class="sortable" data-column="${startColIndex}" data-type="difficulty" data-difficulty="${difficulty}" colspan="${actualCols}" style="padding: 3px 6px; text-align: center; background-color: #4CAF50; color: white; cursor: pointer;">Level ${difficulty}</th>`;
+                    const actualCols = isLevelCollapsed ? totalCols : totalCols;
+                    headerRow1.innerHTML += `<th class="sortable" data-column="${startColIndex}" data-type="difficulty" data-difficulty="${difficulty}" colspan="${actualCols}" rowspan="${isLevelCollapsed ? '3' : '1'}" style="padding: 3px 6px; text-align: center; background-color: #4CAF50; color: white; cursor: pointer;">Level ${difficulty}</th>`;
                     // Store metadata for all columns in this difficulty group
-                    if (!isCollapsed) {
+                    if (!isLevelCollapsed) {
                         difficultyGroup.forEach((ocGroup, ocName) => {
                             const sortedPositionIds = Array.from(ocGroup.keys()).sort();
                             sortedPositionIds.forEach(positionId => {
@@ -819,39 +826,49 @@
                             });
                         });
                     } else {
-                        // When collapsed, only one column for the level
-                        pivotHeaderMetadata.push({
-                            difficulty: difficulty,
-                            oc_name: null,
-                            position_id: null,
-                            columnIndex: columnIndex,
-                            isCollapsed: true
+                        // When collapsed, one column per OC name
+                        difficultyGroup.forEach((ocGroup, ocName) => {
+                            pivotHeaderMetadata.push({
+                                difficulty: difficulty,
+                                oc_name: ocName,
+                                position_id: null,
+                                columnIndex: columnIndex,
+                                isCollapsed: true
+                            });
+                            columnIndex++;
                         });
-                        columnIndex++;
                     }
                 }
             });
             header.appendChild(headerRow1);
 
-            // Second row: oc_name headers (with colspan for position_ids) - sortable with collapse checkbox
+            // Second row: oc_name headers (with colspan for position_ids) - sortable
             const headerRow2 = document.createElement('tr');
             columnIndex = 5; // Skip Member, OC 30d, OC 7d, In OC, Max OC columns
             sortedDifficulties.forEach(difficulty => {
-                if (window.collapsedLevels.has(difficulty)) {
-                    // Skip this level if it's collapsed
-                    return;
-                }
                 const difficultyGroup = columnGroups.get(difficulty);
-                const sortedOCNames = Array.from(difficultyGroup.keys()).sort();
-                sortedOCNames.forEach(ocName => {
-                    const ocGroup = difficultyGroup.get(ocName);
-                    const sortedPositionIds = Array.from(ocGroup.keys()).sort();
-                    const startColIndex = columnIndex;
-                    const isCollapsed = window.collapsedOCNames.has(`${difficulty}_${ocName}`);
-                    const actualCols = isCollapsed ? 1 : sortedPositionIds.length;
-                    headerRow2.innerHTML += `<th class="sortable" data-column="${startColIndex}" data-type="oc_name" data-difficulty="${difficulty}" data-oc-name="${ocName.replace(/"/g, '&quot;')}" colspan="${actualCols}" style="padding: 3px 6px; text-align: center; background-color: #4CAF50; color: white; cursor: pointer;">${ocName}</th>`;
-                    columnIndex += actualCols;
-                });
+                const isLevelCollapsed = window.collapsedLevels.has(difficulty);
+                
+                if (isLevelCollapsed) {
+                    // When level is collapsed, show one cell per OC name to maintain alignment
+                    const sortedOCNames = Array.from(difficultyGroup.keys()).sort();
+                    sortedOCNames.forEach(ocName => {
+                        headerRow2.innerHTML += `<th class="sortable" data-column="${columnIndex}" data-type="oc_name" data-difficulty="${difficulty}" data-oc-name="${ocName.replace(/"/g, '&quot;')}" colspan="1" rowspan="2" style="padding: 3px 6px; text-align: center; background-color: #4CAF50; color: white; cursor: pointer;">${ocName}</th>`;
+                        columnIndex++;
+                    });
+                } else {
+                    // Level is not collapsed - show OC names with their position counts
+                    const sortedOCNames = Array.from(difficultyGroup.keys()).sort();
+                    sortedOCNames.forEach(ocName => {
+                        const ocGroup = difficultyGroup.get(ocName);
+                        const sortedPositionIds = Array.from(ocGroup.keys()).sort();
+                        const startColIndex = columnIndex;
+                        const isOCCollapsed = window.collapsedOCNames.has(`${difficulty}_${ocName}`);
+                        const actualCols = isOCCollapsed ? 1 : sortedPositionIds.length;
+                        headerRow2.innerHTML += `<th class="sortable" data-column="${startColIndex}" data-type="oc_name" data-difficulty="${difficulty}" data-oc-name="${ocName.replace(/"/g, '&quot;')}" colspan="${actualCols}" style="padding: 3px 6px; text-align: center; background-color: #4CAF50; color: white; cursor: pointer;">${ocName}</th>`;
+                        columnIndex += actualCols;
+                    });
+                }
             });
             header.appendChild(headerRow2);
 
@@ -860,27 +877,31 @@
             pivotColumnMap.clear(); // Reset column map
             columnIndex = 5; // Track column index (0 is Member, 1 is OC 30d, 2 is OC 7d, 3 is In OC, 4 is Max OC, so start at 5)
             sortedDifficulties.forEach(difficulty => {
-                if (window.collapsedLevels.has(difficulty)) {
-                    // Skip this level if it's collapsed
-                    return;
-                }
                 const difficultyGroup = columnGroups.get(difficulty);
-                const sortedOCNames = Array.from(difficultyGroup.keys()).sort();
-                sortedOCNames.forEach(ocName => {
-                    if (window.collapsedOCNames.has(`${difficulty}_${ocName}`)) {
-                        // Skip this OC if it's collapsed
-                        return;
-                    }
-                    const ocGroup = difficultyGroup.get(ocName);
-                    const sortedPositionIds = Array.from(ocGroup.keys()).sort();
-                    sortedPositionIds.forEach(positionId => {
-                        const posInfo = ocGroup.get(positionId);
-                        const columnKey = `${difficulty}_${ocName}_${positionId}`;
-                        pivotColumnMap.set(columnIndex, columnKey);
-                        headerRow3.innerHTML += `<th class="sortable" data-column="${columnIndex}" data-type="position_id" data-difficulty="${difficulty}" data-oc-name="${ocName.replace(/"/g, '&quot;')}" data-position-id="${positionId}" style="padding: 3px 6px; text-align: center; background-color: #4CAF50; color: white; cursor: pointer;">${positionId}</th>`;
-                        columnIndex++;
+                const isLevelCollapsed = window.collapsedLevels.has(difficulty);
+                
+                if (isLevelCollapsed) {
+                    // When level is collapsed, skip position row (OC name row already spans 2 rows)
+                    // No cells needed here as OC name cells have rowspan="2"
+                } else {
+                    // Level is not collapsed - show position headers
+                    const sortedOCNames = Array.from(difficultyGroup.keys()).sort();
+                    sortedOCNames.forEach(ocName => {
+                        if (window.collapsedOCNames.has(`${difficulty}_${ocName}`)) {
+                            // Skip this OC if it's collapsed (OC name cell already spans 2 rows)
+                            return;
+                        }
+                        const ocGroup = difficultyGroup.get(ocName);
+                        const sortedPositionIds = Array.from(ocGroup.keys()).sort();
+                        sortedPositionIds.forEach(positionId => {
+                            const posInfo = ocGroup.get(positionId);
+                            const columnKey = `${difficulty}_${ocName}_${positionId}`;
+                            pivotColumnMap.set(columnIndex, columnKey);
+                            headerRow3.innerHTML += `<th class="sortable" data-column="${columnIndex}" data-type="position_id" data-difficulty="${difficulty}" data-oc-name="${ocName.replace(/"/g, '&quot;')}" data-position-id="${positionId}" style="padding: 3px 6px; text-align: center; background-color: #4CAF50; color: white; cursor: pointer;">${positionId}</th>`;
+                            columnIndex++;
+                        });
                     });
-                });
+                }
             });
             header.appendChild(headerRow3);
             
@@ -959,9 +980,11 @@
                     const isLevelCollapsed = window.collapsedLevels && window.collapsedLevels.has(difficulty);
                     
                     if (isLevelCollapsed) {
-                        // Level is collapsed - show range for all values in this level
-                        const allValues = [];
-                        difficultyGroup.forEach((ocGroup, ocName) => {
+                        // Level is collapsed - show one cell per OC name with range for that OC
+                        const sortedOCNames = Array.from(difficultyGroup.keys()).sort();
+                        sortedOCNames.forEach(ocName => {
+                            const ocGroup = difficultyGroup.get(ocName);
+                            const allValues = [];
                             const sortedPositionIds = Array.from(ocGroup.keys()).sort();
                             sortedPositionIds.forEach(positionId => {
                                 const columnKey = `${difficulty}_${ocName}_${positionId}`;
@@ -970,28 +993,29 @@
                                     allValues.push(checkpointRate);
                                 }
                             });
-                        });
-                        
-                        if (allValues.length > 0) {
-                            const minVal = Math.min(...allValues);
-                            const maxVal = Math.max(...allValues);
-                            const rangeText = minVal === maxVal ? minVal.toString() : `${minVal}-${maxVal}`;
                             
-                            // Color coding: red if any value is < 80 or > 90
-                            let cellClass = '';
-                            if (allValues.some(v => v < 80 || v > 90)) {
-                                cellClass = 'cell-red';
+                            if (allValues.length > 0) {
+                                const minVal = Math.min(...allValues);
+                                const maxVal = Math.max(...allValues);
+                                const rangeText = minVal === maxVal ? minVal.toString() : `${minVal}-${maxVal}`;
+                                
+                                // Color coding: red if any value is < 80 or > 90
+                                let cellClass = '';
+                                if (allValues.some(v => v < 80 || v > 90)) {
+                                    cellClass = 'cell-red';
+                                }
+                                
+                                const cell = document.createElement('td');
+                                cell.className = cellClass;
+                                cell.style.cssText = `padding: 2px 4px; border: 1px solid #ddd; border-right: 1px solid #ddd; text-align: center; font-weight: bold;`;
+                                cell.textContent = rangeText;
+                                cell.setAttribute('data-difficulty', difficulty);
+                                cell.setAttribute('data-oc-name', ocName);
+                                row.appendChild(cell);
+                            } else {
+                                row.innerHTML += '<td style="padding: 2px 4px; border: 1px solid #ddd; border-right: 1px solid #ddd; text-align: center; color: #ccc;">—</td>';
                             }
-                            
-                            const cell = document.createElement('td');
-                            cell.className = cellClass;
-                            cell.style.cssText = `padding: 2px 4px; border: 1px solid #ddd; border-right: 1px solid #ddd; text-align: center; font-weight: bold;`;
-                            cell.textContent = rangeText;
-                            cell.setAttribute('data-difficulty', difficulty);
-                            row.appendChild(cell);
-                        } else {
-                            row.innerHTML += '<td style="padding: 2px 4px; border: 1px solid #ddd; border-right: 1px solid #ddd; text-align: center; color: #ccc;">—</td>';
-                        }
+                        });
                     } else {
                         // Level is not collapsed - show OC names and positions
                         const sortedOCNames = Array.from(difficultyGroup.keys()).sort();
