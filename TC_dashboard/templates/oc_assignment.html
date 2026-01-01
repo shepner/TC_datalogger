@@ -571,8 +571,12 @@
                     const ocRadio = document.querySelector('input[name="summarize_mode"][value="oc"]');
                     if (ocRadio) ocRadio.checked = true;
                 } else {
-                    const noneRadio = document.querySelector('input[name="summarize_mode"][value="none"]');
-                    if (noneRadio) noneRadio.checked = true;
+                    // Default to "Level" instead of "None"
+                    const levelRadio = document.querySelector('input[name="summarize_mode"][value="level"]');
+                    if (levelRadio) {
+                        levelRadio.checked = true;
+                        handleSummarizeMode('level');
+                    }
                 }
             }
             
