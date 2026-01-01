@@ -746,16 +746,28 @@
                                     cell.setAttribute('data-position', ocGroup.get(positionId).position);
                                     
                                     // Add hover tooltip with historical data
+                                    let tooltipTimeout = null;
                                     cell.addEventListener('mouseenter', (e) => {
-                                        showHistoryTooltip(e.target, history, difficulty, ocName, ocGroup.get(positionId).position);
+                                        // Small delay to prevent tooltip flicker
+                                        tooltipTimeout = setTimeout(() => {
+                                            showHistoryTooltip(e.target, history, difficulty, ocName, ocGroup.get(positionId).position);
+                                        }, 100);
                                     });
                                     cell.addEventListener('mouseleave', () => {
+                                        if (tooltipTimeout) {
+                                            clearTimeout(tooltipTimeout);
+                                            tooltipTimeout = null;
+                                        }
                                         hideHistoryTooltip();
                                     });
                                     
                                     // Add click handler for full modal
                                     cell.addEventListener('click', (e) => {
                                         e.stopPropagation();
+                                        if (tooltipTimeout) {
+                                            clearTimeout(tooltipTimeout);
+                                        }
+                                        hideHistoryTooltip();
                                         showHistoryModal(member.member_name, columnKey, difficulty, ocName, positionId, ocGroup.get(positionId).position, history);
                                     });
                                 }
