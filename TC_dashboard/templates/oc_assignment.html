@@ -75,35 +75,17 @@
         .oc-level-9 { background-color: #e1bee7; }  /* Violet - violet */
         .oc-level-10 { background-color: #f8bbd0; } /* Purple - purple */
         /* Pivot table header styling - inspired by Wikipedia's sticky-header-multi */
-        #pivot-table-container {
-            position: relative;
-        }
         #pivot-table {
-            border-collapse: collapse;
+            border-collapse: separate;
             border-spacing: 0;
-        }
-        #pivot-header {
-            position: sticky;
-            top: 0;
-            z-index: 20;
         }
         #pivot-header th {
             border: 1px solid rgba(255, 255, 255, 0.3) !important;
             box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.2);
             background-color: #4CAF50 !important;
-            position: sticky;
         }
-        #pivot-header tr:first-child th {
-            top: 0;
-            z-index: 22;
-        }
-        #pivot-header tr:nth-child(2) th {
-            top: 0;
-            z-index: 21;
-        }
-        #pivot-header tr:nth-child(3) th {
-            top: 0;
-            z-index: 20;
+        #pivot-table td {
+            border: 1px solid #ddd;
         }
         #pivot-header th.sortable {
             cursor: pointer;
@@ -272,8 +254,8 @@
 
                 <!-- Pivot View -->
                 <div id="pivot-container">
-                    <div id="pivot-table-container" style="max-height: 70vh; overflow-y: auto; overflow-x: auto; border: 1px solid #ddd; margin-top: 5px; position: relative;">
-                        <table id="pivot-table" style="width: 100%; border-collapse: collapse; border-spacing: 0; font-size: 11px;">
+                    <div id="pivot-table-container" style="max-height: 70vh; overflow-y: auto; overflow-x: auto; border: 1px solid #ddd; margin-top: 5px;">
+                        <table id="pivot-table" style="width: 100%; border-collapse: separate; border-spacing: 0; font-size: 11px;">
                             <thead id="pivot-header" style="background-color: #4CAF50; color: white;">
                             </thead>
                             <tbody id="pivot-body">
@@ -1164,34 +1146,51 @@
                     return;
                 }
                 
+                console.log('Calculating sticky positions for', rows.length, 'header rows');
+                
                 // Calculate cumulative top values for each row
                 let cumulativeTop = 0;
                 rows.forEach((row, index) => {
+                    // Get the actual rendered height of the previous row
                     if (index > 0) {
-                        // Get the actual rendered height of the previous row
                         const prevRow = rows[index - 1];
-                        // Use getBoundingClientRect for accurate height measurement
+                        // Force a reflow to get accurate measurements
+                        void prevRow.offsetHeight;
                         const prevRect = prevRow.getBoundingClientRect();
                         cumulativeTop += prevRect.height;
+                        console.log(`Row ${index}: top = ${cumulativeTop}px (prev row height: ${prevRect.height}px)`);
+                    } else {
+                        console.log(`Row ${index}: top = 0px`);
                     }
                     
                     // Apply sticky positioning to all th in this row
                     row.querySelectorAll('th').forEach(th => {
+                        // Remove any existing top value
+                        th.style.removeProperty('top');
+                        // Set position and top
                         th.style.position = 'sticky';
                         th.style.top = cumulativeTop + 'px';
+                        th.style.zIndex = (30 - index); // Higher z-index for earlier rows
                         // Ensure background color is set
                         th.style.backgroundColor = '#4CAF50';
                     });
                 });
+                
+                console.log('Sticky positioning applied');
             };
             
             // Set sticky positioning - use multiple attempts to ensure it works
-            // Wait for table to be fully rendered
-            setTimeout(setStickyTop, 50);
-            setTimeout(setStickyTop, 200);
-            setTimeout(setStickyTop, 500);
+            // Wait for table to be fully rendered and measured
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    setStickyTop();
+                });
+            });
+            setTimeout(setStickyTop, 100);
+            setTimeout(setStickyTop, 300);
+            setTimeout(setStickyTop, 600);
             
-            // Also recalculate when window resizes
+            // Also recalculate when window resizes or table content changes
             window.addEventListener('resize', () => {
                 setTimeout(setStickyTop, 100);
             });
