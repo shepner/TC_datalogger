@@ -1917,6 +1917,7 @@
                         history.forEach(record => {
                             allData.push({
                                 ...record,
+                                ocName: ocName, // Ensure OC name is set
                                 positionId: positionId,
                                 position: record.position || positionId
                             });
@@ -2022,6 +2023,8 @@
                 title.textContent = `Full Historical Data: ${memberName} - Level ${difficulty} (All OCs)`;
             } else if (summaryType === 'oc') {
                 title.textContent = `Full Historical Data: ${memberName} - Level ${difficulty} ${ocName} (All Positions)`;
+                // For OC summary, we can optionally hide the OC Name column since all rows are the same OC
+                // But we'll keep it for consistency and set it properly
             }
             
             // Sort data: date descending, then OC name ascending (grouped)
@@ -2085,7 +2088,9 @@
                     if (!crimeId && record.id) crimeId = record.id;
                     
                     html += `<tr>`;
-                    html += `<td style="padding: 10px; border: 1px solid #ddd;">${record.ocName || '-'}</td>`;
+                    // For OC summary type, use the ocName parameter if record.ocName is missing
+                    const displayOCName = record.ocName || (summaryType === 'oc' ? ocName : null) || record.oc_name || '-';
+                    html += `<td style="padding: 10px; border: 1px solid #ddd;">${displayOCName}</td>`;
                     html += `<td style="padding: 10px; border: 1px solid #ddd;">${record.position || record.positionId || '-'}</td>`;
                     html += `<td style="padding: 10px; border: 1px solid #ddd;">${dateStr}</td>`;
                     html += `<td class="${rateClass}" style="padding: 10px; border: 1px solid #ddd; text-align: center; font-weight: bold;">${rate}</td>`;
