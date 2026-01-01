@@ -199,10 +199,23 @@
             <h3>Generated Email:</h3>
             <textarea id="email-text" readonly>Generating email...</textarea>
             <button class="copy-button" onclick="copyEmail()">Copy to Clipboard</button>
+    </div>
+</div>
+
+<!-- History Modal -->
+<div id="historyModal" style="display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.4);">
+    <div style="background-color: #fefefe; margin: 5% auto; padding: 20px; border: 1px solid #888; width: 80%; max-width: 800px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 2px solid #4CAF50; padding-bottom: 10px;">
+            <h2 id="historyModalTitle" style="margin: 0; color: #4CAF50;">Historical Data</h2>
+            <span id="historyModalClose" style="color: #aaa; font-size: 28px; font-weight: bold; cursor: pointer; line-height: 1;" onclick="closeHistoryModal()">&times;</span>
+        </div>
+        <div id="historyModalContent" style="max-height: 60vh; overflow-y: auto;">
+            <!-- Content will be populated by JavaScript -->
         </div>
     </div>
+</div>
 
-    <script>
+<script>
         // Auto-generate email when page loads
         window.addEventListener('DOMContentLoaded', function() {
             generateEmail();
@@ -495,7 +508,8 @@
                         is_in_oc: record.is_in_oc || false,
                         days_in_faction: record.days_in_faction || 0,
                         max_recommended_oc: (record.max_recommended_oc !== undefined && record.max_recommended_oc !== null) ? record.max_recommended_oc : null,
-                        data: new Map()
+                        data: new Map(),  // MAX checkpoint_pass_rate per column
+                        history: new Map()  // All historical records per column
                     });
                 }
                 const memberData = members.get(record.member_name);
@@ -518,11 +532,22 @@
                         memberData.max_recommended_oc = record.max_recommended_oc;
                     }
                 }
+                // Store MAX checkpoint_pass_rate for display
                 const currentMax = memberData.data.get(columnKey);
                 const checkpointRate = record.checkpoint_pass_rate || 0;
                 if (!currentMax || checkpointRate > currentMax) {
                     memberData.data.set(columnKey, checkpointRate);
                 }
+                // Store all historical records for this column
+                if (!memberData.history.has(columnKey)) {
+                    memberData.history.set(columnKey, []);
+                }
+                memberData.history.get(columnKey).push({
+                    checkpoint_pass_rate: checkpointRate,
+                    status: record.status || 'Unknown',
+                    executed_at: record.executed_at || null,
+                    crime_id: record.crime_id || null
+                });
             });
 
             // Check if we have any valid data after filtering
@@ -661,7 +686,27 @@
                                     cellClass = 'cell-red';
                                 }
                                 
-                                row.innerHTML += `<td class="${cellClass}" style="padding: 6px; border: 1px solid #ddd; border-right: 1px solid #ddd; text-align: center; font-weight: bold;">${checkpointRate}</td>`;
+                                // Check if there's historical data for this cell
+                                const history = member.history.get(columnKey);
+                                const hasHistory = history && history.length > 0;
+                                const clickableStyle = hasHistory ? 'cursor: pointer;' : '';
+                                const titleAttr = hasHistory ? `title="Click to view ${history.length} historical record(s)"` : '';
+                                
+                                const cell = document.createElement('td');
+                                cell.className = cellClass;
+                                cell.style.cssText = `padding: 6px; border: 1px solid #ddd; border-right: 1px solid #ddd; text-align: center; font-weight: bold; ${clickableStyle}`;
+                                cell.textContent = checkpointRate;
+                                if (hasHistory) {
+                                    cell.setAttribute('data-member', member.member_name);
+                                    cell.setAttribute('data-column-key', columnKey);
+                                    cell.setAttribute('data-difficulty', difficulty);
+                                    cell.setAttribute('data-oc-name', ocName);
+                                    cell.setAttribute('data-position-id', positionId);
+                                    cell.setAttribute('data-position', ocGroup.get(positionId).position);
+                                    cell.title = `Click to view ${history.length} historical record(s)`;
+                                    cell.addEventListener('click', () => showHistoryModal(member.member_name, columnKey, difficulty, ocName, positionId, ocGroup.get(positionId).position, history));
+                                }
+                                row.appendChild(cell);
                             } else {
                                 row.innerHTML += '<td style="padding: 6px; border: 1px solid #ddd; border-right: 1px solid #ddd; text-align: center; color: #ccc;">—</td>';
                             }
