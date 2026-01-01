@@ -585,12 +585,11 @@ class OCEmailGenerator:
             else:
                 logger.warning("DubZzZ not found in member_oc_rates - will fall back to level-based checking")
         
-        # Get members who have never participated in any OC (for Level 1 assignment only)
-        members_with_oc_history = self.get_members_with_oc_history()
+        # members_with_oc_history already fetched in parallel above
         
         logger.info(f"Found {len(members)} members not in OC (after 72-hour filter)")
         logger.info(f"Found {len(ocs)} available OCs")
-        logger.info(f"Found {len(members_with_oc_history)} members with OC history")
+        logger.info(f"Found {len(members_with_oc_history)} members with OC history (fetched in parallel)")
 
         if not members:
             return "No members available for OC assignment (all members are already in OCs or have been in faction for less than 72 hours)."
