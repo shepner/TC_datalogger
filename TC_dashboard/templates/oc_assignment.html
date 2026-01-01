@@ -1518,15 +1518,21 @@
                         console.log('  Record keys:', Object.keys(record));
                         console.log('  Full record:', JSON.stringify(record, null, 2));
                     }
-                    if (!crimeId) {
-                        crimeId = '—';
+                    
+                    // Format OC ID as link if available, otherwise show dash
+                    let ocIdCell;
+                    if (crimeId) {
+                        const ocUrl = `https://www.torn.com/factions.php?step=your#/tab=crimes&crimeId=${crimeId}`;
+                        ocIdCell = `<a href="${ocUrl}" target="_blank" style="color: #4CAF50; text-decoration: none; font-weight: bold;">${crimeId}</a>`;
+                    } else {
+                        ocIdCell = '—';
                     }
                     
                     html += `<tr style="background-color: ${index % 2 === 0 ? '#f9f9f9' : 'white'};">`;
                     html += `<td style="padding: 8px; border: 1px solid #ddd;">${dateStr}</td>`;
                     html += `<td class="${rateClass}" style="padding: 8px; border: 1px solid #ddd; text-align: center; font-weight: bold;">${rate}</td>`;
                     html += `<td style="padding: 8px; border: 1px solid #ddd; text-align: center;">${status}</td>`;
-                    html += `<td style="padding: 8px; border: 1px solid #ddd; text-align: center; font-family: monospace; font-size: 0.9em;">${crimeId}</td>`;
+                    html += `<td style="padding: 8px; border: 1px solid #ddd; text-align: center; font-family: monospace; font-size: 0.9em;">${ocIdCell}</td>`;
                     html += `</tr>`;
                 });
             }
