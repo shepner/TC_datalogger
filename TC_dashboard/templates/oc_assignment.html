@@ -1138,8 +1138,7 @@
             });
             header.appendChild(headerRow3);
             
-            // For multi-row sticky headers, we need to set top values for each row
-            // The thead is sticky, but each row within it needs its own top offset
+            // For multi-row sticky headers, calculate top offsets based on row heights
             const setStickyTop = () => {
                 const rows = Array.from(header.querySelectorAll('tr'));
                 if (rows.length === 0) {
@@ -1147,29 +1146,30 @@
                     return;
                 }
                 
-                // Measure row heights and set top values
                 let cumulativeTop = 0;
                 rows.forEach((row, index) => {
-                    // Get the actual rendered height of the previous row
                     if (index > 0) {
+                        // Get height of previous row
                         const prevRow = rows[index - 1];
-                        const prevRowHeight = prevRow.getBoundingClientRect().height;
-                        cumulativeTop += prevRowHeight;
+                        cumulativeTop += prevRow.offsetHeight || prevRow.getBoundingClientRect().height || 20;
                     }
                     
-                    // Set sticky positioning on all th elements in this row
+                    // Apply sticky positioning to all th in this row
                     row.querySelectorAll('th').forEach(th => {
                         th.style.position = 'sticky';
                         th.style.top = cumulativeTop + 'px';
-                        th.style.zIndex = (25 - index); // Higher z-index for earlier rows
                     });
                 });
             };
             
-            // Call after a short delay to ensure DOM is fully rendered
-            setTimeout(setStickyTop, 0);
-            setTimeout(setStickyTop, 50);
-            setTimeout(setStickyTop, 200);
+            // Set sticky positioning after DOM is ready
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', () => {
+                    setTimeout(setStickyTop, 100);
+                });
+            } else {
+                setTimeout(setStickyTop, 100);
+            }
             
             // Attach sort handlers to all sortable headers
             attachPivotSortHandlers();
