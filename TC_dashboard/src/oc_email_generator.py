@@ -735,7 +735,11 @@ class OCEmailGenerator:
                 continue
             
             # Get appropriate OC list based on activity
-            oc_list = ocs_for_active if member['is_active'] else ocs_for_inactive
+            # If inactive member's list is empty, fall back to active list so they can still be assigned
+            if member['is_active']:
+                oc_list = ocs_for_active
+            else:
+                oc_list = ocs_for_inactive if ocs_for_inactive else ocs_for_active
             
             # Debug logging for specific members
             if member_name in ["Adilon_Scorpian", "Hiyori"]:
