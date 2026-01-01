@@ -220,15 +220,77 @@ class OCEmailGenerator:
         base_path = Path(__file__).parent.parent.parent
         query_path = base_path / query_file
         
-        if not query_path.exists():
-            logger.warning(f"OC performance pivot SQL file not found at {query_path}")
+        if query_path.exists():
+            query = query_path.read_text()
+            query = query.replace("INTERVAL 90 DAY", f"INTERVAL {days_back} DAY")
+        else:
+            # Fallback: inline query (same as oc_performance_pivot.sql)
+            logger.warning(f"OC performance pivot SQL file not found at {query_path}, using inline query")
+            query = """
+            WITH current_members AS (
+              SELECT DISTINCT id AS member_id
+              FROM
+                `torncity-402423.torn_data.v2_faction_40832_members-raw`
+            ),
+            oc_slots AS (
+              SELECT
+                crime.id AS crime_id,
+                crime.name AS oc_name,
+                crime.difficulty,
+                TIMESTAMP_SECONDS(SAFE_CAST(crime.executed_at AS INT64)) AS executed_at,
+                slot.position AS position,
+                slot.position_id,
+                slot.user.id AS member_id,
+                slot.user.outcome AS outcome,
+                slot.checkpoint_pass_rate AS checkpoint_pass_rate
+              FROM
+                `torncity-402423.torn_data.v2_faction_40832_crimes-raw` AS crime,
+                UNNEST(crime.slots) AS slot
+              WHERE
+                slot.user.id IS NOT NULL
+                AND crime.executed_at IS NOT NULL
+                AND crime.difficulty IS NOT NULL
+                AND TIMESTAMP_SECONDS(SAFE_CAST(crime.executed_at AS INT64)) >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL @days_back DAY)
+                AND slot.checkpoint_pass_rate IS NOT NULL
+                AND slot.user.id IN (SELECT member_id FROM current_members)
+            )
+            SELECT
+              os.oc_name,
+              os.difficulty,
+              os.position_id,
+              os.position,
+              COALESCE(m.name, CAST(os.member_id AS STRING)) AS member_name,
+              os.member_id,
+              COALESCE(m.is_in_oc, FALSE) AS is_in_oc,
+              m.days_in_faction,
+              os.checkpoint_pass_rate,
+              CASE
+                WHEN os.outcome = 'Successful' THEN 'Success'
+                ELSE 'Failure'
+              END AS status,
+              os.crime_id,
+              os.executed_at
+            FROM
+              oc_slots AS os
+            INNER JOIN
+              `torncity-402423.torn_data.v2_faction_40832_members-raw` AS m
+            ON
+              os.member_id = m.id
+            ORDER BY
+              os.oc_name ASC,
+              os.difficulty DESC,
+              os.position_id ASC,
+              os.executed_at DESC,
+              m.name ASC
+            """
+            query = query.replace("@days_back", str(days_back))
+        
+        try:
+            results = self.bq.execute_query(query)
+            logger.info(f"get_member_checkpoint_rates() query returned {len(results)} records")
+        except Exception as e:
+            logger.error(f"Error executing get_member_checkpoint_rates query: {e}", exc_info=True)
             return {}
-        
-        query = query_path.read_text()
-        query = query.replace("INTERVAL 90 DAY", f"INTERVAL {days_back} DAY")
-        results = self.bq.execute_query(query)
-        
-        logger.info(f"get_member_checkpoint_rates() query returned {len(results)} records")
         
         # Build dictionary: member_name -> oc_name_position_id -> max_checkpoint_pass_rate
         member_rates = {}
