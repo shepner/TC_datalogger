@@ -1400,10 +1400,29 @@
                         const relevantCells = pivotHeaderMetadata.filter(m => m.difficulty === difficulty && m.oc_name === ocName);
                         comparison = compareByCells(a, b, relevantCells, sort.direction);
                     } else if (sort.type === 'position_id') {
-                        // Sort by specific column
-                        const colIdx = parseInt(sort.column);
-                        const cellIdx = colIdx - 5; // -5 because columns 0=Member, 1=OC 30d, 2=OC 7d, 3=In OC, 4=Max OC
-                        comparison = compareCellValues(a.cells[cellIdx], b.cells[cellIdx], sort.direction);
+                        // Sort by specific column - get value from member data
+                        const getValue = (rowData) => {
+                            if (!rowData.member) {
+                                const cellIdx = parseInt(sort.column) - 5;
+                                return rowData.cells && rowData.cells[cellIdx] !== undefined ? rowData.cells[cellIdx] : null;
+                            }
+                            
+                            const member = rowData.member;
+                            const difficulty = parseInt(sort.difficulty);
+                            const ocName = sort.oc_name;
+                            const positionId = sort.position_id;
+                            
+                            if (difficulty && ocName && positionId && member.data) {
+                                const columnKey = `${difficulty}_${ocName}_${positionId}`;
+                                return member.data.get(columnKey);
+                            }
+                            
+                            // Fallback to cells array
+                            const cellIdx = parseInt(sort.column) - 5;
+                            return rowData.cells && rowData.cells[cellIdx] !== undefined ? rowData.cells[cellIdx] : null;
+                        };
+                        
+                        comparison = compareCellValues(getValue(a), getValue(b), sort.direction);
                     }
                     
                     if (comparison !== 0) {
@@ -1434,10 +1453,60 @@
         }
         
         function compareByCells(a, b, relevantCells, direction) {
-            // Compare by average or max value in relevant cells
-            // columnIndex starts at 5 (after Member, OC 30d, OC 7d, In OC, Max OC), so subtract 5 to get cell index
-            const aVals = relevantCells.map(m => a.cells[m.columnIndex - 5]).filter(v => v != null);
-            const bVals = relevantCells.map(m => b.cells[m.columnIndex - 5]).filter(v => v != null);
+            // Get values from member data, handling summarization
+            const getCellValue = (rowData, metadata) => {
+                if (!rowData.member) {
+                    // Fallback to cells array if member not available
+                    const cellIdx = metadata.columnIndex - 5;
+                    return rowData.cells && rowData.cells[cellIdx] !== undefined ? rowData.cells[cellIdx] : null;
+                }
+                
+                const member = rowData.member;
+                const difficulty = metadata.difficulty;
+                const isLevelCollapsed = window.collapsedLevels && window.collapsedLevels.has(difficulty);
+                
+                if (isLevelCollapsed) {
+                    // Get aggregated level range value
+                    const aggregated = window.aggregatedData && window.aggregatedData[member.member_name] 
+                        ? window.aggregatedData[member.member_name].level_ranges[difficulty] 
+                        : null;
+                    if (aggregated && aggregated.values && aggregated.values.length > 0) {
+                        // Return average of aggregated values for sorting
+                        return aggregated.values.reduce((sum, v) => sum + v, 0) / aggregated.values.length;
+                    }
+                    return null;
+                }
+                
+                const ocName = metadata.oc_name;
+                const isOCCollapsed = window.collapsedOCNames && window.collapsedOCNames.has(`${difficulty}_${ocName}`);
+                
+                if (isOCCollapsed) {
+                    // Get aggregated OC range value
+                    const ocKey = `${difficulty}_${ocName}`;
+                    const aggregated = window.aggregatedData && window.aggregatedData[member.member_name] 
+                        ? window.aggregatedData[member.member_name].oc_ranges[ocKey] 
+                        : null;
+                    if (aggregated && aggregated.values && aggregated.values.length > 0) {
+                        // Return average of aggregated values for sorting
+                        return aggregated.values.reduce((sum, v) => sum + v, 0) / aggregated.values.length;
+                    }
+                    return null;
+                }
+                
+                // Not collapsed - get individual cell value
+                const positionId = metadata.position_id;
+                if (positionId && member.data) {
+                    const columnKey = `${difficulty}_${ocName}_${positionId}`;
+                    return member.data.get(columnKey);
+                }
+                
+                // Fallback to cells array
+                const cellIdx = metadata.columnIndex - 5;
+                return rowData.cells && rowData.cells[cellIdx] !== undefined ? rowData.cells[cellIdx] : null;
+            };
+            
+            const aVals = relevantCells.map(m => getCellValue(a, m)).filter(v => v != null);
+            const bVals = relevantCells.map(m => getCellValue(b, m)).filter(v => v != null);
             
             if (aVals.length === 0 && bVals.length === 0) return 0;
             if (aVals.length === 0) return 1;
