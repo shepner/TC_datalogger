@@ -329,11 +329,12 @@ def get_oc_performance():
                         else:
                             record['max_recommended_oc'] = best_level + 1
                     else:
-                        # No recommendation
-                        record['max_recommended_oc'] = None
+                        # Member has >= 80 but > 90, and not 90+ at any level
+                        # This shouldn't happen, but if it does, set to Level 1
+                        record['max_recommended_oc'] = 1
                 else:
-                    # No recommendation
-                    record['max_recommended_oc'] = None
+                    # Member has >= 80 but no level_rates data (shouldn't happen)
+                    record['max_recommended_oc'] = 1
             else:
                 # Member has no position with >= 80, automatically set to Level 1
                 record['max_recommended_oc'] = 1
