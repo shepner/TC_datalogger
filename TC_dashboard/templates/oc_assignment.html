@@ -783,6 +783,10 @@
                 row.innerHTML += `<td style="padding: 6px; border: 1px solid #ddd; border-right: 1px solid #ddd; position: sticky; left: 120px; background-color: white; text-align: center; font-weight: bold; width: 60px; min-width: 60px; max-width: 60px;">${member.oc_count_30d || 0}</td>`;
                 row.innerHTML += `<td style="padding: 6px; border: 1px solid #ddd; border-right: 1px solid #ddd; position: sticky; left: 180px; background-color: white; text-align: center; font-weight: bold; width: 60px; min-width: 60px; max-width: 60px;">${member.oc_count_7d || 0}</td>`;
                 row.innerHTML += `<td style="padding: 6px; border: 1px solid #ddd; border-right: 1px solid #ddd; position: sticky; left: 240px; background-color: ${inOcBgColor}; text-align: center; font-weight: bold; width: 60px; min-width: 60px; max-width: 60px;">${inOcValue}</td>`;
+                // Debug: Log final display value for specific members
+                if (member.member_name === 'Acnar' || member.member_name === 'makers_mark_man' || member.member_name === 'Raptor_RSA') {
+                    console.log(`  FINAL (displayPivotView): Inserting Max OC cell with maxOcDisplay = "${maxOcDisplay}" for ${member.member_name}, member.max_recommended_oc = ${member.max_recommended_oc}`);
+                }
                 row.innerHTML += `<td class="${maxOcClass}" style="padding: 6px; border: 1px solid #ddd; border-right: 1px solid #ddd; position: sticky; left: 300px; background-color: white; text-align: center; font-weight: bold; width: 60px; min-width: 60px; max-width: 60px;">${maxOcDisplay}</td>`;
                 
                 sortedDifficulties.forEach(difficulty => {
