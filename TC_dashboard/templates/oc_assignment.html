@@ -94,18 +94,21 @@
         }
         /* History Tooltip */
         .history-tooltip {
-            position: fixed;
-            z-index: 10000;
-            background-color: #333;
-            color: white;
-            padding: 12px;
-            border-radius: 6px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-            max-width: 500px;
-            max-height: 400px;
-            overflow-y: auto;
-            font-size: 12px;
-            pointer-events: none;
+            position: fixed !important;
+            z-index: 99999 !important;
+            background-color: #333 !important;
+            color: white !important;
+            padding: 12px !important;
+            border-radius: 6px !important;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5) !important;
+            max-width: 500px !important;
+            max-height: 400px !important;
+            overflow-y: auto !important;
+            font-size: 12px !important;
+            pointer-events: none !important;
+            display: block !important;
+            visibility: visible !important;
+            opacity: 1 !important;
         }
         .history-tooltip table {
             width: 100%;
@@ -748,10 +751,15 @@
                                     // Add hover tooltip with historical data
                                     let tooltipTimeout = null;
                                     cell.addEventListener('mouseenter', (e) => {
-                                        console.log('Mouse enter on cell, history length:', history ? history.length : 0);
+                                        console.log('Mouse enter on cell, history length:', history ? history.length : 0, 'history:', history);
                                         // Small delay to prevent tooltip flicker
                                         tooltipTimeout = setTimeout(() => {
-                                            showHistoryTooltip(e.target, history, difficulty, ocName, ocGroup.get(positionId).position);
+                                            if (history && history.length > 0) {
+                                                console.log('Calling showHistoryTooltip');
+                                                showHistoryTooltip(e.target, history, difficulty, ocName, ocGroup.get(positionId).position);
+                                            } else {
+                                                console.log('No history to show');
+                                            }
                                         }, 200);
                                     });
                                     cell.addEventListener('mouseleave', () => {
