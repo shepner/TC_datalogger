@@ -614,6 +614,20 @@ class OCEmailGenerator:
                     ocs_for_inactive.append(oc)
             else:
                 ocs_for_active.append(oc)
+        
+        # Sort OCs by difficulty (descending) so we try higher levels first
+        # This ensures members get assigned to the highest level they can do
+        def sort_key(oc):
+            difficulty = oc.get('difficulty')
+            if difficulty is None:
+                return 0
+            try:
+                return int(difficulty)
+            except (ValueError, TypeError):
+                return 0
+        
+        ocs_for_active.sort(key=sort_key, reverse=True)
+        ocs_for_inactive.sort(key=sort_key, reverse=True)
 
         # Assign all members to available OCs
         # Structure: oc_id -> [member_name]
@@ -702,12 +716,14 @@ class OCEmailGenerator:
                             except (ValueError, TypeError):
                                 continue
                     
-                    # Debug logging
-                    if member_name == "DubZzZ" and oc_name_lower == "leave no trace":
-                        logger.info(f"DEBUG DubZzZ/Leave No Trace: member_oc_specific_rates keys = {list(member_oc_specific_rates.keys())[:10]}")
-                        logger.info(f"DEBUG DubZzZ/Leave No Trace: oc_name = '{oc_name}', oc_name_lower = '{oc_name_lower}'")
-                        logger.info(f"DEBUG DubZzZ/Leave No Trace: matching_keys = {matching_keys}")
-                        logger.info(f"DEBUG DubZzZ/Leave No Trace: has_oc_specific_data = {has_oc_specific_data}, best_oc_rate = {best_oc_rate}, has_valid_oc_rate = {has_valid_oc_rate}")
+                    # Debug logging for problematic assignments
+                    if (member_name == "DubZzZ" and oc_name_lower == "leave no trace") or \
+                       (member_name in ["Adilon_Scorpian", "Hiyori"] and oc_difficulty < 4):
+                        logger.info(f"DEBUG {member_name}/{oc_name}: member_oc_specific_rates has {len(member_oc_specific_rates)} keys")
+                        logger.info(f"DEBUG {member_name}/{oc_name}: oc_name = '{oc_name}', oc_name_lower = '{oc_name_lower}'")
+                        logger.info(f"DEBUG {member_name}/{oc_name}: matching_keys = {matching_keys}")
+                        logger.info(f"DEBUG {member_name}/{oc_name}: has_oc_specific_data = {has_oc_specific_data}, best_oc_rate = {best_oc_rate}, has_valid_oc_rate = {has_valid_oc_rate}")
+                        logger.info(f"DEBUG {member_name}/{oc_name}: member_max_oc = {member_max_oc}, oc_difficulty = {oc_difficulty}")
                     
                     # If we have OC-specific data and member can't meet requirements, skip this OC
                     if has_oc_specific_data and not has_valid_oc_rate:
