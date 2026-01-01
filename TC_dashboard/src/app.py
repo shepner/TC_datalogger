@@ -339,12 +339,15 @@ def get_oc_performance():
                 # Member has no position with >= 80, automatically set to Level 1
                 record['max_recommended_oc'] = 1
         
-        # Debug: Log first record to verify crime_id is present
+        # Debug: Log first few records to verify crime_id is present
         if performance and len(performance) > 0:
             first_record = performance[0]
-            logger.debug(f"First performance record keys: {list(first_record.keys())}")
-            logger.debug(f"First performance record crime_id: {first_record.get('crime_id')}")
-            logger.debug(f"First performance record sample: {dict(list(first_record.items())[:10])}")
+            logger.info(f"First performance record keys: {list(first_record.keys())}")
+            logger.info(f"First performance record crime_id: {first_record.get('crime_id')}")
+            logger.info(f"First performance record sample: {dict(list(first_record.items())[:10])}")
+            # Check a few more records to see if crime_id is consistently null
+            crime_id_count = sum(1 for r in performance[:10] if r.get('crime_id') is not None)
+            logger.info(f"crime_id present in {crime_id_count} of first 10 records")
         
         return jsonify({"performance": performance})
     except Exception as e:

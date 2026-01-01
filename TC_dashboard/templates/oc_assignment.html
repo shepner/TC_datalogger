@@ -615,11 +615,14 @@
                     console.log('  crime_id:', record.crime_id, 'id:', record.id);
                     console.log('  Full record:', JSON.stringify(record, null, 2).substring(0, 500));
                 }
+                // Store crime_id - preserve the value even if it's 0 or empty string (though it should be a number)
+                // Only use null if it's actually null/undefined
+                const storedCrimeId = (crimeId !== null && crimeId !== undefined) ? crimeId : null;
                 memberData.history.get(columnKey).push({
                     checkpoint_pass_rate: checkpointRate,
                     status: status,
                     executed_at: record.executed_at || null,
-                    crime_id: crimeId || null
+                    crime_id: storedCrimeId
                 });
             });
 
