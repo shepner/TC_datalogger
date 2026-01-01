@@ -476,6 +476,7 @@ class OCEmailGenerator:
         participation = self.get_oc_participation_counts()
         ocs = self.get_available_ocs()
         member_performance = self.get_member_max_oc_and_rates()  # member_name -> {max_recommended_oc, level_rates, has_80_plus}
+        member_oc_rates = self.get_member_checkpoint_rates()  # member_name -> oc_name_position_id -> rate
         
         # Get members who have never participated in any OC (for Level 1 assignment only)
         members_with_oc_history = self.get_members_with_oc_history()
@@ -667,32 +668,49 @@ class OCEmailGenerator:
                     if oc_difficulty != 1:
                         continue
                 else:
-                    # Check if member has valid checkpoint_pass_rate for this difficulty level
-                    # Member must have a position with checkpoint_pass_rate in 80-90 range for this level
-                    level_rate = member_level_rates.get(oc_difficulty)
-                    if level_rate is None:
-                        # Member has no valid rate (either no history or all rates below 80)
-                        logger.debug(f"Skipping {member_name} for Level {oc_difficulty} OC {oc.get('oc_name')}: no valid rate in 80-90 range")
-                        continue
+                    # Check if member has valid checkpoint_pass_rate for this SPECIFIC OC
+                    # Member must have a position with checkpoint_pass_rate in 80-90 range for this specific OC
+                    oc_name = oc.get('oc_name', '')
+                    member_oc_specific_rates = member_oc_rates.get(member_name, {})
                     
-                    # Ensure rate is in percentage format
-                    try:
-                        rate_num = float(level_rate)
-                        if 0 <= rate_num <= 1:
-                            rate_num = rate_num * 100
-                    except (ValueError, TypeError):
-                        logger.debug(f"Skipping {member_name} for Level {oc_difficulty} OC {oc.get('oc_name')}: invalid rate format")
-                        continue
+                    # Check if member has any position for this specific OC with rate in 80-90
+                    has_valid_oc_rate = False
+                    for key, rate in member_oc_specific_rates.items():
+                        if key.startswith(oc_name + '_'):
+                            try:
+                                rate_num = float(rate)
+                                if 0 <= rate_num <= 1:
+                                    rate_num = rate_num * 100
+                                if 80 <= rate_num <= 90:
+                                    has_valid_oc_rate = True
+                                    break
+                            except (ValueError, TypeError):
+                                continue
                     
-                    # STRICT CHECK: Rate must be in valid range (80-90)
-                    # This should always pass since we only store rates in 80-90, but double-check
-                    if not (80 <= rate_num <= 90):
-                        logger.debug(f"Skipping {member_name} for Level {oc_difficulty} OC {oc.get('oc_name')}: rate {rate_num} not in 80-90 range")
-                        continue
+                    if not has_valid_oc_rate:
+                        # Fallback: check if member has valid rate for this difficulty level overall
+                        level_rate = member_level_rates.get(oc_difficulty)
+                        if level_rate is None:
+                            logger.debug(f"Skipping {member_name} for Level {oc_difficulty} OC {oc_name}: no valid rate in 80-90 range for this OC or level")
+                            continue
+                        
+                        # Ensure rate is in percentage format
+                        try:
+                            rate_num = float(level_rate)
+                            if 0 <= rate_num <= 1:
+                                rate_num = rate_num * 100
+                        except (ValueError, TypeError):
+                            logger.debug(f"Skipping {member_name} for Level {oc_difficulty} OC {oc_name}: invalid rate format")
+                            continue
+                        
+                        # STRICT CHECK: Rate must be in valid range (80-90)
+                        if not (80 <= rate_num <= 90):
+                            logger.debug(f"Skipping {member_name} for Level {oc_difficulty} OC {oc_name}: rate {rate_num} not in 80-90 range")
+                            continue
                     
                     # Check if OC difficulty is <= max_recommended_oc
                     if member_max_oc is not None and oc_difficulty > member_max_oc:
-                        logger.debug(f"Skipping {member_name} for Level {oc_difficulty} OC {oc.get('oc_name')}: exceeds max_recommended_oc {member_max_oc}")
+                        logger.debug(f"Skipping {member_name} for Level {oc_difficulty} OC {oc_name}: exceeds max_recommended_oc {member_max_oc}")
                         continue
                 
                 oc_id = oc['oc_id']
