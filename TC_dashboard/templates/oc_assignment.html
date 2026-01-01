@@ -483,7 +483,9 @@
             let html = '';
             neededOCs.forEach(item => {
                 const ocNamesStr = item.oc_names.join(' or ');
-                html += `<div style="margin-bottom: 4px; padding: 4px 0;">Level ${item.level} - ${ocNamesStr}</div>`;
+                const memberNamesStr = item.member_names ? item.member_names.join(', ') : '';
+                const memberNamesDisplay = memberNamesStr ? ` (${memberNamesStr})` : '';
+                html += `<div style="margin-bottom: 4px; padding: 4px 0;">Level ${item.level} - ${ocNamesStr}${memberNamesDisplay}</div>`;
             });
             
             list.innerHTML = html;

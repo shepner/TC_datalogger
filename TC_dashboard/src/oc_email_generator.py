@@ -1381,7 +1381,8 @@ class OCEmailGenerator:
                     if suggested_oc_names:
                         needed_ocs.append({
                             'level': level,
-                            'oc_names': suggested_oc_names[:2]
+                            'oc_names': suggested_oc_names[:2],
+                            'member_names': member_names
                         })
                 except Exception as e:
                     logger.warning(f"Error querying historical OCs for level {level}: {e}")
@@ -1398,7 +1399,8 @@ class OCEmailGenerator:
                     if suggested_oc_names:
                         needed_ocs.append({
                             'level': level,
-                            'oc_names': suggested_oc_names[:2]
+                            'oc_names': suggested_oc_names[:2],
+                            'member_names': member_names
                         })
 
 
