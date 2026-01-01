@@ -295,7 +295,10 @@
                     <!-- OC checkboxes will be populated here -->
                 </div>
             </div>
-            <h3 style="margin: 0 0 8px 0; font-size: 14px; font-weight: 600; color: #333;">Generated Email:</h3>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <h3 style="margin: 0; font-size: 14px; font-weight: 600; color: #333;">Generated Email:</h3>
+                <a href="https://www.torn.com/factions.php?step=your#/tab=controls&option=newsletter&target=notInOC" target="_blank" style="font-size: 12px; color: #4CAF50; text-decoration: none; font-weight: 500;">Send Email →</a>
+            </div>
             <div style="position: relative; display: inline-block; width: 100%;">
                 <textarea id="email-text" readonly style="padding-right: 35px;">Generating email...</textarea>
                 <button onclick="copyEmail()" style="position: absolute; top: 8px; right: 8px; background: none; border: none; cursor: pointer; padding: 4px; display: flex; align-items: center; justify-content: center; color: #4CAF50; opacity: 0.7; transition: opacity 0.2s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'" title="Copy to clipboard">
