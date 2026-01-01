@@ -761,8 +761,8 @@
                 if (totalCols > 0) {
                     const isCollapsed = window.collapsedLevels.has(difficulty);
                     const actualCols = isCollapsed ? 1 : totalCols;
-                    const checkbox = `<input type="checkbox" class="collapse-level-checkbox" data-difficulty="${difficulty}" ${isCollapsed ? 'checked' : ''} style="margin-right: 4px; cursor: pointer;" onclick="event.stopPropagation(); toggleLevelCollapse(${difficulty});">`;
-                    headerRow1.innerHTML += `<th class="sortable" data-column="${startColIndex}" data-type="difficulty" data-difficulty="${difficulty}" colspan="${actualCols}" style="padding: 3px 6px; text-align: center; background-color: #4CAF50; color: white; cursor: pointer;">${checkbox}Level ${difficulty}</th>`;
+                    const checkbox = `<input type="checkbox" class="collapse-level-checkbox" data-difficulty="${difficulty}" ${isCollapsed ? 'checked' : ''} style="margin-right: 6px; cursor: pointer; vertical-align: middle;" onclick="event.stopPropagation(); toggleLevelCollapse(${difficulty});">`;
+                    headerRow1.innerHTML += `<th class="sortable" data-column="${startColIndex}" data-type="difficulty" data-difficulty="${difficulty}" colspan="${actualCols}" style="padding: 3px 6px; text-align: left; background-color: #4CAF50; color: white; cursor: pointer;">${checkbox}<span style="vertical-align: middle;">Level ${difficulty}</span></th>`;
                     // Store metadata for all columns in this difficulty group
                     if (!isCollapsed) {
                         difficultyGroup.forEach((ocGroup, ocName) => {
@@ -809,8 +809,8 @@
                     const isCollapsed = window.collapsedOCNames.has(`${difficulty}_${ocName}`);
                     const actualCols = isCollapsed ? 1 : sortedPositionIds.length;
                     const escapedOCName = ocName.replace(/'/g, "\\'").replace(/"/g, '&quot;');
-                    const checkbox = `<input type="checkbox" class="collapse-oc-checkbox" data-difficulty="${difficulty}" data-oc-name="${escapedOCName}" ${isCollapsed ? 'checked' : ''} style="margin-right: 4px; cursor: pointer;" onclick="event.stopPropagation(); toggleOCCollapse(${difficulty}, '${escapedOCName}');">`;
-                    headerRow2.innerHTML += `<th class="sortable" data-column="${startColIndex}" data-type="oc_name" data-difficulty="${difficulty}" data-oc-name="${ocName.replace(/"/g, '&quot;')}" colspan="${actualCols}" style="padding: 3px 6px; text-align: center; background-color: #4CAF50; color: white; cursor: pointer;">${checkbox}${ocName}</th>`;
+                    const checkbox = `<input type="checkbox" class="collapse-oc-checkbox" data-difficulty="${difficulty}" data-oc-name="${escapedOCName}" ${isCollapsed ? 'checked' : ''} style="margin-right: 6px; cursor: pointer; vertical-align: middle;" onclick="event.stopPropagation(); toggleOCCollapse(${difficulty}, '${escapedOCName}');">`;
+                    headerRow2.innerHTML += `<th class="sortable" data-column="${startColIndex}" data-type="oc_name" data-difficulty="${difficulty}" data-oc-name="${ocName.replace(/"/g, '&quot;')}" colspan="${actualCols}" style="padding: 3px 6px; text-align: left; background-color: #4CAF50; color: white; cursor: pointer;">${checkbox}<span style="vertical-align: middle;">${ocName}</span></th>`;
                     columnIndex += actualCols;
                 });
             });
