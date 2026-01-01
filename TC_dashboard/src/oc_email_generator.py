@@ -796,10 +796,155 @@ class OCEmailGenerator:
                         logger.debug(f"Assigned new member {member_name} to Level 1 OC {oc_id}")
                         break
 
+        # Handle members who couldn't be assigned to their recommended level
+        # Try to assign them to lower levels where they can meet requirements
+        unassigned_members = [m for m in members_sorted if m['member_name'] not in assigned_members]
+        
+        for member in unassigned_members:
+            member_name = member['member_name']
+            member_id = member['member_id']
+            has_oc_history = member_id in members_with_oc_history
+            
+            if not has_oc_history:
+                continue  # Already handled in Level 1 logic
+            
+            member_perf = member_performance.get(member_name, {})
+            member_max_oc = member_perf.get('max_recommended_oc')
+            member_level_rates = member_perf.get('level_rates', {})
+            
+            if member_max_oc is None:
+                continue
+            
+            # Try to find a lower level where member can meet requirements
+            for level in range(member_max_oc - 1, 0, -1):
+                level_rate = member_level_rates.get(level)
+                if level_rate is None:
+                    continue
+                
+                # Check if rate is in valid range (80-90)
+                try:
+                    rate_num = float(level_rate)
+                    if 0 <= rate_num <= 1:
+                        rate_num = rate_num * 100
+                    if not (80 <= rate_num <= 90):
+                        continue
+                except (ValueError, TypeError):
+                    continue
+                
+                # Find an OC at this level
+                for oc in ocs:
+                    if is_excluded_oc(oc):
+                        continue
+                    
+                    oc_difficulty = oc.get('difficulty')
+                    if oc_difficulty is None:
+                        continue
+                    
+                    try:
+                        oc_difficulty = int(oc_difficulty)
+                    except (ValueError, TypeError):
+                        continue
+                    
+                    if oc_difficulty != level:
+                        continue
+                    
+                    oc_id = oc['oc_id']
+                    
+                    # Check if OC has space
+                    if oc_id not in assignments:
+                        assignments[oc_id] = []
+                    
+                    total_slots = oc.get('total_slots', 0)
+                    filled_slots = oc.get('filled_slots', 0)
+                    assigned_count = len(assignments[oc_id])
+                    available_slots = total_slots - filled_slots - assigned_count
+                    
+                    if available_slots > 0:
+                        assignments[oc_id].append(member_name)
+                        assigned_members.add(member_name)
+                        logger.info(f"Assigned {member_name} to lower level {level} OC {oc_id} (couldn't meet requirements for level {member_max_oc})")
+                        break
+                
+                if member_name in assigned_members:
+                    break
+        
+        # Track members who need higher level OCs spawned
+        # Members who have max_recommended_oc but no available OCs at that level
+        spawn_suggestions = {}  # level -> [member_names]
+        
+        for member in members_sorted:
+            member_name = member['member_name']
+            if member_name in assigned_members:
+                continue
+            
+            member_id = member['member_id']
+            has_oc_history = member_id in members_with_oc_history
+            if not has_oc_history:
+                continue
+            
+            member_perf = member_performance.get(member_name, {})
+            member_max_oc = member_perf.get('max_recommended_oc')
+            member_level_rates = member_perf.get('level_rates', {})
+            
+            if member_max_oc is None:
+                continue
+            
+            # Check if there are any available OCs at this level
+            has_available_oc = False
+            for oc in ocs:
+                if is_excluded_oc(oc):
+                    continue
+                
+                oc_difficulty = oc.get('difficulty')
+                if oc_difficulty is None:
+                    continue
+                
+                try:
+                    oc_difficulty = int(oc_difficulty)
+                except (ValueError, TypeError):
+                    continue
+                
+                if oc_difficulty != member_max_oc:
+                    continue
+                
+                # Check if member can meet requirements
+                level_rate = member_level_rates.get(oc_difficulty)
+                if level_rate is None:
+                    continue
+                
+                try:
+                    rate_num = float(level_rate)
+                    if 0 <= rate_num <= 1:
+                        rate_num = rate_num * 100
+                    if not (80 <= rate_num <= 90):
+                        continue
+                except (ValueError, TypeError):
+                    continue
+                
+                # Check if OC has space
+                oc_id = oc['oc_id']
+                total_slots = oc.get('total_slots', 0)
+                filled_slots = oc.get('filled_slots', 0)
+                assigned_count = len(assignments.get(oc_id, []))
+                available_slots = total_slots - filled_slots - assigned_count
+                
+                if available_slots > 0:
+                    has_available_oc = True
+                    break
+            
+            # If no available OC at recommended level, suggest spawning
+            if not has_available_oc:
+                if member_max_oc not in spawn_suggestions:
+                    spawn_suggestions[member_max_oc] = []
+                spawn_suggestions[member_max_oc].append(member_name)
+        
         # Log unassigned members for debugging
         unassigned = [m['member_name'] for m in members_sorted if m['member_name'] not in assigned_members]
         if unassigned:
             logger.info(f"Unassigned members ({len(unassigned)}): {', '.join(unassigned)}")
+        
+        if spawn_suggestions:
+            logger.info(f"OC spawn suggestions: {spawn_suggestions}")
 
         # Generate email text using form letter format
         email_lines = []
