@@ -1335,9 +1335,14 @@ class OCEmailGenerator:
                         level_oc_names[level].append(oc_name)
             
             # For levels that need spawning, get OC names from historical data
-            needed_levels = sorted(spawn_suggestions.keys(), reverse=True)
+            # Include both unassigned members and members assigned below max
+            needed_levels = sorted(all_needed_levels, reverse=True)
             for level in needed_levels:
-                member_names = spawn_suggestions[level]
+                # Combine members from both sources
+                member_names = list(set(
+                    (spawn_suggestions.get(level, [])) + 
+                    (members_assigned_below_max.get(level, []))
+                ))
                 if not member_names:
                     continue
                 
