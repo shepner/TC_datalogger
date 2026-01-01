@@ -752,6 +752,10 @@
                 }
                 
                 const row = document.createElement('tr');
+                // Debug: Log max_recommended_oc for specific members
+                if (member.member_name === 'Acnar' || member.member_name === 'makers_mark_man' || member.member_name === 'Raptor_RSA') {
+                    console.log(`Creating row for ${member.member_name}: member.max_recommended_oc = ${member.max_recommended_oc}, type: ${typeof member.max_recommended_oc}`);
+                }
                 const rowData = { 
                     member_name: member.member_name, 
                     member: member, // Store full member object for history access
@@ -764,6 +768,10 @@
                     cellMetadata: [] // Store { columnKey, difficulty, ocName, positionId, position } for each cell
                 };
                 const maxOcLevel = member.max_recommended_oc || null;
+                // Debug: Log what we're displaying
+                if (member.member_name === 'Acnar' || member.member_name === 'makers_mark_man' || member.member_name === 'Raptor_RSA') {
+                    console.log(`  maxOcLevel = ${maxOcLevel}, maxOcDisplay will be: ${maxOcLevel !== null ? maxOcLevel : '—'}`);
+                }
                 const maxOcClass = maxOcLevel && maxOcLevel >= 1 && maxOcLevel <= 10 ? `oc-level-${maxOcLevel}` : '';
                 const maxOcDisplay = maxOcLevel !== null ? maxOcLevel : '—';
                 
