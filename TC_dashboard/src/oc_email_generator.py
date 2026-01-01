@@ -1205,6 +1205,7 @@ class OCEmailGenerator:
         
         if spawn_suggestions:
             logger.info(f"OC spawn suggestions: {spawn_suggestions}")
+            logger.info(f"Will build needed_ocs list for levels: {list(spawn_suggestions.keys())}")
 
         # Generate email text using form letter format
         email_lines = []
@@ -1376,6 +1377,9 @@ class OCEmailGenerator:
 
 
         email_text = "\n".join(email_lines)
+        
+        # Log what we're returning
+        logger.info(f"Returning needed_ocs: {needed_ocs}")
         
         # Return both email text and needed OCs
         return {
