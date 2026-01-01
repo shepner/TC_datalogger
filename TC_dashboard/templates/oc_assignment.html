@@ -681,7 +681,7 @@
             
             // Set default summarize mode to "Level" when data is first loaded
             const levelRadio = document.querySelector('input[name="summarize_mode"][value="level"]');
-            if (levelRadio && !document.querySelector('input[name="summarize_mode"]:checked')) {
+            if (levelRadio) {
                 levelRadio.checked = true;
                 handleSummarizeMode('level');
             }
