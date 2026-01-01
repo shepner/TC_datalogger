@@ -364,6 +364,7 @@
         let pivotColumnMap = new Map(); // Map column index to column key (difficulty_oc_name_position_id)
         let pivotRows = []; // Store row data for sorting
         let pivotHeaderMetadata = []; // Store metadata for each column: { difficulty, oc_name, position_id, columnIndex }
+        let membersMap = null; // Store the members Map so renderPivotTableBody can access it
 
         function toggleView() {
             const viewMode = document.querySelector('input[name="view_mode"]:checked').value;
@@ -688,6 +689,7 @@
             const tbody = document.getElementById('pivot-body');
             tbody.innerHTML = '';
             pivotRows = []; // Reset row data
+            membersMap = members; // Store members Map globally for renderPivotTableBody
 
             // Sort members by name
             const sortedMembers = Array.from(members.values()).sort((a, b) => 
@@ -706,7 +708,17 @@
                 }
                 
                 const row = document.createElement('tr');
-                const rowData = { member_name: member.member_name, oc_count_30d: member.oc_count_30d || 0, oc_count_7d: member.oc_count_7d || 0, is_in_oc: member.is_in_oc || false, days_in_faction: member.days_in_faction || 0, max_recommended_oc: member.max_recommended_oc || null, cells: [] };
+                const rowData = { 
+                    member_name: member.member_name, 
+                    member: member, // Store full member object for history access
+                    oc_count_30d: member.oc_count_30d || 0, 
+                    oc_count_7d: member.oc_count_7d || 0, 
+                    is_in_oc: member.is_in_oc || false, 
+                    days_in_faction: member.days_in_faction || 0, 
+                    max_recommended_oc: member.max_recommended_oc || null, 
+                    cells: [],
+                    cellMetadata: [] // Store { columnKey, difficulty, ocName, positionId, position } for each cell
+                };
                 const maxOcLevel = member.max_recommended_oc || null;
                 const maxOcClass = maxOcLevel && maxOcLevel >= 1 && maxOcLevel <= 10 ? `oc-level-${maxOcLevel}` : '';
                 const maxOcDisplay = maxOcLevel !== null ? maxOcLevel : '—';
@@ -733,6 +745,14 @@
                             
                             // Store cell value for sorting
                             rowData.cells.push(checkpointRate !== undefined ? checkpointRate : null);
+                            // Store cell metadata for event handler attachment
+                            rowData.cellMetadata.push({
+                                columnKey: columnKey,
+                                difficulty: difficulty,
+                                ocName: ocName,
+                                positionId: positionId,
+                                position: ocGroup.get(positionId).position
+                            });
                             
                             if (checkpointRate !== undefined) {
                                 // Color coding: red for < 80 or > 90, no color for 80-90 range
@@ -1001,7 +1021,62 @@
                         if (checkpointRate < 80 || checkpointRate > 90) {
                             cellClass = 'cell-red';
                         }
-                        row.innerHTML += `<td class="${cellClass}" style="padding: 6px; border: 1px solid #ddd; border-right: 1px solid #ddd; text-align: center; font-weight: bold;">${checkpointRate}</td>`;
+                        
+                        const cell = document.createElement('td');
+                        cell.className = cellClass;
+                        cell.style.cssText = 'padding: 6px; border: 1px solid #ddd; border-right: 1px solid #ddd; text-align: center; font-weight: bold; cursor: pointer; position: relative;';
+                        cell.textContent = checkpointRate;
+                        
+                        // Get cell metadata and member for event handlers
+                        const metadata = rowData.cellMetadata[idx];
+                        const member = rowData.member;
+                        if (metadata && member && member.history) {
+                            const cellHistory = member.history.get(metadata.columnKey);
+                            if (cellHistory && cellHistory.length > 0) {
+                                // Store history reference in closure
+                                const history = cellHistory;
+                                const difficulty = metadata.difficulty;
+                                const ocName = metadata.ocName;
+                                const positionId = metadata.positionId;
+                                const positionName = metadata.position;
+                                
+                                // Add hover tooltip with historical data
+                                let tooltipTimeout = null;
+                                cell.addEventListener('mouseenter', function(e) {
+                                    console.log('MOUSE ENTER EVENT FIRED!', rowData.member_name, metadata.columnKey);
+                                    e.stopPropagation();
+                                    
+                                    if (history && history.length > 0) {
+                                        tooltipTimeout = setTimeout(() => {
+                                            console.log('Calling showHistoryTooltip with', history.length, 'records');
+                                            showHistoryTooltip(e.target, history, difficulty, ocName, positionName);
+                                        }, 200);
+                                    }
+                                }, true);
+                                
+                                cell.addEventListener('mouseleave', function() {
+                                    if (tooltipTimeout) {
+                                        clearTimeout(tooltipTimeout);
+                                        tooltipTimeout = null;
+                                    }
+                                    hideHistoryTooltip();
+                                }, true);
+                                
+                                // Add click handler for full modal
+                                cell.addEventListener('click', function(e) {
+                                    e.stopPropagation();
+                                    if (tooltipTimeout) {
+                                        clearTimeout(tooltipTimeout);
+                                    }
+                                    hideHistoryTooltip();
+                                    if (history && history.length > 0) {
+                                        showHistoryModal(rowData.member_name, metadata.columnKey, difficulty, ocName, positionId, positionName, history);
+                                    }
+                                }, true);
+                            }
+                        }
+                        
+                        row.appendChild(cell);
                     } else {
                         row.innerHTML += '<td style="padding: 6px; border: 1px solid #ddd; border-right: 1px solid #ddd; text-align: center; color: #ccc;">—</td>';
                     }
