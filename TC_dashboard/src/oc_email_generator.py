@@ -805,7 +805,7 @@ class OCEmailGenerator:
                     
                     # Debug logging for problematic assignments
                     if (member_name == "DubZzZ" and oc_name_lower == "leave no trace") or \
-                       (member_name in ["Adilon_Scorpian", "Hiyori"] and (oc_difficulty < 4 or oc_difficulty == 4)):
+                       (member_name in ["Adilon_Scorpian", "Hiyori"] and oc_difficulty >= 3):
                         logger.info(f"DEBUG {member_name}/{oc_name} (Level {oc_difficulty}): member_oc_specific_rates has {len(member_oc_specific_rates)} keys")
                         logger.info(f"DEBUG {member_name}/{oc_name}: oc_name = '{oc_name}', oc_name_lower = '{oc_name_lower}'")
                         logger.info(f"DEBUG {member_name}/{oc_name}: matching_keys = {matching_keys}")
