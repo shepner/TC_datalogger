@@ -1504,10 +1504,16 @@
                     if (!status) {
                         status = 'Unknown';
                     }
-                    // Get crime_id - handle both 'crime_id' and 'id' fields
+                    // Get crime_id - handle multiple possible field names
                     let crimeId = record.crime_id;
                     if (!crimeId && record.id) {
                         crimeId = record.id;
+                    }
+                    // Debug: Log if crime_id is missing
+                    if (!crimeId && index === 0) {
+                        console.log('Missing crime_id in modal for', memberName, columnKey);
+                        console.log('  Record keys:', Object.keys(record));
+                        console.log('  Full record:', JSON.stringify(record, null, 2));
                     }
                     if (!crimeId) {
                         crimeId = '—';
