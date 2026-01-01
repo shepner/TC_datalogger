@@ -670,28 +670,42 @@ class OCEmailGenerator:
                 else:
                     # Check if member has valid checkpoint_pass_rate for this SPECIFIC OC
                     # Member must have a position with checkpoint_pass_rate in 80-90 range for this specific OC
-                    oc_name = oc.get('oc_name', '')
+                    oc_name = oc.get('oc_name', '').strip()
                     member_oc_specific_rates = member_oc_rates.get(member_name, {})
                     
                     # Check if member has any position for this specific OC with rate in 80-90
                     has_valid_oc_rate = False
+                    has_oc_specific_data = False
+                    best_oc_rate = None
+                    
                     for key, rate in member_oc_specific_rates.items():
-                        if key.startswith(oc_name + '_'):
+                        # Key format is "oc_name_position_id", so check if it starts with oc_name
+                        if key.lower().startswith(oc_name.lower() + '_'):
+                            has_oc_specific_data = True
                             try:
                                 rate_num = float(rate)
                                 if 0 <= rate_num <= 1:
                                     rate_num = rate_num * 100
+                                
+                                # Track best rate for this OC
+                                if best_oc_rate is None or rate_num > best_oc_rate:
+                                    best_oc_rate = rate_num
+                                
                                 if 80 <= rate_num <= 90:
                                     has_valid_oc_rate = True
-                                    break
                             except (ValueError, TypeError):
                                 continue
                     
-                    if not has_valid_oc_rate:
-                        # Fallback: check if member has valid rate for this difficulty level overall
+                    # If we have OC-specific data and member can't meet requirements, skip this OC
+                    if has_oc_specific_data and not has_valid_oc_rate:
+                        logger.info(f"Skipping {member_name} for Level {oc_difficulty} OC '{oc_name}': has OC-specific data with best rate {best_oc_rate} (not in 80-90 range)")
+                        continue
+                    
+                    # If no OC-specific data, fallback to level-based check
+                    if not has_oc_specific_data:
                         level_rate = member_level_rates.get(oc_difficulty)
                         if level_rate is None:
-                            logger.debug(f"Skipping {member_name} for Level {oc_difficulty} OC {oc_name}: no valid rate in 80-90 range for this OC or level")
+                            logger.debug(f"Skipping {member_name} for Level {oc_difficulty} OC {oc_name}: no valid rate in 80-90 range for this level")
                             continue
                         
                         # Ensure rate is in percentage format
@@ -753,25 +767,39 @@ class OCEmailGenerator:
                         continue
                     
                     # Check if member has valid checkpoint_pass_rate for this SPECIFIC OC
-                    oc_name = oc.get('oc_name', '')
+                    oc_name = oc.get('oc_name', '').strip()
                     member_oc_specific_rates = member_oc_rates.get(member_name, {})
                     
                     # Check if member has any position for this specific OC with rate in 80-90
                     has_valid_oc_rate = False
+                    has_oc_specific_data = False
+                    best_oc_rate = None
+                    
                     for key, rate in member_oc_specific_rates.items():
-                        if key.startswith(oc_name + '_'):
+                        # Key format is "oc_name_position_id", so check if it starts with oc_name
+                        if key.lower().startswith(oc_name.lower() + '_'):
+                            has_oc_specific_data = True
                             try:
                                 rate_num = float(rate)
                                 if 0 <= rate_num <= 1:
                                     rate_num = rate_num * 100
+                                
+                                # Track best rate for this OC
+                                if best_oc_rate is None or rate_num > best_oc_rate:
+                                    best_oc_rate = rate_num
+                                
                                 if 80 <= rate_num <= 90:
                                     has_valid_oc_rate = True
-                                    break
                             except (ValueError, TypeError):
                                 continue
                     
-                    if not has_valid_oc_rate:
-                        # Fallback: check if member has valid rate for this difficulty level overall
+                    # If we have OC-specific data and member can't meet requirements, skip this OC
+                    if has_oc_specific_data and not has_valid_oc_rate:
+                        logger.info(f"Fallback: Skipping {member_name} for Level {oc_difficulty} OC '{oc_name}': has OC-specific data with best rate {best_oc_rate} (not in 80-90 range)")
+                        continue
+                    
+                    # If no OC-specific data, fallback to level-based check
+                    if not has_oc_specific_data:
                         level_rate = member_level_rates.get(oc_difficulty)
                         if level_rate is None:
                             continue
