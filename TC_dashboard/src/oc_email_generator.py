@@ -579,6 +579,7 @@ class OCEmailGenerator:
 
         # Sort OCs by priority for active members
         # Priority: OCs that already have members and are starting soon, or OCs expiring >1 day away
+        # Also sort by difficulty (higher first) so members get assigned to highest level they can do
         now = datetime.now(timezone.utc)
         ocs_for_active = []
         ocs_for_inactive = []
@@ -648,7 +649,8 @@ class OCEmailGenerator:
             member_max_oc = member_perf.get('max_recommended_oc')
             member_level_rates = member_perf.get('level_rates', {})
             
-            # Try to assign member to first available OC (excluding excluded OCs)
+            # Try to assign member to highest level OC they can do (OCs are already sorted by difficulty descending)
+            # This ensures members get assigned to their max recommended level, not just the first available
             for oc in oc_list:
                 # Skip excluded OCs
                 if is_excluded_oc(oc):
@@ -753,7 +755,7 @@ class OCEmailGenerator:
                 if available_slots > 0:
                     assignments[oc_id].append(member_name)
                     assigned_members.add(member_name)
-                    logger.debug(f"Assigned {member_name} to OC {oc_id} (Level {oc_difficulty})")
+                    logger.info(f"Assigned {member_name} to OC {oc_id} ({oc.get('oc_name')}, Level {oc_difficulty})")
                     break
             
             # If member wasn't assigned and has OC history, try all OCs (not just activity-based list)
