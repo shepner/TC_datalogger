@@ -54,18 +54,18 @@ class OCEmailGenerator:
 
     def get_oc_participation_counts(self) -> Dict[int, Dict[str, Any]]:
         """
-        Get OC participation counts for all members (30-day and 7-day).
+        Get OC participation counts for all members (30-day and 7-day) in a single query.
 
         Returns:
-            Dictionary mapping member_id to participation data
+            Dictionary mapping member_id to participation data with oc_count_30d and oc_count_7d
         """
-        # Query for OC participation - handle INT64 timestamp fields
-        # If there are TIMESTAMP fields, they will cause an error which we'll catch
-        query_30d = """
+        # Combined query for both 30d and 7d participation counts - more efficient than two separate queries
+        query = """
         WITH oc_participations AS (
           SELECT DISTINCT
             slot.user.id AS member_id,
-            crime.id AS crime_id
+            crime.id AS crime_id,
+            TIMESTAMP_SECONDS(SAFE_CAST(crime.executed_at AS INT64)) AS executed_at
           FROM
             `torncity-402423.torn_data.v2_faction_40832_crimes-raw` AS crime,
             UNNEST(crime.slots) AS slot
@@ -76,7 +76,14 @@ class OCEmailGenerator:
         )
         SELECT
           oc.member_id,
-          COUNT(DISTINCT oc.crime_id) AS oc_count_30d
+          COUNT(DISTINCT CASE 
+            WHEN oc.executed_at >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 30 DAY)
+            THEN oc.crime_id
+          END) AS oc_count_30d,
+          COUNT(DISTINCT CASE 
+            WHEN oc.executed_at >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 7 DAY)
+            THEN oc.crime_id
+          END) AS oc_count_7d
         FROM
           oc_participations AS oc
         GROUP BY
@@ -84,22 +91,22 @@ class OCEmailGenerator:
         """
         
         try:
-            results_30d = self.bq.execute_query(query_30d)
+            results = self.bq.execute_query(query)
         except Exception as e:
             error_str = str(e)
             if 'TIMESTAMP' in error_str and 'INT64' in error_str:
                 logger.warning("OC participation query failed due to mixed timestamp types. Returning empty results.")
                 # Return empty results if we can't handle the mixed types
-                results_30d = []
+                results = []
             else:
                 raise
         
         # Convert to dictionary
         participation = {}
-        for row in results_30d:
+        for row in results:
             participation[row['member_id']] = {
                 'oc_count_30d': row.get('oc_count_30d', 0),
-                'oc_count_7d': 0  # Will update if we query 7d
+                'oc_count_7d': row.get('oc_count_7d', 0)
             }
         
         return participation
@@ -612,14 +619,11 @@ class OCEmailGenerator:
                 return "No available OCs found. Please create new OCs first."
 
         # Enrich members with participation data and activity status
-        # Get 7-day counts separately and merge them
-        participation_7d = self.get_oc_participation_counts_7d()
-        participation_7d_dict = {row['member_id']: row.get('oc_count_7d', 0) for row in participation_7d}
-        
+        # Participation data now includes both 30d and 7d counts from a single query
         for member in members:
             member_id = member['member_id']
             member['oc_count_30d'] = participation.get(member_id, {}).get('oc_count_30d', 0)
-            member['oc_count_7d'] = participation_7d_dict.get(member_id, 0)
+            member['oc_count_7d'] = participation.get(member_id, {}).get('oc_count_7d', 0)
             
             # Determine if active (within 24 hours)
             last_action = member.get('last_action_timestamp')
