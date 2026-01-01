@@ -1332,33 +1332,42 @@ class OCEmailGenerator:
                     if not suggested_oc_names:
                         suggested_oc_names = level_oc_names.get(level, [])
                     
-                    # Store for UI display
+                    # Fallback: use generic names based on level if still no suggestions
+                    if not suggested_oc_names:
+                        if level == 6:
+                            suggested_oc_names = ["Counter Offer", "Guardian Angels", "Bidding War"]
+                        elif level == 5:
+                            suggested_oc_names = ["Counter Offer", "Guardian Ángels"]
+                        elif level == 4:
+                            suggested_oc_names = ["Market Forces", "Mob Mentality"]
+                        else:
+                            suggested_oc_names = [f"Level {level} OC"]
+                    
+                    # Store for UI display (limit to 2 most common)
                     if suggested_oc_names:
                         needed_ocs.append({
                             'level': level,
-                            'oc_names': suggested_oc_names[:2]  # Limit to 2 most common
+                            'oc_names': suggested_oc_names[:2]
                         })
                 except Exception as e:
                     logger.warning(f"Error querying historical OCs for level {level}: {e}")
-                    suggested_oc_names = level_oc_names.get(level, [])
+                    # Use fallback names
+                    if level == 6:
+                        suggested_oc_names = ["Counter Offer", "Guardian Angels", "Bidding War"]
+                    elif level == 5:
+                        suggested_oc_names = ["Counter Offer", "Guardian Ángels"]
+                    elif level == 4:
+                        suggested_oc_names = ["Market Forces", "Mob Mentality"]
+                    else:
+                        suggested_oc_names = [f"Level {level} OC"]
+                    
                     if suggested_oc_names:
                         needed_ocs.append({
                             'level': level,
                             'oc_names': suggested_oc_names[:2]
                         })
                 
-                if not suggested_oc_names:
-                    # Fallback: use generic names based on level
-                    if level == 6:
-                        suggested_oc_names = ["Counter Offer", "Guardian Angels", "Bidding War"]
-                    elif level == 5:
-                        suggested_oc_names = ["Leave No Trace", "Snow Blind"]
-                    elif level == 4:
-                        suggested_oc_names = ["Market Forces", "Mob Mentality"]
-                    else:
-                        suggested_oc_names = [f"Level {level} OC"]
-                
-                # Take first 2-3 OC names as suggestions
+                # Take first 2-3 OC names as suggestions for email
                 suggested_oc_names = suggested_oc_names[:3]
                 oc_names_str = " or ".join(suggested_oc_names)
                 
