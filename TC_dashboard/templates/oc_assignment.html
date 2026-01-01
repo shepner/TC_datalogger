@@ -252,8 +252,8 @@
                 <!-- Pivot View -->
                 <div id="pivot-container">
                     <div style="max-height: 70vh; overflow-y: auto; overflow-x: auto; border: 1px solid #ddd; margin-top: 5px;">
-                        <table id="pivot-table" style="width: 100%; border-collapse: collapse; border-spacing: 0; font-size: 11px;">
-                            <thead id="pivot-header" style="position: sticky; top: 0; background-color: #4CAF50; color: white; z-index: 20;">
+                        <table id="pivot-table" style="width: 100%; border-collapse: separate; border-spacing: 0; font-size: 11px;">
+                            <thead id="pivot-header" style="background-color: #4CAF50; color: white;">
                             </thead>
                             <tbody id="pivot-body">
                             </tbody>
@@ -1069,7 +1069,7 @@
                 }
                 
                 if (totalCols > 0) {
-                    headerRow1.innerHTML += `<th class="sortable" data-column="${startColIndex}" data-type="difficulty" data-difficulty="${difficulty}" colspan="${totalCols}" rowspan="${isLevelCollapsed ? '3' : '1'}" style="padding: 3px 6px; position: sticky; top: 0; text-align: center; background-color: #4CAF50; color: white; cursor: pointer;">Level ${difficulty}</th>`;
+                    headerRow1.innerHTML += `<th class="sortable" data-column="${startColIndex}" data-type="difficulty" data-difficulty="${difficulty}" colspan="${totalCols}" rowspan="${isLevelCollapsed ? '3' : '1'}" style="padding: 3px 6px; position: sticky; text-align: center; background-color: #4CAF50; color: white; cursor: pointer;">Level ${difficulty}</th>`;
                 }
             });
             header.appendChild(headerRow1);
@@ -1135,32 +1135,35 @@
             header.appendChild(headerRow3);
             
             // Calculate and set top offsets for each header row to make them stick properly
-            // First, we need to measure the actual row heights after they're rendered
-            setTimeout(() => {
-                const rows = header.querySelectorAll('tr');
-                let cumulativeTop = 0;
-                rows.forEach((row, index) => {
-                    if (index === 0) {
-                        // First row sticks at top: 0
-                        cumulativeTop = 0;
-                    } else {
-                        // Subsequent rows stick below previous rows
-                        const prevRow = rows[index - 1];
-                        cumulativeTop += prevRow.offsetHeight;
-                    }
-                    row.querySelectorAll('th').forEach(th => {
-                        const currentTop = th.style.top;
-                        // Only update if it doesn't already have a specific top value (for sticky left columns)
-                        if (!currentTop || currentTop === '0px') {
-                            th.style.top = cumulativeTop + 'px';
+            // We need to wait for the DOM to fully render to get accurate row heights
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    const rows = header.querySelectorAll('tr');
+                    let cumulativeTop = 0;
+                    rows.forEach((row, index) => {
+                        if (index === 0) {
+                            // First row sticks at top: 0
+                            cumulativeTop = 0;
                         } else {
-                            // For sticky left columns, combine top and left
-                            const leftValue = th.style.left;
-                            th.style.top = cumulativeTop + 'px';
+                            // Subsequent rows stick below previous rows
+                            const prevRow = rows[index - 1];
+                            cumulativeTop += prevRow.offsetHeight;
                         }
+                        row.querySelectorAll('th').forEach(th => {
+                            // Always set position sticky and top value
+                            th.style.position = 'sticky';
+                            // For sticky left columns, preserve left but update top
+                            if (th.style.left) {
+                                // This is a sticky left column, keep left and set top
+                                th.style.top = cumulativeTop + 'px';
+                            } else {
+                                // Regular column, just set top
+                                th.style.top = cumulativeTop + 'px';
+                            }
+                        });
                     });
                 });
-            }, 0);
+            });
             
             // Attach sort handlers to all sortable headers
             attachPivotSortHandlers();
