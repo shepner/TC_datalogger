@@ -2025,21 +2025,35 @@
             }
             
             // Sort data: date descending, then OC name ascending (grouped)
+            // Normalize dates to date-only for grouping, but use full timestamp for ordering
             const sortedData = [...allData].sort((a, b) => {
-                // First sort by date (descending - most recent first)
+                // Get full timestamps for primary sort
                 const dateA = a.executed_at ? new Date(a.executed_at).getTime() : 0;
                 const dateB = b.executed_at ? new Date(b.executed_at).getTime() : 0;
-                if (dateB !== dateA) {
-                    return dateB - dateA; // Descending
+                
+                // Normalize to date-only (midnight) for grouping purposes
+                const dateOnlyA = a.executed_at ? new Date(a.executed_at).setHours(0, 0, 0, 0) : 0;
+                const dateOnlyB = b.executed_at ? new Date(b.executed_at).setHours(0, 0, 0, 0) : 0;
+                
+                // First sort by date-only (descending - most recent first)
+                if (dateOnlyB !== dateOnlyA) {
+                    return dateOnlyB - dateOnlyA; // Descending
                 }
-                // If dates are equal, sort by OC name (ascending) to group them
+                
+                // If same date (date-only), sort by OC name (ascending) to group them
                 const ocNameA = (a.ocName || '').toLowerCase();
                 const ocNameB = (b.ocName || '').toLowerCase();
                 const ocCompare = ocNameA.localeCompare(ocNameB);
                 if (ocCompare !== 0) {
                     return ocCompare;
                 }
-                // If same date and same OC name, sort by position for consistency
+                
+                // If same date and same OC name, sort by full timestamp (descending) for most recent first
+                if (dateB !== dateA) {
+                    return dateB - dateA; // Descending
+                }
+                
+                // If same date, same OC name, same timestamp, sort by position for consistency
                 const posA = (a.position || a.positionId || '').toLowerCase();
                 const posB = (b.position || b.positionId || '').toLowerCase();
                 return posA.localeCompare(posB);
