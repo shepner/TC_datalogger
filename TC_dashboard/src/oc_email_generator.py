@@ -386,12 +386,20 @@ class OCEmailGenerator:
                     'max_recommended_oc': None
                 }
             
-            # Track best rate per level
+            # Track best rate per level (but only if it's in the valid 80-90 range)
+            # This ensures we only consider rates that meet requirements
             if difficulty not in member_data[member_name]['level_rates']:
-                member_data[member_name]['level_rates'][difficulty] = checkpoint_rate
-            else:
-                if checkpoint_rate > member_data[member_name]['level_rates'][difficulty]:
+                # Only store if in valid range, otherwise store None to indicate no valid rate
+                if 80 <= checkpoint_rate <= 90:
                     member_data[member_name]['level_rates'][difficulty] = checkpoint_rate
+                else:
+                    member_data[member_name]['level_rates'][difficulty] = None
+            else:
+                current_rate = member_data[member_name]['level_rates'][difficulty]
+                # Only update if new rate is better AND in valid range
+                if 80 <= checkpoint_rate <= 90:
+                    if current_rate is None or checkpoint_rate > current_rate:
+                        member_data[member_name]['level_rates'][difficulty] = checkpoint_rate
             
             # Track highest level
             if member_name not in member_highest_level:
@@ -673,12 +681,15 @@ class OCEmailGenerator:
                     except (ValueError, TypeError):
                         continue
                     
-                    # Check if rate is in valid range (80-90)
+                    # STRICT CHECK: Rate must be in valid range (80-90)
+                    # If rate is below 80, member cannot do this level
                     if not (80 <= rate_num <= 90):
+                        logger.debug(f"Skipping {member_name} for Level {oc_difficulty} OC {oc.get('oc_name')}: rate {rate_num} not in 80-90 range")
                         continue
                     
                     # Check if OC difficulty is <= max_recommended_oc
                     if member_max_oc is not None and oc_difficulty > member_max_oc:
+                        logger.debug(f"Skipping {member_name} for Level {oc_difficulty} OC {oc.get('oc_name')}: exceeds max_recommended_oc {member_max_oc}")
                         continue
                 
                 oc_id = oc['oc_id']
