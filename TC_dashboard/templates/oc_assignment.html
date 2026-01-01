@@ -844,7 +844,7 @@
                 if (member.member_name === 'Acnar' || member.member_name === 'makers_mark_man' || member.member_name === 'Raptor_RSA') {
                     console.log(`  FINAL (displayPivotView): Inserting Max OC cell with maxOcDisplay = "${maxOcDisplay}" for ${member.member_name}, member.max_recommended_oc = ${member.max_recommended_oc}`);
                 }
-                row.innerHTML += `<td class="${maxOcClass}" style="padding: 3px 4px; border: 1px solid #ddd; border-right: 1px solid #ddd; position: sticky; left: 250px; ${maxOcBgColor} text-align: center; font-weight: bold; width: 50px; min-width: 50px; max-width: 50px; z-index: 10;">${maxOcDisplay}</td>`;
+                row.innerHTML += `<td class="${maxOcClass}" style="padding: 2px 4px; border: 1px solid #ddd; border-right: 1px solid #ddd; position: sticky; left: 250px; ${maxOcBgColor} text-align: center; font-weight: bold; width: 50px; min-width: 50px; max-width: 50px; z-index: 10;">${maxOcDisplay}</td>`;
                 
                 sortedDifficulties.forEach(difficulty => {
                     const difficultyGroup = columnGroups.get(difficulty);
@@ -1323,15 +1323,15 @@
                 else progressClass = 'cell-red';
 
                 row.innerHTML = `
-                    <td style="padding: 3px 4px; border: 1px solid #ddd; position: sticky; left: 0; background-color: white; font-weight: bold;">${record.member_name || 'Unknown'}</td>
-                    <td style="padding: 3px 4px; border: 1px solid #ddd; text-align: center;">${record.oc_level || '-'}</td>
-                    <td style="padding: 3px 4px; border: 1px solid #ddd;">${record.oc_name || '-'}</td>
-                    <td style="padding: 3px 4px; border: 1px solid #ddd;">${record.position || '-'}</td>
-                    <td style="padding: 3px 4px; border: 1px solid #ddd;">${record.position_id || '-'}</td>
-                    <td style="padding: 3px 4px; border: 1px solid #ddd;">${executedAt ? executedAt.toLocaleString() : '-'}</td>
-                    <td class="${progressClass}" style="padding: 3px 4px; border: 1px solid #ddd; text-align: center; font-weight: bold;">${progress.toFixed(1)}%</td>
-                    <td style="padding: 3px 4px; border: 1px solid #ddd; text-align: center;">${outcome}</td>
-                    <td style="padding: 3px 4px; border: 1px solid #ddd; text-align: center;">${checkpointRate}</td>
+                    <td style="padding: 2px 4px; border: 1px solid #ddd; position: sticky; left: 0; background-color: white; font-weight: bold;">${record.member_name || 'Unknown'}</td>
+                    <td style="padding: 2px 4px; border: 1px solid #ddd; text-align: center;">${record.oc_level || '-'}</td>
+                    <td style="padding: 2px 4px; border: 1px solid #ddd;">${record.oc_name || '-'}</td>
+                    <td style="padding: 2px 4px; border: 1px solid #ddd;">${record.position || '-'}</td>
+                    <td style="padding: 2px 4px; border: 1px solid #ddd;">${record.position_id || '-'}</td>
+                    <td style="padding: 2px 4px; border: 1px solid #ddd;">${executedAt ? executedAt.toLocaleString() : '-'}</td>
+                    <td class="${progressClass}" style="padding: 2px 4px; border: 1px solid #ddd; text-align: center; font-weight: bold;">${progress.toFixed(1)}%</td>
+                    <td style="padding: 2px 4px; border: 1px solid #ddd; text-align: center;">${outcome}</td>
+                    <td style="padding: 2px 4px; border: 1px solid #ddd; text-align: center;">${checkpointRate}</td>
                 `;
 
                 tbody.appendChild(row);
@@ -1426,15 +1426,15 @@
                 else progressClass = 'cell-red';
 
                 row.innerHTML = `
-                    <td style="padding: 3px 4px; border: 1px solid #ddd; position: sticky; left: 0; background-color: white; font-weight: bold;">${record.member_name || 'Unknown'}</td>
-                    <td style="padding: 3px 4px; border: 1px solid #ddd; text-align: center;">${record.oc_level || '-'}</td>
-                    <td style="padding: 3px 4px; border: 1px solid #ddd;">${record.oc_name || '-'}</td>
-                    <td style="padding: 3px 4px; border: 1px solid #ddd;">${record.position || '-'}</td>
-                    <td style="padding: 3px 4px; border: 1px solid #ddd;">${record.position_id || '-'}</td>
-                    <td style="padding: 3px 4px; border: 1px solid #ddd;">${executedAt ? executedAt.toLocaleString() : '-'}</td>
-                    <td class="${progressClass}" style="padding: 3px 4px; border: 1px solid #ddd; text-align: center; font-weight: bold;">${progress.toFixed(1)}%</td>
-                    <td style="padding: 3px 4px; border: 1px solid #ddd; text-align: center;">${outcome}</td>
-                    <td style="padding: 3px 4px; border: 1px solid #ddd; text-align: center;">${checkpointRate}</td>
+                    <td style="padding: 2px 4px; border: 1px solid #ddd; position: sticky; left: 0; background-color: white; font-weight: bold;">${record.member_name || 'Unknown'}</td>
+                    <td style="padding: 2px 4px; border: 1px solid #ddd; text-align: center;">${record.oc_level || '-'}</td>
+                    <td style="padding: 2px 4px; border: 1px solid #ddd;">${record.oc_name || '-'}</td>
+                    <td style="padding: 2px 4px; border: 1px solid #ddd;">${record.position || '-'}</td>
+                    <td style="padding: 2px 4px; border: 1px solid #ddd;">${record.position_id || '-'}</td>
+                    <td style="padding: 2px 4px; border: 1px solid #ddd;">${executedAt ? executedAt.toLocaleString() : '-'}</td>
+                    <td class="${progressClass}" style="padding: 2px 4px; border: 1px solid #ddd; text-align: center; font-weight: bold;">${progress.toFixed(1)}%</td>
+                    <td style="padding: 2px 4px; border: 1px solid #ddd; text-align: center;">${outcome}</td>
+                    <td style="padding: 2px 4px; border: 1px solid #ddd; text-align: center;">${checkpointRate}</td>
                 `;
 
                 tbody.appendChild(row);
