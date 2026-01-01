@@ -436,24 +436,31 @@
             // Store performance data globally for toggle functions
             window.performanceData = performanceData;
             
+            const viewMode = document.querySelector('input[name="view_mode"]:checked').value;
+            
             // Show/hide summarize controls based on view mode
             const summarizeControls = document.getElementById('summarize-controls');
-            const viewMode = document.querySelector('input[name="view_mode"]:checked').value;
             if (summarizeControls) {
                 summarizeControls.style.display = viewMode === 'pivot' ? 'flex' : 'none';
             }
             
-            // Update checkbox states based on current collapse state
-            const collapseAllLevels = document.getElementById('collapse-all-levels');
-            const collapseAllOCs = document.getElementById('collapse-all-ocs');
-            if (collapseAllLevels) {
-                collapseAllLevels.checked = window.collapsedLevels && window.collapsedLevels.size > 0;
-            }
-            if (collapseAllOCs) {
-                collapseAllOCs.checked = window.collapsedOCNames && window.collapsedOCNames.size > 0;
+            // Update radio button states based on current collapse state
+            if (viewMode === 'pivot') {
+                const hasLevelCollapse = window.collapsedLevels && window.collapsedLevels.size > 0;
+                const hasOCCollapse = window.collapsedOCNames && window.collapsedOCNames.size > 0;
+                
+                if (hasLevelCollapse) {
+                    const levelRadio = document.querySelector('input[name="summarize_mode"][value="level"]');
+                    if (levelRadio) levelRadio.checked = true;
+                } else if (hasOCCollapse) {
+                    const ocRadio = document.querySelector('input[name="summarize_mode"][value="oc"]');
+                    if (ocRadio) ocRadio.checked = true;
+                } else {
+                    const noneRadio = document.querySelector('input[name="summarize_mode"][value="none"]');
+                    if (noneRadio) noneRadio.checked = true;
+                }
             }
             
-            const viewMode = document.querySelector('input[name="view_mode"]:checked').value;
             if (viewMode === 'pivot') {
                 document.getElementById('pivot-container').style.display = 'block';
                 document.getElementById('detail-container').style.display = 'none';
