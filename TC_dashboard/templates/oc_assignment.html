@@ -695,6 +695,16 @@
             );
 
             sortedMembers.forEach(member => {
+                // Debug: Log history for first few members
+                if (sortedMembers.indexOf(member) < 3) {
+                    console.log('Member:', member.member_name, 'has history map:', !!member.history, 'history keys:', member.history ? Array.from(member.history.keys()) : []);
+                    if (member.history) {
+                        member.history.forEach((hist, key) => {
+                            console.log('  Column', key, 'has', hist.length, 'records');
+                        });
+                    }
+                }
+                
                 const row = document.createElement('tr');
                 const rowData = { member_name: member.member_name, oc_count_30d: member.oc_count_30d || 0, oc_count_7d: member.oc_count_7d || 0, is_in_oc: member.is_in_oc || false, days_in_faction: member.days_in_faction || 0, max_recommended_oc: member.max_recommended_oc || null, cells: [] };
                 const maxOcLevel = member.max_recommended_oc || null;
