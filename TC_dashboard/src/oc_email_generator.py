@@ -804,7 +804,7 @@ class OCEmailGenerator:
         # Generate email text using form letter format
         email_lines = []
         
-        # Form letter guidelines - match exact spacing from screenshot
+        # Form letter guidelines - match exact spacing from user's template
         email_lines.append("OC quick guidelines:")
         email_lines.append("")
         email_lines.append("")
@@ -860,9 +860,9 @@ class OCEmailGenerator:
                 # Format: Lv <number> - <OC Name> - <OC URL>
                 email_lines.append(f"Lv {level} - {oc_name} - {oc_url}")
                 
-                # Member list (one per line, no bullets)
+                # Member list (one per line with dashes)
                 for member_name in level_assignments[oc_id]:
-                    email_lines.append(member_name)
+                    email_lines.append(f"- {member_name}")
                 
                 email_lines.append("")
 
