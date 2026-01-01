@@ -494,6 +494,8 @@
             if (filteredData.length > 0 && filteredData[0]) {
                 console.log('First record:', filteredData[0]);
                 console.log('Difficulty value:', filteredData[0].difficulty, 'Type:', typeof filteredData[0].difficulty);
+                console.log('Status field:', filteredData[0].status, 'Outcome field:', filteredData[0].outcome);
+                console.log('Crime ID field:', filteredData[0].crime_id, 'ID field:', filteredData[0].id);
             }
 
             // Build hierarchical column structure: difficulty -> oc_name -> position_id
@@ -591,15 +593,19 @@
                 // Get status - check both 'status' and 'outcome' fields, and convert outcome to status format
                 let status = record.status;
                 if (!status && record.outcome) {
-                    status = record.outcome === 'Successful' ? 'Success' : 'Failure';
+                    status = record.outcome === 'Successful' ? 'Success' : (record.outcome === 'Failed' ? 'Failure' : record.outcome);
                 }
                 if (!status) {
                     status = 'Unknown';
                 }
-                // Get crime_id - check both 'crime_id' and 'id' fields
+                // Get crime_id - check multiple possible field names
                 let crimeId = record.crime_id;
                 if (!crimeId && record.id) {
                     crimeId = record.id;
+                }
+                // Debug: Log first few records to see what fields are available
+                if (memberData.history.get(columnKey).length === 0) {
+                    console.log('Storing history for', record.member_name, columnKey, 'Record fields:', Object.keys(record), 'status:', record.status, 'outcome:', record.outcome, 'crime_id:', record.crime_id, 'id:', record.id);
                 }
                 memberData.history.get(columnKey).push({
                     checkpoint_pass_rate: checkpointRate,
