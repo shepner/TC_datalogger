@@ -459,6 +459,7 @@
 
         function validateDaysBack() {
             const input = document.getElementById('performance_days');
+            if (!input) return;
             let value = parseInt(input.value, 10);
             
             if (isNaN(value) || value < 7) {
@@ -472,6 +473,7 @@
 
         async function loadPerformance() {
             const input = document.getElementById('performance_days');
+            if (!input) return;
             let daysBack = parseInt(input.value, 10);
             
             // Validate and clamp the value
@@ -516,7 +518,8 @@
             // Store performance data globally for toggle functions
             window.performanceData = performanceData;
             
-            const viewMode = document.querySelector('input[name="view_mode"]:checked').value;
+            const viewModeRadio = document.querySelector('input[name="view_mode"]:checked');
+            const viewMode = viewModeRadio ? viewModeRadio.value : 'pivot';
             
             // Show/hide summarize controls based on view mode
             const summarizeControls = document.getElementById('summarize-controls');
@@ -636,7 +639,8 @@
                 filterControls.style.display = 'flex';
             }
             if (summarizeControls) {
-                const viewMode = document.querySelector('input[name="view_mode"]:checked').value;
+                const viewModeRadio = document.querySelector('input[name="view_mode"]:checked');
+                const viewMode = viewModeRadio ? viewModeRadio.value : 'pivot';
                 summarizeControls.style.display = viewMode === 'pivot' ? 'flex' : 'none';
             }
             
