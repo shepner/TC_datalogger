@@ -576,8 +576,22 @@
                 }
                 // Update max_recommended_oc - keep the highest value (or first non-null value)
                 if (record.max_recommended_oc !== undefined && record.max_recommended_oc !== null) {
-                    if (memberData.max_recommended_oc === null || record.max_recommended_oc > memberData.max_recommended_oc) {
-                        memberData.max_recommended_oc = record.max_recommended_oc;
+                    // Debug: Log max_recommended_oc values for specific members
+                    if (record.member_name === 'Acnar' || record.member_name === 'makers_mark_man' || record.member_name === 'Raptor_RSA') {
+                        console.log(`Processing ${record.member_name}: record.max_recommended_oc = ${record.max_recommended_oc}, current memberData.max_recommended_oc = ${memberData.max_recommended_oc}`);
+                    }
+                    // Only update if the new value is a valid OC level (1-10) and is higher
+                    // This prevents checkpoint_pass_rate values (80-100) from being used as max_recommended_oc
+                    const maxOcValue = record.max_recommended_oc;
+                    if (typeof maxOcValue === 'number' && maxOcValue >= 1 && maxOcValue <= 10) {
+                        if (memberData.max_recommended_oc === null || maxOcValue > memberData.max_recommended_oc) {
+                            memberData.max_recommended_oc = maxOcValue;
+                        }
+                    } else {
+                        // Invalid value - log it for debugging
+                        if (record.member_name === 'Acnar' || record.member_name === 'makers_mark_man' || record.member_name === 'Raptor_RSA') {
+                            console.warn(`Invalid max_recommended_oc value for ${record.member_name}: ${maxOcValue} (expected 1-10)`);
+                        }
                     }
                 }
                 // Store MAX checkpoint_pass_rate for display
