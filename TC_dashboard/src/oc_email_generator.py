@@ -752,22 +752,41 @@ class OCEmailGenerator:
                     except (ValueError, TypeError):
                         continue
                     
-                    # Check if member has valid checkpoint_pass_rate for this difficulty level
-                    level_rate = member_level_rates.get(oc_difficulty)
-                    if level_rate is None:
-                        continue
+                    # Check if member has valid checkpoint_pass_rate for this SPECIFIC OC
+                    oc_name = oc.get('oc_name', '')
+                    member_oc_specific_rates = member_oc_rates.get(member_name, {})
                     
-                    # Ensure rate is in percentage format
-                    try:
-                        rate_num = float(level_rate)
-                        if 0 <= rate_num <= 1:
-                            rate_num = rate_num * 100
-                    except (ValueError, TypeError):
-                        continue
+                    # Check if member has any position for this specific OC with rate in 80-90
+                    has_valid_oc_rate = False
+                    for key, rate in member_oc_specific_rates.items():
+                        if key.startswith(oc_name + '_'):
+                            try:
+                                rate_num = float(rate)
+                                if 0 <= rate_num <= 1:
+                                    rate_num = rate_num * 100
+                                if 80 <= rate_num <= 90:
+                                    has_valid_oc_rate = True
+                                    break
+                            except (ValueError, TypeError):
+                                continue
                     
-                    # Check if rate is in valid range (80-90)
-                    if not (80 <= rate_num <= 90):
-                        continue
+                    if not has_valid_oc_rate:
+                        # Fallback: check if member has valid rate for this difficulty level overall
+                        level_rate = member_level_rates.get(oc_difficulty)
+                        if level_rate is None:
+                            continue
+                        
+                        # Ensure rate is in percentage format
+                        try:
+                            rate_num = float(level_rate)
+                            if 0 <= rate_num <= 1:
+                                rate_num = rate_num * 100
+                        except (ValueError, TypeError):
+                            continue
+                        
+                        # STRICT CHECK: Rate must be in valid range (80-90)
+                        if not (80 <= rate_num <= 90):
+                            continue
                     
                     # Check if OC difficulty is <= max_recommended_oc
                     if member_max_oc is not None and oc_difficulty > member_max_oc:
