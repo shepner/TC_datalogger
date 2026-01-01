@@ -515,6 +515,39 @@
             document.getElementById('performance-container').style.display = 'block';
         }
 
+        // Toggle functions for collapsing levels and OCs
+        function toggleLevelCollapse(difficulty) {
+            if (!window.collapsedLevels) window.collapsedLevels = new Set();
+            if (window.collapsedLevels.has(difficulty)) {
+                window.collapsedLevels.delete(difficulty);
+            } else {
+                window.collapsedLevels.add(difficulty);
+                // Also remove any collapsed OCs under this level
+                if (!window.collapsedOCNames) window.collapsedOCNames = new Set();
+                const keysToRemove = [];
+                window.collapsedOCNames.forEach(key => {
+                    if (key.startsWith(`${difficulty}_`)) {
+                        keysToRemove.push(key);
+                    }
+                });
+                keysToRemove.forEach(key => window.collapsedOCNames.delete(key));
+            }
+            // Reload the performance data to rebuild the table
+            loadPerformance();
+        }
+        
+        function toggleOCCollapse(difficulty, ocName) {
+            if (!window.collapsedOCNames) window.collapsedOCNames = new Set();
+            const key = `${difficulty}_${ocName}`;
+            if (window.collapsedOCNames.has(key)) {
+                window.collapsedOCNames.delete(key);
+            } else {
+                window.collapsedOCNames.add(key);
+            }
+            // Reload the performance data to rebuild the table
+            loadPerformance();
+        }
+        
         function displayPivotView(data) {
             // Get checked difficulty levels
             const checkedLevels = new Set();
@@ -739,30 +772,45 @@
             });
             header.appendChild(headerRow1);
 
-            // Second row: oc_name headers (with colspan for position_ids) - sortable
+            // Second row: oc_name headers (with colspan for position_ids) - sortable with collapse checkbox
             const headerRow2 = document.createElement('tr');
             columnIndex = 5; // Skip Member, OC 30d, OC 7d, In OC, Max OC columns
             sortedDifficulties.forEach(difficulty => {
+                if (window.collapsedLevels.has(difficulty)) {
+                    // Skip this level if it's collapsed
+                    return;
+                }
                 const difficultyGroup = columnGroups.get(difficulty);
                 const sortedOCNames = Array.from(difficultyGroup.keys()).sort();
                 sortedOCNames.forEach(ocName => {
                     const ocGroup = difficultyGroup.get(ocName);
                     const sortedPositionIds = Array.from(ocGroup.keys()).sort();
                     const startColIndex = columnIndex;
-                    headerRow2.innerHTML += `<th class="sortable" data-column="${startColIndex}" data-type="oc_name" data-difficulty="${difficulty}" data-oc-name="${ocName.replace(/"/g, '&quot;')}" colspan="${sortedPositionIds.length}" style="padding: 3px 6px; text-align: center; background-color: #4CAF50; color: white; cursor: pointer;">${ocName}</th>`;
-                    columnIndex += sortedPositionIds.length;
+                    const isCollapsed = window.collapsedOCNames.has(`${difficulty}_${ocName}`);
+                    const actualCols = isCollapsed ? 1 : sortedPositionIds.length;
+                    const checkbox = `<input type="checkbox" class="collapse-oc-checkbox" data-difficulty="${difficulty}" data-oc-name="${ocName.replace(/"/g, '&quot;')}" ${isCollapsed ? 'checked' : ''} style="margin-right: 4px; cursor: pointer;" onclick="event.stopPropagation(); toggleOCCollapse(${difficulty}, '${ocName.replace(/'/g, "\\'")}');">`;
+                    headerRow2.innerHTML += `<th class="sortable" data-column="${startColIndex}" data-type="oc_name" data-difficulty="${difficulty}" data-oc-name="${ocName.replace(/"/g, '&quot;')}" colspan="${actualCols}" style="padding: 3px 6px; text-align: center; background-color: #4CAF50; color: white; cursor: pointer;">${checkbox}${ocName}</th>`;
+                    columnIndex += actualCols;
                 });
             });
             header.appendChild(headerRow2);
 
-            // Third row: position_id headers (sortable)
+            // Third row: position_id headers (sortable) - only show if not collapsed
             const headerRow3 = document.createElement('tr');
             pivotColumnMap.clear(); // Reset column map
             columnIndex = 5; // Track column index (0 is Member, 1 is OC 30d, 2 is OC 7d, 3 is In OC, 4 is Max OC, so start at 5)
             sortedDifficulties.forEach(difficulty => {
+                if (window.collapsedLevels.has(difficulty)) {
+                    // Skip this level if it's collapsed
+                    return;
+                }
                 const difficultyGroup = columnGroups.get(difficulty);
                 const sortedOCNames = Array.from(difficultyGroup.keys()).sort();
                 sortedOCNames.forEach(ocName => {
+                    if (window.collapsedOCNames.has(`${difficulty}_${ocName}`)) {
+                        // Skip this OC if it's collapsed
+                        return;
+                    }
                     const ocGroup = difficultyGroup.get(ocName);
                     const sortedPositionIds = Array.from(ocGroup.keys()).sort();
                     sortedPositionIds.forEach(positionId => {
