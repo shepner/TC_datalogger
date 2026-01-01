@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>OC Assignment Email Generator - Torn City Faction Management</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📊</text></svg>">
     <link rel="stylesheet" href="{{ url_for('static', filename='dashboard.css') }}">
     <style>
         .container {
@@ -996,9 +997,6 @@
                                 // OC is not collapsed - show individual positions
                                 const sortedPositionIds = Array.from(ocGroup.keys()).sort();
                                 sortedPositionIds.forEach(positionId => {
-                        const ocGroup = difficultyGroup.get(ocName);
-                        const sortedPositionIds = Array.from(ocGroup.keys()).sort();
-                        sortedPositionIds.forEach(positionId => {
                             const columnKey = `${difficulty}_${ocName}_${positionId}`;
                             const checkpointRate = member.data.get(columnKey);
                             
