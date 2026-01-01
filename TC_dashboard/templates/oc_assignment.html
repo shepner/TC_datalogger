@@ -449,23 +449,43 @@
             }
         }
 
-        function copyEmail() {
+        async function copyEmail(event) {
             const emailText = document.getElementById('email-text');
-            emailText.select();
-            emailText.setSelectionRange(0, 99999); // For mobile devices
-            document.execCommand('copy');
+            const textToCopy = emailText.value;
             
-            // Show feedback on the icon
-            const button = event.target.closest('button');
-            if (button) {
-                const originalColor = button.style.color;
-                button.style.color = '#28a745';
-                const originalSvg = button.innerHTML;
-                button.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>';
-                setTimeout(() => {
-                    button.style.color = originalColor;
-                    button.innerHTML = originalSvg;
-                }, 2000);
+            try {
+                // Try modern Clipboard API first
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    await navigator.clipboard.writeText(textToCopy);
+                } else {
+                    // Fallback to older method
+                    emailText.select();
+                    emailText.setSelectionRange(0, 99999); // For mobile devices
+                    document.execCommand('copy');
+                }
+                
+                // Show feedback on the icon
+                const button = event.target.closest('button');
+                if (button) {
+                    const originalColor = button.style.color;
+                    button.style.color = '#28a745';
+                    const originalSvg = button.innerHTML;
+                    button.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+                    setTimeout(() => {
+                        button.style.color = originalColor;
+                        button.innerHTML = originalSvg;
+                    }, 2000);
+                }
+            } catch (err) {
+                console.error('Failed to copy text: ', err);
+                // Fallback: try the old method
+                try {
+                    emailText.select();
+                    emailText.setSelectionRange(0, 99999);
+                    document.execCommand('copy');
+                } catch (fallbackErr) {
+                    console.error('Fallback copy also failed: ', fallbackErr);
+                }
             }
         }
 
