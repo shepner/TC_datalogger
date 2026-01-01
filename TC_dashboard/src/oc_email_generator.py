@@ -801,12 +801,12 @@ class OCEmailGenerator:
                     
                     # Debug logging for problematic assignments
                     if (member_name == "DubZzZ" and oc_name_lower == "leave no trace") or \
-                       (member_name in ["Adilon_Scorpian", "Hiyori"] and oc_difficulty < 4):
-                        logger.info(f"DEBUG {member_name}/{oc_name}: member_oc_specific_rates has {len(member_oc_specific_rates)} keys")
+                       (member_name in ["Adilon_Scorpian", "Hiyori"] and (oc_difficulty < 4 or oc_difficulty == 4)):
+                        logger.info(f"DEBUG {member_name}/{oc_name} (Level {oc_difficulty}): member_oc_specific_rates has {len(member_oc_specific_rates)} keys")
                         logger.info(f"DEBUG {member_name}/{oc_name}: oc_name = '{oc_name}', oc_name_lower = '{oc_name_lower}'")
                         logger.info(f"DEBUG {member_name}/{oc_name}: matching_keys = {matching_keys}")
                         logger.info(f"DEBUG {member_name}/{oc_name}: has_oc_specific_data = {has_oc_specific_data}, best_oc_rate = {best_oc_rate}, has_valid_oc_rate = {has_valid_oc_rate}")
-                        logger.info(f"DEBUG {member_name}/{oc_name}: member_max_oc = {member_max_oc}, oc_difficulty = {oc_difficulty}")
+                        logger.info(f"DEBUG {member_name}/{oc_name}: member_max_oc = {member_max_oc}, oc_difficulty = {oc_difficulty}, level_rate = {member_level_rates.get(oc_difficulty)}")
                     
                     # If we have OC-specific data and member can't meet requirements, skip this OC
                     if has_oc_specific_data and not has_valid_oc_rate:
@@ -836,7 +836,10 @@ class OCEmailGenerator:
                     
                     # Check if OC difficulty is <= max_recommended_oc
                     if member_max_oc is not None and oc_difficulty > member_max_oc:
-                        logger.debug(f"Skipping {member_name} for Level {oc_difficulty} OC {oc_name}: exceeds max_recommended_oc {member_max_oc}")
+                        if member_name in ["Adilon_Scorpian", "Hiyori", "DubZzZ"]:
+                            logger.info(f"Skipping {member_name} for Level {oc_difficulty} OC {oc_name}: exceeds max_recommended_oc {member_max_oc}")
+                        else:
+                            logger.debug(f"Skipping {member_name} for Level {oc_difficulty} OC {oc_name}: exceeds max_recommended_oc {member_max_oc}")
                         continue
                 
                 oc_id = oc['oc_id']
@@ -856,6 +859,9 @@ class OCEmailGenerator:
                     assigned_members.add(member_name)
                     logger.info(f"Assigned {member_name} to OC {oc_id} ({oc.get('oc_name')}, Level {oc_difficulty})")
                     break
+                else:
+                    if member_name in ["Adilon_Scorpian", "Hiyori", "DubZzZ"]:
+                        logger.info(f"DEBUG {member_name}: OC {oc_id} ({oc_name}, Level {oc_difficulty}) has no available slots (total: {total_slots}, filled: {filled_slots}, assigned: {assigned_count})")
             
             # If member wasn't assigned and has OC history, try all OCs (not just activity-based list)
             if member_name not in assigned_members and has_oc_history:
