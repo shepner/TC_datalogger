@@ -26,3 +26,6 @@ RUN mkdir -p /app/logs
 # Set entrypoint
 ENTRYPOINT ["/app/docker/entrypoint.sh"]
 
+
+
+

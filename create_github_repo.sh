@@ -12,3 +12,6 @@ echo ""
 echo "✅ Repository created successfully!"
 echo "🔗 View it at: https://github.com/$(gh api user --jq .login)/TC_datalogger"
 
+
+
+

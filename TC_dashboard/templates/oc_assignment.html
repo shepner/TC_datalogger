@@ -2024,6 +2024,20 @@
                 title.textContent = `Full Historical Data: ${memberName} - Level ${difficulty} ${ocName} (All Positions)`;
             }
             
+            // Sort data: date descending, then OC name ascending
+            const sortedData = [...allData].sort((a, b) => {
+                // First sort by date (descending - most recent first)
+                const dateA = a.executed_at ? new Date(a.executed_at).getTime() : 0;
+                const dateB = b.executed_at ? new Date(b.executed_at).getTime() : 0;
+                if (dateB !== dateA) {
+                    return dateB - dateA; // Descending
+                }
+                // If dates are equal, sort by OC name (ascending)
+                const ocNameA = (a.ocName || '').toLowerCase();
+                const ocNameB = (b.ocName || '').toLowerCase();
+                return ocNameA.localeCompare(ocNameB);
+            });
+            
             let html = `<table style="width: 100%; border-collapse: collapse; margin-top: 10px;">`;
             html += `<thead><tr style="background-color: #4CAF50; color: white;">`;
             html += `<th style="padding: 10px; text-align: left; border: 1px solid #ddd;">OC Name</th>`;
@@ -2034,10 +2048,10 @@
             html += `<th style="padding: 10px; text-align: center; border: 1px solid #ddd;">OC ID</th>`;
             html += `</tr></thead><tbody>`;
             
-            if (allData.length === 0) {
+            if (sortedData.length === 0) {
                 html += `<tr><td colspan="6" style="padding: 20px; text-align: center; color: #999;">No historical data available</td></tr>`;
             } else {
-                allData.forEach((record) => {
+                sortedData.forEach((record) => {
                     const dateStr = record.executed_at ? new Date(record.executed_at).toLocaleString() : 'Unknown';
                     const rate = record.checkpoint_pass_rate || 0;
                     const rateClass = (rate < 80 || rate > 90) ? 'cell-red' : '';

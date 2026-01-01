@@ -17,3 +17,6 @@ services:
       # Mount logs directory for persistence
       - ./logs:/app/logs
 
+
+
+
