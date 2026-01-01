@@ -237,10 +237,7 @@ class OCEmailGenerator:
                 crime.id AS crime_id,
                 crime.name AS oc_name,
                 crime.difficulty,
-                COALESCE(
-                  TIMESTAMP_SECONDS(SAFE_CAST(crime.executed_at AS INT64)),
-                  SAFE_CAST(crime.executed_at AS TIMESTAMP)
-                ) AS executed_at,
+                TIMESTAMP_SECONDS(SAFE_CAST(crime.executed_at AS INT64)) AS executed_at,
                 slot.position AS position,
                 slot.position_id,
                 slot.user.id AS member_id,
@@ -253,10 +250,7 @@ class OCEmailGenerator:
                 slot.user.id IS NOT NULL
                 AND crime.executed_at IS NOT NULL
                 AND crime.difficulty IS NOT NULL
-                AND COALESCE(
-                  TIMESTAMP_SECONDS(SAFE_CAST(crime.executed_at AS INT64)),
-                  SAFE_CAST(crime.executed_at AS TIMESTAMP)
-                ) >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL @days_back DAY)
+                AND TIMESTAMP_SECONDS(SAFE_CAST(crime.executed_at AS INT64)) >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL @days_back DAY)
                 AND slot.checkpoint_pass_rate IS NOT NULL
                 AND slot.user.id IN (SELECT member_id FROM current_members)
             )
