@@ -349,7 +349,72 @@ def get_oc_performance():
             crime_id_count = sum(1 for r in performance[:10] if r.get('crime_id') is not None)
             logger.info(f"crime_id present in {crime_id_count} of first 10 records")
         
-        return jsonify({"performance": performance})
+        # Pre-generate aggregated data for performance
+        # Group by member -> difficulty -> oc_name -> position_id
+        aggregated_data = {}  # member_name -> {level_ranges: {}, oc_ranges: {}}
+        
+        for record in performance:
+            member_name = record.get('member_name')
+            difficulty = record.get('difficulty')
+            oc_name = record.get('oc_name')
+            position_id = record.get('position_id')
+            checkpoint_rate = record.get('checkpoint_pass_rate', 0)
+            
+            if not member_name or difficulty is None or not oc_name:
+                continue
+            
+            try:
+                difficulty = int(difficulty)
+                checkpoint_rate = float(checkpoint_rate)
+                # Convert 0-1 to 0-100 if needed
+                if 0 <= checkpoint_rate <= 1:
+                    checkpoint_rate = checkpoint_rate * 100
+            except (ValueError, TypeError):
+                continue
+            
+            if member_name not in aggregated_data:
+                aggregated_data[member_name] = {
+                    'level_ranges': {},  # difficulty -> {min, max, values: []}
+                    'oc_ranges': {}  # "difficulty_oc_name" -> {min, max, values: []}
+                }
+            
+            member_agg = aggregated_data[member_name]
+            
+            # Track level ranges
+            if difficulty not in member_agg['level_ranges']:
+                member_agg['level_ranges'][difficulty] = {'values': []}
+            if checkpoint_rate is not None:
+                member_agg['level_ranges'][difficulty]['values'].append(checkpoint_rate)
+            
+            # Track OC name ranges
+            oc_key = f"{difficulty}_{oc_name}"
+            if oc_key not in member_agg['oc_ranges']:
+                member_agg['oc_ranges'][oc_key] = {'values': []}
+            if checkpoint_rate is not None:
+                member_agg['oc_ranges'][oc_key]['values'].append(checkpoint_rate)
+        
+        # Calculate min/max for all ranges
+        for member_name, member_agg in aggregated_data.items():
+            for difficulty, level_data in member_agg['level_ranges'].items():
+                if level_data['values']:
+                    level_data['min'] = min(level_data['values'])
+                    level_data['max'] = max(level_data['values'])
+                    level_data['range'] = f"{int(level_data['min'])}-{int(level_data['max'])}" if level_data['min'] != level_data['max'] else str(int(level_data['min']))
+                else:
+                    level_data['range'] = None
+            
+            for oc_key, oc_data in member_agg['oc_ranges'].items():
+                if oc_data['values']:
+                    oc_data['min'] = min(oc_data['values'])
+                    oc_data['max'] = max(oc_data['values'])
+                    oc_data['range'] = f"{int(oc_data['min'])}-{int(oc_data['max'])}" if oc_data['min'] != oc_data['max'] else str(int(oc_data['min']))
+                else:
+                    oc_data['range'] = None
+        
+        return jsonify({
+            "performance": performance,
+            "aggregated": aggregated_data
+        })
     except Exception as e:
         logger.error(f"Error getting OC performance: {e}", exc_info=True)
         return jsonify({"error": str(e)}), 500
