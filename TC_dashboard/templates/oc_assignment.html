@@ -1132,6 +1132,12 @@
             // Render rows in sorted order
             pivotRows.forEach(rowData => {
                 const row = document.createElement('tr');
+                // Debug: Log max_recommended_oc for specific members
+                if (rowData.member_name === 'Acnar' || rowData.member_name === 'makers_mark_man' || rowData.member_name === 'Raptor_RSA') {
+                    console.log(`renderPivotTableBody: ${rowData.member_name}: rowData.max_recommended_oc = ${rowData.max_recommended_oc}, type: ${typeof rowData.max_recommended_oc}`);
+                    console.log(`  rowData object keys:`, Object.keys(rowData));
+                    console.log(`  rowData.cells[0] = ${rowData.cells[0]}, rowData.cells.length = ${rowData.cells.length}`);
+                }
                 const maxOcLevel = rowData.max_recommended_oc || null;
                 const maxOcClass = maxOcLevel && maxOcLevel >= 1 && maxOcLevel <= 10 ? `oc-level-${maxOcLevel}` : '';
                 const maxOcDisplay = maxOcLevel !== null ? maxOcLevel : '—';
