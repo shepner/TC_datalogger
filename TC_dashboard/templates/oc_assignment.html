@@ -771,7 +771,7 @@
                                 cell.style.cssText = `padding: 6px; border: 1px solid #ddd; border-right: 1px solid #ddd; text-align: center; font-weight: bold; ${clickableStyle}`;
                                 cell.textContent = checkpointRate;
                                 
-                                // Always add hover/click handlers if we have a checkpoint rate (even if no history yet)
+                                // Always set data attributes for event delegation
                                 if (checkpointRate !== undefined) {
                                     cell.setAttribute('data-member', member.member_name);
                                     cell.setAttribute('data-column-key', columnKey);
@@ -780,54 +780,11 @@
                                     cell.setAttribute('data-position-id', positionId);
                                     cell.setAttribute('data-position', ocGroup.get(positionId).position);
                                     
-                                    // Store history reference in closure
+                                    // Debug: Log when creating cells with history
                                     const cellHistory = member.history ? member.history.get(columnKey) : null;
-                                    const positionName = ocGroup.get(positionId).position;
-                                    
-                                    // Debug: Log when attaching handlers
                                     if (cellHistory && cellHistory.length > 0) {
-                                        console.log('Attaching handlers to cell:', member.member_name, columnKey, 'with', cellHistory.length, 'history records');
+                                        console.log('Creating cell with history:', member.member_name, columnKey, 'with', cellHistory.length, 'history records');
                                     }
-                                    
-                                    // Add hover tooltip with historical data
-                                    let tooltipTimeout = null;
-                                    cell.addEventListener('mouseenter', function(e) {
-                                        console.log('MOUSE ENTER EVENT FIRED!', member.member_name, columnKey);
-                                        e.stopPropagation();
-                                        
-                                        if (cellHistory && cellHistory.length > 0) {
-                                            console.log('History found:', cellHistory.length, 'records');
-                                            // Small delay to prevent tooltip flicker
-                                            tooltipTimeout = setTimeout(() => {
-                                                console.log('Calling showHistoryTooltip with', cellHistory.length, 'records');
-                                                showHistoryTooltip(e.target, cellHistory, difficulty, ocName, positionName);
-                                            }, 200);
-                                        } else {
-                                            console.log('No history available for this cell');
-                                        }
-                                    }, true); // Use capture phase
-                                    
-                                    cell.addEventListener('mouseleave', function() {
-                                        console.log('MOUSE LEAVE EVENT FIRED!');
-                                        if (tooltipTimeout) {
-                                            clearTimeout(tooltipTimeout);
-                                            tooltipTimeout = null;
-                                        }
-                                        hideHistoryTooltip();
-                                    }, true);
-                                    
-                                    // Add click handler for full modal
-                                    cell.addEventListener('click', function(e) {
-                                        e.stopPropagation();
-                                        console.log('CLICK EVENT FIRED!');
-                                        if (tooltipTimeout) {
-                                            clearTimeout(tooltipTimeout);
-                                        }
-                                        hideHistoryTooltip();
-                                        if (cellHistory && cellHistory.length > 0) {
-                                            showHistoryModal(member.member_name, columnKey, difficulty, ocName, positionId, positionName, cellHistory);
-                                        }
-                                    }, true);
                                 }
                                 row.appendChild(cell);
                             } else {
@@ -840,6 +797,90 @@
                 pivotRows.push(rowData);
                 tbody.appendChild(row);
             });
+            
+            // Use event delegation on tbody for hover/click events
+            setupPivotTableEventDelegation();
+        }
+        
+        function setupPivotTableEventDelegation() {
+            const tbody = document.getElementById('pivot-body');
+            if (!tbody) return;
+            
+            // Remove existing listeners to avoid duplicates
+            const newTbody = tbody.cloneNode(true);
+            tbody.parentNode.replaceChild(newTbody, tbody);
+            
+            // Add event delegation for mouseenter/mouseleave on cells with data-history attribute
+            newTbody.addEventListener('mouseenter', function(e) {
+                const cell = e.target.closest('td[data-column-key]');
+                if (!cell) return;
+                
+                const columnKey = cell.getAttribute('data-column-key');
+                const memberName = cell.getAttribute('data-member');
+                const difficulty = parseInt(cell.getAttribute('data-difficulty'));
+                const ocName = cell.getAttribute('data-oc-name');
+                const positionId = cell.getAttribute('data-position-id');
+                const positionName = cell.getAttribute('data-position');
+                
+                if (!memberName || !columnKey || !membersMap) return;
+                
+                const member = membersMap.get(memberName);
+                if (!member || !member.history) return;
+                
+                const history = member.history.get(columnKey);
+                if (!history || history.length === 0) return;
+                
+                console.log('MOUSE ENTER (delegation) on cell:', memberName, columnKey, 'with', history.length, 'records');
+                
+                // Store timeout on the cell element
+                const timeout = setTimeout(() => {
+                    showHistoryTooltip(cell, history, difficulty, ocName, positionName);
+                }, 200);
+                cell.setAttribute('data-tooltip-timeout', timeout);
+            }, true);
+            
+            newTbody.addEventListener('mouseleave', function(e) {
+                const cell = e.target.closest('td[data-column-key]');
+                if (!cell) return;
+                
+                const timeoutId = cell.getAttribute('data-tooltip-timeout');
+                if (timeoutId) {
+                    clearTimeout(parseInt(timeoutId));
+                    cell.removeAttribute('data-tooltip-timeout');
+                }
+                hideHistoryTooltip();
+            }, true);
+            
+            newTbody.addEventListener('click', function(e) {
+                const cell = e.target.closest('td[data-column-key]');
+                if (!cell) return;
+                
+                const columnKey = cell.getAttribute('data-column-key');
+                const memberName = cell.getAttribute('data-member');
+                const difficulty = parseInt(cell.getAttribute('data-difficulty'));
+                const ocName = cell.getAttribute('data-oc-name');
+                const positionId = cell.getAttribute('data-position-id');
+                const positionName = cell.getAttribute('data-position');
+                
+                if (!memberName || !columnKey || !membersMap) return;
+                
+                const member = membersMap.get(memberName);
+                if (!member || !member.history) return;
+                
+                const history = member.history.get(columnKey);
+                if (!history || history.length === 0) return;
+                
+                console.log('CLICK (delegation) on cell:', memberName, columnKey);
+                e.stopPropagation();
+                
+                const timeoutId = cell.getAttribute('data-tooltip-timeout');
+                if (timeoutId) {
+                    clearTimeout(parseInt(timeoutId));
+                    cell.removeAttribute('data-tooltip-timeout');
+                }
+                hideHistoryTooltip();
+                showHistoryModal(memberName, columnKey, difficulty, ocName, positionId, positionName, history);
+            }, true);
         }
         
         function attachPivotSortHandlers() {
@@ -1084,8 +1125,11 @@
                 
                 tbody.appendChild(row);
             });
+            
+            // Re-setup event delegation after regenerating table
+            setupPivotTableEventDelegation();
         }
-
+        
         function showHistory(historyKey) {
             const records = historyData.get(historyKey);
             if (!records || records.length === 0) return;
