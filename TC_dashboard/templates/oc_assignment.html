@@ -810,10 +810,22 @@
             const newTbody = tbody.cloneNode(true);
             tbody.parentNode.replaceChild(newTbody, tbody);
             
-            // Add event delegation for mouseenter/mouseleave on cells with data-history attribute
-            newTbody.addEventListener('mouseenter', function(e) {
+            // Add event delegation for mouseover/mouseout (these bubble, unlike mouseenter/mouseleave)
+            let currentHoveredCell = null;
+            newTbody.addEventListener('mouseover', function(e) {
                 const cell = e.target.closest('td[data-column-key]');
-                if (!cell) return;
+                if (!cell || cell === currentHoveredCell) return;
+                
+                // Clear previous cell's timeout
+                if (currentHoveredCell) {
+                    const prevTimeoutId = currentHoveredCell.getAttribute('data-tooltip-timeout');
+                    if (prevTimeoutId) {
+                        clearTimeout(parseInt(prevTimeoutId));
+                        currentHoveredCell.removeAttribute('data-tooltip-timeout');
+                    }
+                }
+                
+                currentHoveredCell = cell;
                 
                 const columnKey = cell.getAttribute('data-column-key');
                 const memberName = cell.getAttribute('data-member');
@@ -830,7 +842,7 @@
                 const history = member.history.get(columnKey);
                 if (!history || history.length === 0) return;
                 
-                console.log('MOUSE ENTER (delegation) on cell:', memberName, columnKey, 'with', history.length, 'records');
+                console.log('MOUSE OVER (delegation) on cell:', memberName, columnKey, 'with', history.length, 'records');
                 
                 // Store timeout on the cell element
                 const timeout = setTimeout(() => {
@@ -839,16 +851,39 @@
                 cell.setAttribute('data-tooltip-timeout', timeout);
             }, true);
             
-            newTbody.addEventListener('mouseleave', function(e) {
+            newTbody.addEventListener('mouseout', function(e) {
                 const cell = e.target.closest('td[data-column-key]');
-                if (!cell) return;
-                
-                const timeoutId = cell.getAttribute('data-tooltip-timeout');
-                if (timeoutId) {
-                    clearTimeout(parseInt(timeoutId));
-                    cell.removeAttribute('data-tooltip-timeout');
+                if (!cell) {
+                    // Mouse left the table entirely
+                    if (currentHoveredCell) {
+                        const timeoutId = currentHoveredCell.getAttribute('data-tooltip-timeout');
+                        if (timeoutId) {
+                            clearTimeout(parseInt(timeoutId));
+                            currentHoveredCell.removeAttribute('data-tooltip-timeout');
+                        }
+                        currentHoveredCell = null;
+                    }
+                    hideHistoryTooltip();
+                    return;
                 }
-                hideHistoryTooltip();
+                
+                // Check if we're moving to a different cell
+                const relatedTarget = e.relatedTarget;
+                if (relatedTarget && relatedTarget.closest('td[data-column-key]') === cell) {
+                    // Still within the same cell, don't hide
+                    return;
+                }
+                
+                // Moving away from this cell
+                if (cell === currentHoveredCell) {
+                    const timeoutId = cell.getAttribute('data-tooltip-timeout');
+                    if (timeoutId) {
+                        clearTimeout(parseInt(timeoutId));
+                        cell.removeAttribute('data-tooltip-timeout');
+                    }
+                    currentHoveredCell = null;
+                    hideHistoryTooltip();
+                }
             }, true);
             
             newTbody.addEventListener('click', function(e) {
