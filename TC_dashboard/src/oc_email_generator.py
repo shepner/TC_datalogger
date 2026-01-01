@@ -1307,12 +1307,8 @@ class OCEmailGenerator:
         # Merge with spawn_suggestions (for unassigned members)
         all_needed_levels = set(spawn_suggestions.keys()) | set(members_assigned_below_max.keys())
         
-        # Add spawn suggestions if any
+        # Build needed_ocs list for UI display (but don't add to email text)
         if spawn_suggestions or members_assigned_below_max:
-            email_lines.append("")
-            email_lines.append("OC Spawn Suggestions:")
-            email_lines.append("")
-            
             # Get OC names for each level from historical data
             # Query for common OC names at each level that needs spawning
             level_oc_names = {}  # level -> [oc_names]
@@ -1404,13 +1400,6 @@ class OCEmailGenerator:
                             'level': level,
                             'oc_names': suggested_oc_names[:2]
                         })
-                
-                # Take first 2-3 OC names as suggestions for email
-                suggested_oc_names = suggested_oc_names[:3]
-                oc_names_str = " or ".join(suggested_oc_names)
-                
-                email_lines.append(f"Please spawn {oc_names_str} (Level {level}) for: {', '.join(member_names)}")
-                email_lines.append("")
 
 
         email_text = "\n".join(email_lines)
