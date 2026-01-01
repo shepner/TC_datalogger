@@ -257,7 +257,7 @@
                 <div id="pivot-container">
                     <div style="max-height: 70vh; overflow-y: auto; overflow-x: auto; border: 1px solid #ddd; margin-top: 5px;">
                         <table id="pivot-table" style="width: 100%; border-collapse: separate; border-spacing: 0; font-size: 11px;">
-                            <thead id="pivot-header" style="background-color: #4CAF50; color: white;">
+                            <thead id="pivot-header" style="position: sticky; top: 0; background-color: #4CAF50; color: white; z-index: 20;">
                             </thead>
                             <tbody id="pivot-body">
                             </tbody>
@@ -1138,37 +1138,38 @@
             });
             header.appendChild(headerRow3);
             
-            // Calculate and set top offsets for each header row to make them stick properly
-            // We need to wait for the DOM to fully render to get accurate row heights
+            // For multi-row sticky headers, we need to set top values for each row
+            // The thead is sticky, but each row within it needs its own top offset
             const setStickyTop = () => {
                 const rows = Array.from(header.querySelectorAll('tr'));
                 if (rows.length === 0) {
-                    // If rows aren't ready yet, try again
                     setTimeout(setStickyTop, 10);
                     return;
                 }
                 
+                // Measure row heights and set top values
                 let cumulativeTop = 0;
                 rows.forEach((row, index) => {
+                    // Get the actual rendered height of the previous row
                     if (index > 0) {
-                        // Subsequent rows stick below previous rows
                         const prevRow = rows[index - 1];
-                        cumulativeTop += prevRow.offsetHeight || 20; // fallback to 20px if height not available
+                        const prevRowHeight = prevRow.getBoundingClientRect().height;
+                        cumulativeTop += prevRowHeight;
                     }
                     
+                    // Set sticky positioning on all th elements in this row
                     row.querySelectorAll('th').forEach(th => {
-                        // Set top value for sticky positioning
-                        th.style.top = cumulativeTop + 'px';
-                        // Ensure position is sticky
                         th.style.position = 'sticky';
+                        th.style.top = cumulativeTop + 'px';
+                        th.style.zIndex = (25 - index); // Higher z-index for earlier rows
                     });
                 });
             };
             
-            // Try multiple times to ensure it works
-            setStickyTop();
+            // Call after a short delay to ensure DOM is fully rendered
+            setTimeout(setStickyTop, 0);
             setTimeout(setStickyTop, 50);
-            setTimeout(setStickyTop, 100);
+            setTimeout(setStickyTop, 200);
             
             // Attach sort handlers to all sortable headers
             attachPivotSortHandlers();
