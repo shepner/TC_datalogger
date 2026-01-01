@@ -588,11 +588,24 @@
                 if (!memberData.history.has(columnKey)) {
                     memberData.history.set(columnKey, []);
                 }
+                // Get status - check both 'status' and 'outcome' fields, and convert outcome to status format
+                let status = record.status;
+                if (!status && record.outcome) {
+                    status = record.outcome === 'Successful' ? 'Success' : 'Failure';
+                }
+                if (!status) {
+                    status = 'Unknown';
+                }
+                // Get crime_id - check both 'crime_id' and 'id' fields
+                let crimeId = record.crime_id;
+                if (!crimeId && record.id) {
+                    crimeId = record.id;
+                }
                 memberData.history.get(columnKey).push({
                     checkpoint_pass_rate: checkpointRate,
-                    status: record.status || 'Unknown',
+                    status: status,
                     executed_at: record.executed_at || null,
-                    crime_id: record.crime_id || null
+                    crime_id: crimeId || null
                 });
             });
 
@@ -1469,8 +1482,22 @@
                     const dateStr = record.executed_at ? new Date(record.executed_at).toLocaleString() : 'Unknown';
                     const rate = record.checkpoint_pass_rate || 0;
                     const rateClass = (rate < 80 || rate > 90) ? 'cell-red' : '';
-                    const status = record.status || 'Unknown';
-                    const crimeId = record.crime_id || '—';
+                    // Get status - handle both 'status' and 'outcome' fields
+                    let status = record.status;
+                    if (!status && record.outcome) {
+                        status = record.outcome === 'Successful' ? 'Success' : 'Failure';
+                    }
+                    if (!status) {
+                        status = 'Unknown';
+                    }
+                    // Get crime_id - handle both 'crime_id' and 'id' fields
+                    let crimeId = record.crime_id;
+                    if (!crimeId && record.id) {
+                        crimeId = record.id;
+                    }
+                    if (!crimeId) {
+                        crimeId = '—';
+                    }
                     
                     html += `<tr style="background-color: ${index % 2 === 0 ? '#f9f9f9' : 'white'};">`;
                     html += `<td style="padding: 8px; border: 1px solid #ddd;">${dateStr}</td>`;
