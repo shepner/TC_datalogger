@@ -677,10 +677,14 @@ class OCEmailGenerator:
                     has_valid_oc_rate = False
                     has_oc_specific_data = False
                     best_oc_rate = None
+                    matching_keys = []
                     
+                    oc_name_lower = oc_name.lower().strip()
                     for key, rate in member_oc_specific_rates.items():
                         # Key format is "oc_name_position_id", so check if it starts with oc_name
-                        if key.lower().startswith(oc_name.lower() + '_'):
+                        key_lower = key.lower()
+                        if key_lower.startswith(oc_name_lower + '_'):
+                            matching_keys.append(key)
                             has_oc_specific_data = True
                             try:
                                 rate_num = float(rate)
@@ -695,6 +699,13 @@ class OCEmailGenerator:
                                     has_valid_oc_rate = True
                             except (ValueError, TypeError):
                                 continue
+                    
+                    # Debug logging
+                    if member_name == "DubZzZ" and oc_name_lower == "leave no trace":
+                        logger.info(f"DEBUG DubZzZ/Leave No Trace: member_oc_specific_rates keys = {list(member_oc_specific_rates.keys())[:10]}")
+                        logger.info(f"DEBUG DubZzZ/Leave No Trace: oc_name = '{oc_name}', oc_name_lower = '{oc_name_lower}'")
+                        logger.info(f"DEBUG DubZzZ/Leave No Trace: matching_keys = {matching_keys}")
+                        logger.info(f"DEBUG DubZzZ/Leave No Trace: has_oc_specific_data = {has_oc_specific_data}, best_oc_rate = {best_oc_rate}, has_valid_oc_rate = {has_valid_oc_rate}")
                     
                     # If we have OC-specific data and member can't meet requirements, skip this OC
                     if has_oc_specific_data and not has_valid_oc_rate:
