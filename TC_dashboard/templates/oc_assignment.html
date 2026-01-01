@@ -1068,53 +1068,15 @@
                         cell.style.cssText = 'padding: 6px; border: 1px solid #ddd; border-right: 1px solid #ddd; text-align: center; font-weight: bold; cursor: pointer; position: relative;';
                         cell.textContent = checkpointRate;
                         
-                        // Get cell metadata and member for event handlers
+                        // Get cell metadata and set data attributes for event delegation
                         const metadata = rowData.cellMetadata[idx];
-                        const member = rowData.member;
-                        if (metadata && member && member.history) {
-                            const cellHistory = member.history.get(metadata.columnKey);
-                            if (cellHistory && cellHistory.length > 0) {
-                                // Store history reference in closure
-                                const history = cellHistory;
-                                const difficulty = metadata.difficulty;
-                                const ocName = metadata.ocName;
-                                const positionId = metadata.positionId;
-                                const positionName = metadata.position;
-                                
-                                // Add hover tooltip with historical data
-                                let tooltipTimeout = null;
-                                cell.addEventListener('mouseenter', function(e) {
-                                    console.log('MOUSE ENTER EVENT FIRED!', rowData.member_name, metadata.columnKey);
-                                    e.stopPropagation();
-                                    
-                                    if (history && history.length > 0) {
-                                        tooltipTimeout = setTimeout(() => {
-                                            console.log('Calling showHistoryTooltip with', history.length, 'records');
-                                            showHistoryTooltip(e.target, history, difficulty, ocName, positionName);
-                                        }, 200);
-                                    }
-                                }, true);
-                                
-                                cell.addEventListener('mouseleave', function() {
-                                    if (tooltipTimeout) {
-                                        clearTimeout(tooltipTimeout);
-                                        tooltipTimeout = null;
-                                    }
-                                    hideHistoryTooltip();
-                                }, true);
-                                
-                                // Add click handler for full modal
-                                cell.addEventListener('click', function(e) {
-                                    e.stopPropagation();
-                                    if (tooltipTimeout) {
-                                        clearTimeout(tooltipTimeout);
-                                    }
-                                    hideHistoryTooltip();
-                                    if (history && history.length > 0) {
-                                        showHistoryModal(rowData.member_name, metadata.columnKey, difficulty, ocName, positionId, positionName, history);
-                                    }
-                                }, true);
-                            }
+                        if (metadata) {
+                            cell.setAttribute('data-member', rowData.member_name);
+                            cell.setAttribute('data-column-key', metadata.columnKey);
+                            cell.setAttribute('data-difficulty', metadata.difficulty);
+                            cell.setAttribute('data-oc-name', metadata.ocName);
+                            cell.setAttribute('data-position-id', metadata.positionId);
+                            cell.setAttribute('data-position', metadata.position);
                         }
                         
                         row.appendChild(cell);
