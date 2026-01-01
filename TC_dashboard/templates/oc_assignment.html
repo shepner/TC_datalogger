@@ -452,7 +452,6 @@
                 }
                 
                 // Display needed OCs below the email text
-                console.log('Needed OCs data:', data.needed_ocs);
                 displayNeededOCs(data.needed_ocs || []);
             } catch (error) {
                 if (errorEl) {
@@ -463,25 +462,17 @@
         }
 
         function displayNeededOCs(neededOCs) {
-            console.log('displayNeededOCs called with:', neededOCs);
             const section = document.getElementById('needed-ocs-section');
             const list = document.getElementById('needed-ocs-list');
             
-            console.log('Section element:', section);
-            console.log('List element:', list);
-            
             if (!section || !list) {
-                console.error('needed-ocs-section or needed-ocs-list not found');
                 return;
             }
             
             if (!neededOCs || neededOCs.length === 0) {
-                console.log('No needed OCs, hiding section');
                 section.style.display = 'none';
                 return;
             }
-            
-            console.log('Displaying needed OCs:', neededOCs);
             
             // Sort by level descending
             neededOCs.sort((a, b) => b.level - a.level);
@@ -494,7 +485,6 @@
             
             list.innerHTML = html;
             section.style.display = 'block';
-            console.log('Section should now be visible');
         }
 
         async function copyEmail(event) {
