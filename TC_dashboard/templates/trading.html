@@ -506,6 +506,9 @@
 
             document.getElementById('trades-table').style.display = 'table';
             document.getElementById('grouped-table').style.display = 'none';
+            
+            // Attach sort handlers after table is displayed
+            attachSortHandlers();
         }
 
         function sortGroupedTrades(memberGroups, column, direction) {
