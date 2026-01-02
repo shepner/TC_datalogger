@@ -276,9 +276,9 @@ class TradingDashboard:
         # Calculate individual payment value (payment_amount / quantity)
         individual_payment = int(payment_amount / quantity) if quantity > 0 else 0
         
-        # Format: [Quantity] [Item Name] * [Individual Value] = [Total Value]
+        # Format: [Quantity] [Item Name] * $[Individual Value] = $[Total Value]
         # Where Individual Value is the payment per item, Total Value is total payment
-        message = f"{quantity} {item_name} * {individual_payment} = {payment_amount}"
+        message = f"{quantity} {item_name} * ${individual_payment} = ${payment_amount}"
         return message
 
     def mark_as_paid(self, event_id: str, trade: Optional[Dict[str, Any]] = None) -> None:
