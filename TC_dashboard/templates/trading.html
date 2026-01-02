@@ -271,6 +271,7 @@
                         return {
                             event_id: t.event_id || t.get && t.get('event_id'),
                             timestamp: t.timestamp || t.get && t.get('timestamp'),
+                            user_name: t.user_name || t.get && t.get('user_name') || member.member_name,
                             item_name: t.item_name || t.get && t.get('item_name'),
                             quantity: t.quantity || t.get && t.get('quantity'),
                             market_price: t.market_price || t.get && t.get('market_price'),
@@ -282,15 +283,18 @@
                     return t;
                 });
                 
-                const tradesHtml = trades.map(trade => {
+                const memberId = member.member_name.replace(/\s+/g, '-');
+                const tradesHtml = trades.map((trade, index) => {
                     const date = new Date(trade.timestamp);
                     const individualPayment = trade.payment_amount || 0;
                     const marketPrice = trade.market_price || 0;
                     const salesFee = ((trade.sales_fee || 0) * 100).toFixed(1);
                     const buyPrice = trade.buy_price || 0;
                     const tradeJson = JSON.stringify(trade).replace(/'/g, "\\'");
+                    const checkboxId = `trade-checkbox-${memberId}-${index}`;
                     return `
                         <tr class="trade-detail">
+                            <td><input type="checkbox" class="trade-checkbox" id="${checkboxId}" data-trade-index="${index}" checked></td>
                             <td>${date.toLocaleString()}</td>
                             <td>${trade.item_name || 'Unknown'}</td>
                             <td>${trade.quantity || 0}</td>
@@ -316,11 +320,14 @@
                         <button class="small" onclick="toggleMemberTrades(this)" style="margin-right: 5px;">▶</button>
                         ${member.member_name || 'Unknown'}
                     </td>
-                    <td>${tradeCount}</td>
-                    <td>${totalQuantity}</td>
-                    <td>$${totalPayment.toLocaleString()}</td>
+                    <td class="trade-count-${memberId}">${tradeCount}</td>
+                    <td class="total-quantity-${memberId}">${totalQuantity}</td>
+                    <td class="total-payment-${memberId}">$${totalPayment.toLocaleString()}</td>
                     <td class="actions">
-                        <button class="small" onclick="copyValue('${totalPayment}')">Copy Total</button>
+                        <button class="small copy-total-btn" data-member-id="${memberId}">Copy Total</button>
+                        <button class="small copy-all-chat-btn" 
+                                data-member-id="${memberId}"
+                                data-trades="${tradesJson}">Copy Chat</button>
                         <button class="small mark-all-paid-btn" 
                                 data-member-name="${memberNameEscaped}" 
                                 data-trades="${tradesJson}">Mark All Paid</button>
@@ -351,6 +358,7 @@
                         <table style="width: 100%; margin-left: 20px; font-size: 12px;">
                             <thead>
                                 <tr style="background-color: #e8f5e9;">
+                                    <th><input type="checkbox" class="select-all-checkbox" id="select-all-${memberId}" checked></th>
                                     <th>Date</th>
                                     <th>Item</th>
                                     <th>Quantity</th>
@@ -361,7 +369,7 @@
                                     <th>Actions</th>
                                 </tr>
                             </thead>
-                            <tbody class="member-trades-${member.member_name.replace(/\s+/g, '-')}">
+                            <tbody class="member-trades-${memberId}" data-member-id="${memberId}">
                                 ${tradesHtml}
                             </tbody>
                         </table>
@@ -384,6 +392,59 @@
                         }
                     });
                 });
+                
+                // Attach event listener to copy total button
+                const copyTotalBtn = row.querySelector('.copy-total-btn');
+                if (copyTotalBtn) {
+                    copyTotalBtn.addEventListener('click', function() {
+                        const memberId = this.dataset.memberId;
+                        const totalElement = document.querySelector(`.total-payment-${memberId}`);
+                        if (totalElement) {
+                            const totalText = totalElement.textContent.replace(/[$,]/g, '');
+                            copyValue(totalText);
+                        }
+                    });
+                }
+                
+                // Attach event listener to copy all chat button
+                const copyAllChatBtn = row.querySelector('.copy-all-chat-btn');
+                if (copyAllChatBtn) {
+                    copyAllChatBtn.addEventListener('click', function() {
+                        const memberId = this.dataset.memberId;
+                        try {
+                            const tradesData = JSON.parse(this.dataset.trades);
+                            copyAllChatMessages(memberId, tradesData);
+                        } catch (error) {
+                            console.error('Error parsing trades data:', error);
+                            showError('Failed to parse trades data');
+                        }
+                    });
+                }
+                
+                // Attach event listener to select all checkbox
+                const selectAllCheckbox = detailRow.querySelector('.select-all-checkbox');
+                if (selectAllCheckbox) {
+                    selectAllCheckbox.addEventListener('change', function() {
+                        const memberId = this.id.replace('select-all-', '');
+                        const checkboxes = detailRow.querySelectorAll(`.member-trades-${memberId} .trade-checkbox`);
+                        checkboxes.forEach(cb => cb.checked = this.checked);
+                        updateMemberTotals(memberId, trades);
+                    });
+                }
+                
+                // Attach event listeners to individual checkboxes
+                const tradeCheckboxes = detailRow.querySelectorAll('.trade-checkbox');
+                tradeCheckboxes.forEach(checkbox => {
+                    checkbox.addEventListener('change', function() {
+                        const memberId = this.closest('tbody').dataset.memberId;
+                        updateSelectAllState(memberId);
+                        updateMemberTotals(memberId, trades);
+                    });
+                });
+                
+                // Initialize select-all state and totals (all checked by default)
+                updateSelectAllState(memberId);
+                // Totals are already correct from backend, but we can verify if needed
             });
 
             document.getElementById('grouped-table').style.display = 'table';
@@ -493,6 +554,94 @@
             navigator.clipboard.writeText(value).then(() => {
                 showSuccess('Value copied to clipboard!');
             });
+        }
+
+        function updateMemberTotals(memberId, trades) {
+            const checkboxes = document.querySelectorAll(`.member-trades-${memberId} .trade-checkbox`);
+            let checkedCount = 0;
+            let totalQuantity = 0;
+            let totalPayment = 0;
+            
+            checkboxes.forEach((checkbox, index) => {
+                if (checkbox.checked && trades[index]) {
+                    checkedCount++;
+                    totalQuantity += trades[index].quantity || 0;
+                    totalPayment += trades[index].payment_amount || 0;
+                }
+            });
+            
+            // Update the totals in the member row
+            const memberRow = document.querySelector(`.trade-count-${memberId}`).closest('tr');
+            if (memberRow) {
+                memberRow.querySelector(`.trade-count-${memberId}`).textContent = checkedCount;
+                memberRow.querySelector(`.total-quantity-${memberId}`).textContent = totalQuantity;
+                memberRow.querySelector(`.total-payment-${memberId}`).textContent = `$${totalPayment.toLocaleString()}`;
+            }
+        }
+
+        function updateSelectAllState(memberId) {
+            const checkboxes = document.querySelectorAll(`.member-trades-${memberId} .trade-checkbox`);
+            const selectAllCheckbox = document.getElementById(`select-all-${memberId}`);
+            
+            if (!selectAllCheckbox || checkboxes.length === 0) return;
+            
+            const checkedCount = Array.from(checkboxes).filter(cb => cb.checked).length;
+            
+            if (checkedCount === 0) {
+                selectAllCheckbox.checked = false;
+                selectAllCheckbox.indeterminate = false;
+            } else if (checkedCount === checkboxes.length) {
+                selectAllCheckbox.checked = true;
+                selectAllCheckbox.indeterminate = false;
+            } else {
+                selectAllCheckbox.checked = false;
+                selectAllCheckbox.indeterminate = true;
+            }
+        }
+
+        async function copyAllChatMessages(memberId, trades) {
+            const checkboxes = document.querySelectorAll(`.member-trades-${memberId} .trade-checkbox`);
+            const checkedTrades = [];
+            
+            checkboxes.forEach((checkbox, index) => {
+                if (checkbox.checked && trades[index]) {
+                    checkedTrades.push(trades[index]);
+                }
+            });
+            
+            if (checkedTrades.length === 0) {
+                showError('No trades selected');
+                return;
+            }
+            
+            try {
+                const messages = [];
+                for (const trade of checkedTrades) {
+                    const response = await fetch('/api/trading/chat-message', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ trade: trade })
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (!response.ok) {
+                        throw new Error(data.error || 'Failed to format message');
+                    }
+                    
+                    messages.push(data.message);
+                }
+                
+                const allMessages = messages.join('\n');
+                navigator.clipboard.writeText(allMessages).then(() => {
+                    showSuccess(`Copied ${checkedTrades.length} chat message(s) to clipboard!`);
+                });
+            } catch (error) {
+                console.error('Error copying chat messages:', error);
+                showError(error.message || 'Failed to copy chat messages');
+            }
         }
 
         async function copyChatMessage(trade) {
