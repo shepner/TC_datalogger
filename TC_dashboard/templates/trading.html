@@ -616,6 +616,8 @@
             
             try {
                 const messages = [];
+                let totalPayment = 0;
+                
                 for (const trade of checkedTrades) {
                     const response = await fetch('/api/trading/chat-message', {
                         method: 'POST',
@@ -632,7 +634,11 @@
                     }
                     
                     messages.push(data.message);
+                    totalPayment += trade.payment_amount || 0;
                 }
+                
+                // Add final line with total payment
+                messages.push(`$${totalPayment.toLocaleString()} deposited to the vault!`);
                 
                 const allMessages = messages.join('\n');
                 navigator.clipboard.writeText(allMessages).then(() => {
