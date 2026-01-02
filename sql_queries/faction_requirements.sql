@@ -62,7 +62,7 @@ oc_participation AS (
 ),
 trading_items AS (
   SELECT
-    TRIM(REGEXP_EXTRACT(event, r' from (.+)$')) AS user_name,
+    TRIM(REGEXP_EXTRACT(event, r' from (.+?)(?: with the message|$)')) AS user_name,
     SUM(CAST(REGEXP_EXTRACT(event, r'You were sent (\d+)x ') AS INT64)) AS trading_count_30d
   FROM
     `torncity-402423.torn_data.v2_torn_user_events-raw`

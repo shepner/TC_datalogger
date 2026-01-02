@@ -68,7 +68,7 @@ class TradingDashboard:
             event,
             CAST(REGEXP_EXTRACT(event, r'You were sent (\d+)x ') AS INT64) AS quantity,
             REGEXP_EXTRACT(event, r'You were sent \d+x (.+?) from ') AS item_name,
-            TRIM(REGEXP_EXTRACT(event, r' from (.+)$')) AS user_name
+            TRIM(REGEXP_EXTRACT(event, r' from (.+?)(?: with the message|$)')) AS user_name
           FROM
             `torncity-402423.torn_data.v2_torn_user_events-raw`
           WHERE
@@ -148,7 +148,7 @@ class TradingDashboard:
             event,
             CAST(REGEXP_EXTRACT(event, r'You were sent (\d+)x ') AS INT64) AS quantity,
             REGEXP_EXTRACT(event, r'You were sent \d+x (.+?) from ') AS item_name,
-            TRIM(REGEXP_EXTRACT(event, r' from (.+)$')) AS user_name
+            TRIM(REGEXP_EXTRACT(event, r' from (.+?)(?: with the message|$)')) AS user_name
           FROM
             `torncity-402423.torn_data.v2_torn_user_events-raw`
           WHERE
@@ -317,7 +317,7 @@ class TradingDashboard:
             event,
             CAST(REGEXP_EXTRACT(event, r'You were sent (\d+)x ') AS INT64) AS quantity,
             REGEXP_EXTRACT(event, r'You were sent \d+x (.+?) from ') AS item_name,
-            TRIM(REGEXP_EXTRACT(event, r' from (.+)$')) AS user_name
+            TRIM(REGEXP_EXTRACT(event, r' from (.+?)(?: with the message|$)')) AS user_name
           FROM
             `torncity-402423.torn_data.v2_torn_user_events-raw`
           WHERE
@@ -364,7 +364,7 @@ class TradingDashboard:
         WITH parsed_events AS (
           SELECT
             id AS event_id,
-            TRIM(REGEXP_EXTRACT(event, r' from (.+)$')) AS user_name,
+            TRIM(REGEXP_EXTRACT(event, r' from (.+?)(?: with the message|$)')) AS user_name,
             CAST(REGEXP_EXTRACT(event, r'You were sent (\d+)x ') AS INT64) AS quantity,
             REGEXP_EXTRACT(event, r'You were sent \d+x (.+?) from ') AS item_name
           FROM
