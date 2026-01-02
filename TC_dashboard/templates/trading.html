@@ -392,6 +392,13 @@
                         continue;
                     }
                     
+                    // Ensure trade has user_name/member_name for database saving
+                    const tradeWithMember = {
+                        ...trade,
+                        user_name: trade.user_name || memberName,
+                        member_name: trade.member_name || memberName
+                    };
+                    
                     try {
                         const response = await fetch('/api/trading/mark-paid', {
                             method: 'POST',
@@ -400,7 +407,7 @@
                             },
                             body: JSON.stringify({
                                 event_id: trade.event_id,
-                                trade: trade
+                                trade: tradeWithMember
                             })
                         });
                         

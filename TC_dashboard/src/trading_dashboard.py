@@ -231,6 +231,7 @@ class TradingDashboard:
             STRUCT(
               event_id,
               timestamp,
+              user_name,
               item_name,
               quantity,
               market_price,
@@ -299,9 +300,12 @@ class TradingDashboard:
                 return
 
             # Insert into BigQuery
+            # Handle both user_name (from individual trades) and member_name (from grouped trades)
+            member_name = trade.get("user_name") or trade.get("member_name") or ""
+            
             row = {
                 "event_id": event_id,
-                "member_name": trade.get("user_name", ""),
+                "member_name": member_name,
                 "item_name": trade.get("item_name", ""),
                 "quantity": trade.get("quantity", 0),
                 "payment_amount": trade.get("payment_amount", 0),

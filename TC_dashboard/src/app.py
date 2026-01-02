@@ -4,7 +4,7 @@ import logging
 import os
 from pathlib import Path
 
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, jsonify, render_template, request, send_from_directory
 
 from src.bigquery_client import BigQueryClient
 from src.docker_client import DockerClient
@@ -60,9 +60,8 @@ def index():
 
 @app.route("/favicon.ico")
 def favicon():
-    """Handle favicon requests to prevent 404 errors."""
-    # Return 204 No Content to suppress favicon requests
-    return "", 204
+    """Serve the favicon file."""
+    return send_from_directory(app.static_folder, 'favicon.ico', mimetype='image/vnd.microsoft.icon')
 
 
 @app.route("/api/health")
