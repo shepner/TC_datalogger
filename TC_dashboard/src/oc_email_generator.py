@@ -1258,12 +1258,30 @@ class OCEmailGenerator:
         for level in sorted(assignments_by_level.keys(), reverse=True):
             level_assignments = assignments_by_level[level]
             
-            # For each OC at this level
+            # Get all OCs at this level that have assignments, and sort them by priority
+            # Priority: partially filled OCs first, then by members needed
+            level_ocs_with_assignments = []
             for oc in ocs:
                 oc_id = oc['oc_id']
-                if oc_id not in level_assignments:
-                    continue
-                
+                if oc_id in level_assignments:
+                    level_ocs_with_assignments.append(oc)
+            
+            # Sort OCs at this level by the same priority used for assignment:
+            # 1. Partially filled OCs first (filled_slots > 0)
+            # 2. Members needed (ascending) - OCs that need fewer members first
+            def level_oc_sort_key(oc):
+                total_slots = oc.get('total_slots', 0)
+                filled_slots = oc.get('filled_slots', 0)
+                members_needed = max(0, total_slots - filled_slots)
+                is_partially_filled = 1 if filled_slots > 0 else 0
+                # Return tuple: (negative is_partially_filled for descending, members_needed for ascending)
+                return (-is_partially_filled, members_needed)
+            
+            level_ocs_with_assignments.sort(key=level_oc_sort_key)
+            
+            # Output each OC at this level in priority order
+            for oc in level_ocs_with_assignments:
+                oc_id = oc['oc_id']
                 oc_name = oc['oc_name']
                 # Use the correct URL format: #/tab=crimes&crimeId=
                 oc_url = f"https://www.torn.com/factions.php?step=your#/tab=crimes&crimeId={oc_id}"
