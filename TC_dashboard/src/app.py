@@ -647,13 +647,17 @@ def get_requirements_report():
 
 @app.route("/api/data-pull/trigger", methods=["POST"])
 def trigger_data_pull():
-    """Trigger data pull from TC API for all services."""
+    """Trigger data pull from TC API for specified services."""
     if not docker_client.is_available():
         return jsonify({"error": "Docker client not available"}), 500
     
     from datetime import datetime, timedelta
     from pathlib import Path
     import json
+    
+    # Get requested services from request body, default to OC services for backward compatibility
+    request_data = request.get_json() or {}
+    requested_services = request_data.get("services", ["faction_crimes", "faction_members"])
     
     # Rate limiting: faction_crimes can only be pulled once every 30 minutes
     LAST_PULL_FILE = Path("/app/logs/last_data_pull.json")
@@ -668,13 +672,13 @@ def trigger_data_pull():
         except Exception as e:
             logger.warning(f"Could not read last pull file: {e}")
     
-    # Check if faction_crimes was pulled recently
+    # Check if faction_crimes was pulled recently (only if it's in the requested services)
     now = datetime.now()
     last_crimes_pull_str = last_pulls.get("faction_crimes")
     skip_crimes = False
     time_until_next = None
     
-    if last_crimes_pull_str:
+    if "faction_crimes" in requested_services and last_crimes_pull_str:
         try:
             last_crimes_pull = datetime.fromisoformat(last_crimes_pull_str)
             time_since_pull = now - last_crimes_pull
@@ -685,26 +689,41 @@ def trigger_data_pull():
         except Exception as e:
             logger.warning(f"Could not parse last crimes pull time: {e}")
     
-    # List of services to trigger
-    # Only update services/tables used by the OC assignment page:
-    # - v2_faction_40832_crimes-raw (from faction_crimes) - rate limited to once per 30 min
-    # - v2_faction_40832_members-raw (from faction_members)
-    services = []
-    
-    if not skip_crimes:
-        services.append({
+    # Service definitions
+    SERVICE_DEFINITIONS = {
+        "faction_crimes": {
             "name": "faction_crimes",
             "container": "tc-faction-crimes-pipeline",
             "command": ["python", "-m", "src.main"]
-        })
-    else:
-        logger.info(f"Skipping faction_crimes pull - last pull was less than {COOLDOWN_MINUTES} minutes ago")
+        },
+        "faction_members": {
+            "name": "faction_members",
+            "container": "tc-faction-members-pipeline",
+            "command": ["python", "-m", "src.main"]
+        },
+        "user_events": {
+            "name": "user_events",
+            "container": "tc-user-events-pipeline",
+            "command": ["python", "-m", "src.main"]
+        },
+        "items": {
+            "name": "items",
+            "container": "tc-items-pipeline",
+            "command": ["python", "-m", "src.main"]
+        }
+    }
     
-    services.append({
-        "name": "faction_members",
-        "container": "tc-faction-members-pipeline",
-        "command": ["python", "-m", "src.main"]
-    })
+    # Build list of services to trigger based on requested services
+    services = []
+    for service_key in requested_services:
+        if service_key in SERVICE_DEFINITIONS:
+            # Skip faction_crimes if rate limited
+            if service_key == "faction_crimes" and skip_crimes:
+                logger.info(f"Skipping faction_crimes pull - last pull was less than {COOLDOWN_MINUTES} minutes ago")
+                continue
+            services.append(SERVICE_DEFINITIONS[service_key])
+        else:
+            logger.warning(f"Unknown service requested: {service_key}")
     
     results = {}
     all_success = True

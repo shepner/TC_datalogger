@@ -922,6 +922,122 @@
             }
         }
 
+        async function triggerDataPull() {
+            const btn = document.getElementById('pull-data-btn');
+            const statusDiv = document.getElementById('data-pull-status');
+            
+            // Disable button and show status
+            btn.disabled = true;
+            btn.textContent = 'Pulling Data...';
+            statusDiv.style.display = 'block';
+            statusDiv.style.backgroundColor = '#fff3cd';
+            statusDiv.style.color = '#856404';
+            statusDiv.style.border = '1px solid #ffc107';
+            
+            // Only update services/tables used by the trading dashboard
+            // - v2_torn_user_events-raw (from user_events)
+            // - v2_torn_items-raw (from items)
+            // - v2_faction_40832_members-raw (from faction_members) - for user IDs
+            const services = ['user_events', 'items', 'faction_members'];
+            let startTime = Date.now();
+            
+            // Show initial status with service list
+            const updateStatus = (message, showServices = false) => {
+                let statusMsg = message;
+                if (showServices) {
+                    statusMsg += '\n\nPulling data for:\n';
+                    services.forEach(s => {
+                        statusMsg += `  • ${s}\n`;
+                    });
+                }
+                statusDiv.innerHTML = statusMsg.replace(/\n/g, '<br>');
+            };
+            
+            updateStatus('🔄 Starting data pull...', true);
+            
+            // Update elapsed time every second
+            const timeInterval = setInterval(() => {
+                const elapsed = Math.floor((Date.now() - startTime) / 1000);
+                const minutes = Math.floor(elapsed / 60);
+                const seconds = elapsed % 60;
+                const currentStatus = statusDiv.textContent || statusDiv.innerText;
+                if (!currentStatus.includes('completed') && !currentStatus.includes('Error')) {
+                    updateStatus(`🔄 Pulling data... (${minutes}m ${seconds}s elapsed)`, true);
+                }
+            }, 1000);
+            
+            try {
+                const response = await fetch('/api/data-pull/trigger', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ services: services })
+                });
+                
+                clearInterval(timeInterval);
+                const data = await response.json();
+                const totalTime = Math.floor((Date.now() - startTime) / 1000);
+                const minutes = Math.floor(totalTime / 60);
+                const seconds = totalTime % 60;
+                
+                if (data.success) {
+                    statusDiv.style.backgroundColor = '#d4edda';
+                    statusDiv.style.color = '#155724';
+                    statusDiv.style.border = '1px solid #c3e6cb';
+                    
+                    // Show success with service details
+                    const successCount = Object.values(data.results || {}).filter(r => r.success).length;
+                    let successMsg = `✅ Data pull completed successfully!\n\n`;
+                    successMsg += `Completed in ${minutes}m ${seconds}s\n`;
+                    successMsg += `${successCount} of ${services.length} services completed successfully.\n\n`;
+                    successMsg += `Reloading page in 3 seconds...`;
+                    statusDiv.innerHTML = successMsg.replace(/\n/g, '<br>');
+                    
+                    // Wait a moment, then reload the page
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 3000);
+                } else {
+                    statusDiv.style.backgroundColor = '#f8d7da';
+                    statusDiv.style.color = '#721c24';
+                    statusDiv.style.border = '1px solid #f5c6cb';
+                    
+                    let errorMsg = `❌ Data pull completed with errors\n\n`;
+                    errorMsg += `Completed in ${minutes}m ${seconds}s\n\n`;
+                    
+                    if (data.results) {
+                        Object.entries(data.results).forEach(([service, result]) => {
+                            if (result.success) {
+                                errorMsg += `✅ ${service}: Success\n`;
+                            } else {
+                                errorMsg += `❌ ${service}: ${result.error || 'Failed'}\n`;
+                            }
+                        });
+                    }
+                    
+                    if (data.skipped && data.skipped.length > 0) {
+                        errorMsg += `\n⚠️ Skipped services:\n`;
+                        data.skipped.forEach(s => {
+                            errorMsg += `  • ${s.name}: ${s.reason}\n`;
+                        });
+                    }
+                    
+                    statusDiv.innerHTML = errorMsg.replace(/\n/g, '<br>');
+                    btn.disabled = false;
+                    btn.textContent = 'Pull Data from TC API';
+                }
+            } catch (error) {
+                clearInterval(timeInterval);
+                statusDiv.style.backgroundColor = '#f8d7da';
+                statusDiv.style.color = '#721c24';
+                statusDiv.style.border = '1px solid #f5c6cb';
+                statusDiv.innerHTML = `❌ Error: ${error.message}`;
+                btn.disabled = false;
+                btn.textContent = 'Pull Data from TC API';
+            }
+        }
+
         async function undoAllPaidStatus(memberName, trades) {
             if (!trades || !Array.isArray(trades) || trades.length === 0) {
                 showError('No trades to undo for ' + memberName);
