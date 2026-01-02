@@ -480,9 +480,15 @@
             return promotableRoles[currentIndex - 1];
         }
 
-        // Check if member is at top promotable role
+        // Check if member is at top role (either in full hierarchy or promotable roles)
         function isAtTopRole(position) {
             if (!position) return false;
+            // First check if at top of full hierarchy (leadership roles should never be promoted)
+            const allRoles = getAllRoles();
+            if (allRoles.length > 0 && allRoles[allRoles.length - 1] === position) {
+                return true;
+            }
+            // Also check promotable roles for backwards compatibility
             const promotableRoles = getPromotableRoles();
             if (promotableRoles.length === 0) return false;
             return promotableRoles[promotableRoles.length - 1] === position;
