@@ -188,6 +188,7 @@
                         <th>Buy Price</th>
                         <th>Market Value</th>
                         <th>Payment Amount</th>
+                        <th>Comments</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
@@ -276,6 +277,8 @@
                     ? `<a href="https://www.torn.com/profiles.php?XID=${userId}" target="_blank" style="color: #4CAF50; text-decoration: none; font-weight: 500;">${userName}</a>`
                     : userName;
                 
+                const comment = trade.comment || '';
+                
                 row.innerHTML = `
                     <td>${date.toLocaleString()}</td>
                     <td>${memberNameCell}</td>
@@ -286,6 +289,7 @@
                     <td>$${buyPrice.toLocaleString()}</td>
                     <td>$${totalValue.toLocaleString()}</td>
                     <td>$${paymentAmount.toLocaleString()}</td>
+                    <td style="max-width: 200px; word-wrap: break-word; font-size: 11px;">${comment}</td>
                     <td class="actions">
                         ${actionButtons}
                     </td>
