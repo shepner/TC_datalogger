@@ -76,6 +76,26 @@
             font-size: 12px;
             font-weight: 600;
         }
+        th.sortable {
+            cursor: pointer;
+            user-select: none;
+        }
+        th.sortable:hover {
+            background-color: #45a049;
+        }
+        th.sortable::after {
+            content: ' ↕';
+            opacity: 0.5;
+            font-size: 10px;
+        }
+        th.sort-asc::after {
+            content: ' ↑';
+            opacity: 1;
+        }
+        th.sort-desc::after {
+            content: ' ↓';
+            opacity: 1;
+        }
         tr:hover {
             background-color: #f5f5f5;
         }
@@ -226,10 +246,10 @@
             <table id="grouped-table" style="display: none;">
                 <thead>
                     <tr>
-                        <th>Member</th>
-                        <th>Trade Count</th>
-                        <th>Total Quantity</th>
-                        <th>Total Payment</th>
+                        <th class="sortable" data-column="member_name">Member</th>
+                        <th class="sortable" data-column="trade_count">Trade Count</th>
+                        <th class="sortable" data-column="total_quantity">Total Quantity</th>
+                        <th class="sortable" data-column="total_payment_amount">Total Payment</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
@@ -265,6 +285,10 @@
         let isGrouped = true;
 
         let showPaid = false;
+        let currentSort = {
+            column: null,
+            direction: 'asc'
+        };
 
         async function loadTrades() {
             const daysBack = document.getElementById('days_back').value;
@@ -390,6 +414,47 @@
             document.getElementById('grouped-table').style.display = 'none';
         }
 
+        function sortGroupedTrades(memberGroups, column, direction) {
+            const sorted = [...memberGroups].sort((a, b) => {
+                let aVal = a[column];
+                let bVal = b[column];
+
+                if (aVal == null && bVal == null) return 0;
+                if (aVal == null) return 1;
+                if (bVal == null) return -1;
+
+                // Handle numeric columns
+                if (column === 'trade_count' || column === 'total_quantity' || column === 'total_payment_amount') {
+                    aVal = Number(aVal) || 0;
+                    bVal = Number(bVal) || 0;
+                    return direction === 'asc' ? aVal - bVal : bVal - aVal;
+                }
+
+                // Handle string columns (member_name)
+                if (typeof aVal === 'string') {
+                    aVal = aVal.toLowerCase();
+                    bVal = bVal.toLowerCase();
+                }
+
+                let comparison = 0;
+                if (aVal < bVal) comparison = -1;
+                if (aVal > bVal) comparison = 1;
+
+                return direction === 'asc' ? comparison : -comparison;
+            });
+
+            return sorted;
+        }
+
+        function updateSortIndicators(column) {
+            document.querySelectorAll('#grouped-table th.sortable').forEach(th => {
+                th.classList.remove('sort-asc', 'sort-desc');
+                if (th.dataset.column === column) {
+                    th.classList.add(`sort-${currentSort.direction}`);
+                }
+            });
+        }
+
         function displayGroupedTrades(memberGroups, isPaid = false) {
             const tbody = document.getElementById('grouped-body');
             tbody.innerHTML = '';
@@ -400,6 +465,12 @@
                 document.getElementById('grouped-table').style.display = 'table';
                 document.getElementById('trades-table').style.display = 'none';
                 return;
+            }
+
+            // Sort the data if a sort is active
+            if (currentSort.column) {
+                memberGroups = sortGroupedTrades(memberGroups, currentSort.column, currentSort.direction);
+                updateSortIndicators(currentSort.column);
             }
 
             memberGroups.forEach(member => {
@@ -661,6 +732,9 @@
 
             document.getElementById('grouped-table').style.display = 'table';
             document.getElementById('trades-table').style.display = 'none';
+            
+            // Attach sort handlers after table is displayed
+            attachSortHandlers();
         }
 
         function toggleMemberTrades(button) {
@@ -1342,10 +1416,38 @@
             }
         }
 
+        function attachSortHandlers() {
+            document.querySelectorAll('#grouped-table th.sortable').forEach(th => {
+                // Remove existing listeners by cloning
+                const newTh = th.cloneNode(true);
+                th.parentNode.replaceChild(newTh, th);
+                
+                // Add click listener
+                newTh.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    const column = newTh.dataset.column;
+                    
+                    // Toggle direction if clicking the same column
+                    if (currentSort.column === column) {
+                        currentSort.direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
+                    } else {
+                        currentSort.column = column;
+                        currentSort.direction = 'asc';
+                    }
+                    
+                    // Re-display with new sort
+                    if (isGrouped && currentTrades.length > 0) {
+                        displayGroupedTrades(currentTrades, showPaid);
+                    }
+                });
+            });
+        }
+
         window.addEventListener('DOMContentLoaded', () => {
             loadMaxDaysBack();
             loadMemberNames();
             loadTrades();
+            attachSortHandlers();
         });
     </script>
 </body>
