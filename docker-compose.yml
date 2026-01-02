@@ -68,6 +68,10 @@ services:
     build:
       context: ./TC_dashboard
       dockerfile: Dockerfile
+      args:
+        # Set CACHE_BUST environment variable to bust cache: export CACHE_BUST=$(date +%s)
+        # Or pass via command line: docker-compose build --build-arg CACHE_BUST=$(date +%s) tc-dashboard
+        CACHE_BUST: ${CACHE_BUST:-1}
     container_name: tc-dashboard
     restart: unless-stopped
     environment:

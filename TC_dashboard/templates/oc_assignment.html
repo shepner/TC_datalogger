@@ -74,15 +74,22 @@
         .oc-level-8 { background-color: #c5cae9; }  /* Indigo - indigo */
         .oc-level-9 { background-color: #e1bee7; }  /* Violet - violet */
         .oc-level-10 { background-color: #f8bbd0; } /* Purple - purple */
-        /* Pivot table header styling - inspired by Wikipedia's sticky-header-multi */
+        /* Pivot table header styling */
+        #pivot-table-container {
+            position: relative;
+        }
         #pivot-table {
             border-collapse: separate;
             border-spacing: 0;
         }
         #pivot-header th {
             border: 1px solid rgba(255, 255, 255, 0.3) !important;
-            box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.2);
             background-color: #4CAF50 !important;
+        }
+        /* Make all header rows sticky - top offsets will be set by JavaScript */
+        #pivot-header th {
+            position: sticky;
+            z-index: 10;
         }
         #pivot-table td {
             border: 1px solid #ddd;
@@ -210,8 +217,12 @@
     <div class="container">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #ddd;">
             <h1 style="margin: 0; font-size: 18px; font-weight: 600; color: #333;">OC Assignment Email Generator</h1>
-            <a href="/" style="text-decoration: none; font-size: 12px; color: #666; padding: 4px 8px; border: 1px solid #ccc; border-radius: 3px; background-color: #f5f5f5;">← Back to Dashboard</a>
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <button id="pull-data-btn" onclick="triggerDataPull()" style="padding: 6px 12px; font-size: 12px; background-color: #2196F3; color: white; border: none; border-radius: 3px; cursor: pointer;">Pull Data from TC API</button>
+                <a href="/" style="text-decoration: none; font-size: 12px; color: #666; padding: 4px 8px; border: 1px solid #ccc; border-radius: 3px; background-color: #f5f5f5;">← Back to Dashboard</a>
+            </div>
         </div>
+        <div id="data-pull-status" style="display: none; margin-bottom: 10px; padding: 8px; border-radius: 4px; font-size: 12px;"></div>
 
             <div style="margin-top: 15px; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #ddd;">
             <h2 id="dashboard-title" style="margin: 0 0 10px 0; font-size: 16px; font-weight: 600; color: #333;">OC Performance Dashboard</h2>
@@ -268,9 +279,9 @@
                 <div id="detail-container" style="display: none;">
                     <div style="max-height: 70vh; overflow-y: auto; overflow-x: auto; border: 1px solid #ddd; margin-top: 20px;">
                         <table id="performance-table" style="width: 100%; border-collapse: collapse; font-size: 11px;">
-                            <thead style="position: sticky; top: 0; background-color: #4CAF50; color: white; z-index: 10;">
+                            <thead style="background-color: #4CAF50; color: white; z-index: 10;">
                                 <tr>
-                                    <th class="sortable" data-column="member_name" style="padding: 3px 6px; border: 1px solid #ddd; cursor: pointer; position: sticky; left: 0; z-index: 25;">Member ↕</th>
+                                    <th class="sortable" data-column="member_name" style="padding: 3px 6px; border: 1px solid #ddd; cursor: pointer; z-index: 25;">Member ↕</th>
                                     <th class="sortable" data-column="oc_level" style="padding: 3px 6px; border: 1px solid #ddd; cursor: pointer;">OC Level ↕</th>
                                     <th class="sortable" data-column="oc_name" style="padding: 3px 6px; border: 1px solid #ddd; cursor: pointer;">OC Name ↕</th>
                                     <th class="sortable" data-column="position" style="padding: 3px 6px; border: 1px solid #ddd; cursor: pointer;">Position ↕</th>
@@ -353,6 +364,151 @@
                 generateEmail();
             }
         });
+
+        async function triggerDataPull() {
+            const btn = document.getElementById('pull-data-btn');
+            const statusDiv = document.getElementById('data-pull-status');
+            
+            // Disable button and show status
+            btn.disabled = true;
+            btn.textContent = 'Pulling Data...';
+            statusDiv.style.display = 'block';
+            statusDiv.style.backgroundColor = '#fff3cd';
+            statusDiv.style.color = '#856404';
+            statusDiv.style.border = '1px solid #ffc107';
+            
+            // Only update services/tables used by the OC assignment page
+            const services = ['faction_crimes', 'faction_members'];
+            let startTime = Date.now();
+            
+            // Show initial status with service list
+            const updateStatus = (message, showServices = false) => {
+                let statusText = message;
+                if (showServices) {
+                    const elapsed = Math.floor((Date.now() - startTime) / 1000);
+                    const minutes = Math.floor(elapsed / 60);
+                    const seconds = elapsed % 60;
+                    statusText += `\n⏱️ Elapsed time: ${minutes}m ${seconds}s`;
+                    statusText += `\n\nServices being processed:\n${services.map(s => '  • ' + s.replace('_', ' ')).join('\n')}`;
+                }
+                statusDiv.innerHTML = statusText.replace(/\n/g, '<br>');
+            };
+            
+            updateStatus('🔄 Triggering data pull from TC API...\nThis may take several minutes. Please wait.', true);
+            
+            // Update elapsed time every second
+            const timeInterval = setInterval(() => {
+                if (!btn.disabled) {
+                    clearInterval(timeInterval);
+                    return;
+                }
+                const elapsed = Math.floor((Date.now() - startTime) / 1000);
+                const minutes = Math.floor(elapsed / 60);
+                const seconds = elapsed % 60;
+                const currentText = statusDiv.innerHTML.split('<br>')[0];
+                statusDiv.innerHTML = currentText + `<br>⏱️ Elapsed time: ${minutes}m ${seconds}s<br><br>Services being processed:<br>${services.map(s => '  • ' + s.replace('_', ' ')).join('<br>')}`;
+            }, 1000);
+            
+            try {
+                const response = await fetch('/api/data-pull/trigger', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+                
+                clearInterval(timeInterval);
+                const data = await response.json();
+                const totalTime = Math.floor((Date.now() - startTime) / 1000);
+                const minutes = Math.floor(totalTime / 60);
+                const seconds = totalTime % 60;
+                
+                if (data.success) {
+                    statusDiv.style.backgroundColor = '#d4edda';
+                    statusDiv.style.color = '#155724';
+                    statusDiv.style.border = '1px solid #c3e6cb';
+                    
+                    // Show success with service details
+                    const successCount = Object.values(data.results || {}).filter(r => r.success).length;
+                    let successMsg = `✅ Data pull completed successfully!\n\n`;
+                    successMsg += `Completed in ${minutes}m ${seconds}s\n`;
+                    successMsg += `All ${successCount} services completed successfully.\n\n`;
+                    successMsg += `Reloading page in 3 seconds...`;
+                    statusDiv.innerHTML = successMsg.replace(/\n/g, '<br>');
+                    
+                    // Wait a moment, then reload the page
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 3000);
+                } else {
+                    // Some services failed or were skipped - show detailed results
+                    const results = data.results || {};
+                    const successful = Object.entries(results).filter(([_, r]) => r.success);
+                    const failed = Object.entries(results).filter(([_, r]) => !r.success && !r.error?.includes('Rate limited'));
+                    const rateLimited = Object.entries(results).filter(([_, r]) => r.error?.includes('Rate limited'));
+                    
+                    statusDiv.style.backgroundColor = '#f8d7da';
+                    statusDiv.style.color = '#721c24';
+                    statusDiv.style.border = '1px solid #f5c6cb';
+                    
+                    let errorMsg = `⚠️ Data pull completed with issues\n\n`;
+                    errorMsg += `Completed in ${minutes}m ${seconds}s\n\n`;
+                    
+                    if (successful.length > 0) {
+                        errorMsg += `✅ Successful (${successful.length}): ${successful.map(([n]) => n.replace('_', ' ')).join(', ')}\n\n`;
+                    }
+                    
+                    if (rateLimited.length > 0) {
+                        errorMsg += `⏱️ Rate Limited (${rateLimited.length}): ${rateLimited.map(([n, r]) => {
+                            const match = r.error?.match(/wait (\d+) more minute/);
+                            const minutes = match ? match[1] : '?';
+                            return `${n.replace('_', ' ')} (wait ${minutes} min)`;
+                        }).join(', ')}\n\n`;
+                    }
+                    
+                    if (failed.length > 0) {
+                        errorMsg += `❌ Failed (${failed.length}): ${failed.map(([n]) => n.replace('_', ' ')).join(', ')}\n\n`;
+                        
+                        // Show error details for each failed service
+                        failed.forEach(([name, result]) => {
+                            errorMsg += `${name.replace('_', ' ')}:\n`;
+                            if (result.error) {
+                                errorMsg += `  Error: ${result.error}\n`;
+                            }
+                            if (result.exit_code !== undefined && result.exit_code !== -1) {
+                                errorMsg += `  Exit code: ${result.exit_code}\n`;
+                            }
+                            // Show last few lines of output if available
+                            if (result.output) {
+                                const outputLines = result.output.split('\n').filter(l => l.trim());
+                                const lastLines = outputLines.slice(-3).join('\n');
+                                if (lastLines) {
+                                    errorMsg += `  Last output:\n${lastLines.split('\n').map(l => '    ' + l).join('\n')}\n`;
+                                }
+                            }
+                            errorMsg += '\n';
+                        });
+                        
+                        errorMsg += `Check container logs for more details.`;
+                    }
+                    
+                    statusDiv.innerHTML = errorMsg.replace(/\n/g, '<br>');
+                    
+                    btn.disabled = false;
+                    btn.textContent = 'Pull Data from TC API';
+                }
+            } catch (error) {
+                clearInterval(timeInterval);
+                console.error('Error triggering data pull:', error);
+                statusDiv.style.backgroundColor = '#f8d7da';
+                statusDiv.style.color = '#721c24';
+                statusDiv.style.border = '1px solid #f5c6cb';
+                statusDiv.innerHTML = `❌ Error: ${error.message}`;
+                
+                btn.disabled = false;
+                btn.textContent = 'Pull Data from TC API';
+            }
+        }
 
         async function loadOcNames() {
             try {
@@ -1001,11 +1157,11 @@
             
             // First row: difficulty headers (with colspan) - sortable
             const headerRow1 = document.createElement('tr');
-            headerRow1.innerHTML = '<th rowspan="3" class="sortable" data-column="member" data-type="member" style="padding: 3px 6px; position: sticky; left: 0; top: 0; background-color: #4CAF50; z-index: 25; text-align: left; cursor: pointer; width: 100px; min-width: 100px; max-width: 100px;">Member</th>';
-            headerRow1.innerHTML += '<th rowspan="3" class="sortable" data-column="oc_30d" data-type="oc_30d" style="padding: 3px 6px; position: sticky; left: 100px; top: 0; background-color: #4CAF50; z-index: 25; text-align: center; cursor: pointer; width: 50px; min-width: 50px; max-width: 50px;">OC 30d</th>';
-            headerRow1.innerHTML += '<th rowspan="3" class="sortable" data-column="oc_7d" data-type="oc_7d" style="padding: 3px 6px; position: sticky; left: 150px; top: 0; background-color: #4CAF50; z-index: 25; text-align: center; cursor: pointer; width: 50px; min-width: 50px; max-width: 50px;">OC 7d</th>';
-            headerRow1.innerHTML += '<th rowspan="3" class="sortable" data-column="in_oc" data-type="in_oc" style="padding: 3px 6px; position: sticky; left: 200px; top: 0; background-color: #4CAF50; z-index: 25; text-align: center; cursor: pointer; width: 50px; min-width: 50px; max-width: 50px;">In OC</th>';
-            headerRow1.innerHTML += '<th rowspan="3" class="sortable" data-column="max_oc" data-type="max_oc" style="padding: 3px 6px; position: sticky; left: 250px; top: 0; background-color: #4CAF50; z-index: 25; text-align: center; cursor: pointer; width: 50px; min-width: 50px; max-width: 50px;">Max OC</th>';
+            headerRow1.innerHTML = '<th rowspan="3" class="sortable" data-column="member" data-type="member" data-sticky-left="0" style="padding: 3px 6px; background-color: #4CAF50; z-index: 25; text-align: left; cursor: pointer; width: 100px; min-width: 100px; max-width: 100px;">Member</th>';
+            headerRow1.innerHTML += '<th rowspan="3" class="sortable" data-column="oc_30d" data-type="oc_30d" data-sticky-left="100" style="padding: 3px 6px; background-color: #4CAF50; z-index: 25; text-align: center; cursor: pointer; width: 50px; min-width: 50px; max-width: 50px;">OC 30d</th>';
+            headerRow1.innerHTML += '<th rowspan="3" class="sortable" data-column="oc_7d" data-type="oc_7d" data-sticky-left="150" style="padding: 3px 6px; background-color: #4CAF50; z-index: 25; text-align: center; cursor: pointer; width: 50px; min-width: 50px; max-width: 50px;">OC 7d</th>';
+            headerRow1.innerHTML += '<th rowspan="3" class="sortable" data-column="in_oc" data-type="in_oc" data-sticky-left="200" style="padding: 3px 6px; background-color: #4CAF50; z-index: 25; text-align: center; cursor: pointer; width: 50px; min-width: 50px; max-width: 50px;">In OC</th>';
+            headerRow1.innerHTML += '<th rowspan="3" class="sortable" data-column="max_oc" data-type="max_oc" data-sticky-left="250" style="padding: 3px 6px; background-color: #4CAF50; z-index: 25; text-align: center; cursor: pointer; width: 50px; min-width: 50px; max-width: 50px;">Max OC</th>';
             
             // Track collapsed state
             if (!window.collapsedLevels) window.collapsedLevels = new Set();
@@ -1072,7 +1228,7 @@
                 }
                 
                 if (totalCols > 0) {
-                    headerRow1.innerHTML += `<th class="sortable" data-column="${startColIndex}" data-type="difficulty" data-difficulty="${difficulty}" colspan="${totalCols}" rowspan="${isLevelCollapsed ? '3' : '1'}" style="padding: 3px 6px; position: sticky; text-align: center; background-color: #4CAF50; color: white; cursor: pointer;">Level ${difficulty}</th>`;
+                    headerRow1.innerHTML += `<th class="sortable" data-column="${startColIndex}" data-type="difficulty" data-difficulty="${difficulty}" colspan="${totalCols}" rowspan="${isLevelCollapsed ? '3' : '1'}" style="padding: 3px 6px; text-align: center; background-color: #4CAF50; color: white; cursor: pointer;">Level ${difficulty}</th>`;
                 }
             });
             header.appendChild(headerRow1);
@@ -1097,7 +1253,7 @@
                         const isOCCollapsed = window.collapsedOCNames.has(`${difficulty}_${ocName}`);
                         const actualCols = isOCCollapsed ? 1 : sortedPositionIds.length;
                         const rowspan = isOCCollapsed ? '2' : '1';
-                        headerRow2.innerHTML += `<th class="sortable" data-column="${startColIndex}" data-type="oc_name" data-difficulty="${difficulty}" data-oc-name="${ocName.replace(/"/g, '&quot;')}" colspan="${actualCols}" rowspan="${rowspan}" style="padding: 3px 6px; position: sticky; text-align: center; background-color: #4CAF50; color: white; cursor: pointer;">${ocName}</th>`;
+                        headerRow2.innerHTML += `<th class="sortable" data-column="${startColIndex}" data-type="oc_name" data-difficulty="${difficulty}" data-oc-name="${ocName.replace(/"/g, '&quot;')}" colspan="${actualCols}" rowspan="${rowspan}" style="padding: 3px 6px; text-align: center; background-color: #4CAF50; color: white; cursor: pointer;">${ocName}</th>`;
                         columnIndex += actualCols;
                     });
                 }
@@ -1129,7 +1285,7 @@
                             const posInfo = ocGroup.get(positionId);
                             const columnKey = `${difficulty}_${ocName}_${positionId}`;
                             pivotColumnMap.set(columnIndex, columnKey);
-                            headerRow3.innerHTML += `<th class="sortable" data-column="${columnIndex}" data-type="position_id" data-difficulty="${difficulty}" data-oc-name="${ocName.replace(/"/g, '&quot;')}" data-position-id="${positionId}" style="padding: 3px 6px; position: sticky; text-align: center; background-color: #4CAF50; color: white; cursor: pointer;">${positionId}</th>`;
+                            headerRow3.innerHTML += `<th class="sortable" data-column="${columnIndex}" data-type="position_id" data-difficulty="${difficulty}" data-oc-name="${ocName.replace(/"/g, '&quot;')}" data-position-id="${positionId}" style="padding: 3px 6px; text-align: center; background-color: #4CAF50; color: white; cursor: pointer;">${positionId}</th>`;
                             columnIndex++;
                         });
                     });
@@ -1137,66 +1293,54 @@
             });
             header.appendChild(headerRow3);
             
-            // For multi-row sticky headers, calculate top offsets based on row heights
-            // This approach is similar to Wikipedia's sticky-header-multi implementation
-            const setStickyTop = () => {
+            // Attach sort handlers to all sortable headers
+            attachPivotSortHandlers();
+            
+            // Set sticky positioning for all header rows with cumulative top offsets
+            const setStickyHeaderPositions = () => {
                 const rows = Array.from(header.querySelectorAll('tr'));
                 if (rows.length === 0) {
-                    setTimeout(setStickyTop, 10);
+                    setTimeout(setStickyHeaderPositions, 50);
                     return;
                 }
                 
-                console.log('Calculating sticky positions for', rows.length, 'header rows');
+                // Force a reflow to get accurate measurements
+                void header.offsetHeight;
                 
-                // Calculate cumulative top values for each row
                 let cumulativeTop = 0;
                 rows.forEach((row, index) => {
-                    // Get the actual rendered height of the previous row
                     if (index > 0) {
                         const prevRow = rows[index - 1];
-                        // Force a reflow to get accurate measurements
-                        void prevRow.offsetHeight;
-                        const prevRect = prevRow.getBoundingClientRect();
-                        cumulativeTop += prevRect.height;
-                        console.log(`Row ${index}: top = ${cumulativeTop}px (prev row height: ${prevRect.height}px)`);
-                    } else {
-                        console.log(`Row ${index}: top = 0px`);
+                        void prevRow.offsetHeight; // Force reflow
+                        cumulativeTop += prevRow.offsetHeight || 0;
                     }
                     
-                    // Apply sticky positioning to all th in this row
-                    row.querySelectorAll('th').forEach(th => {
-                        // Remove any existing top value
-                        th.style.removeProperty('top');
-                        // Set position and top
-                        th.style.position = 'sticky';
-                        th.style.top = cumulativeTop + 'px';
-                        th.style.zIndex = (30 - index); // Higher z-index for earlier rows
-                        // Ensure background color is set
-                        th.style.backgroundColor = '#4CAF50';
+                    const thElements = row.querySelectorAll('th');
+                    thElements.forEach((th, thIndex) => {
+                        th.style.setProperty('position', 'sticky', 'important');
+                        th.style.setProperty('top', cumulativeTop + 'px', 'important');
+                        
+                        // Apply horizontal sticky for first 5 columns
+                        const stickyLeft = th.getAttribute('data-sticky-left');
+                        if (stickyLeft !== null) {
+                            th.style.setProperty('left', stickyLeft + 'px', 'important');
+                            // Higher z-index for sticky left columns to ensure they appear above other columns
+                            th.style.setProperty('z-index', (20 - index).toString(), 'important');
+                        } else {
+                            th.style.setProperty('z-index', (12 - index).toString(), 'important');
+                        }
                     });
                 });
-                
-                console.log('Sticky positioning applied');
             };
             
-            // Set sticky positioning - use multiple attempts to ensure it works
-            // Wait for table to be fully rendered and measured
-            requestAnimationFrame(() => {
-                requestAnimationFrame(() => {
-                    setStickyTop();
-                });
-            });
-            setTimeout(setStickyTop, 100);
-            setTimeout(setStickyTop, 300);
-            setTimeout(setStickyTop, 600);
+            // Set sticky positions after a short delay to ensure rows are rendered
+            setTimeout(setStickyHeaderPositions, 100);
+            setTimeout(setStickyHeaderPositions, 300);
             
-            // Also recalculate when window resizes or table content changes
+            // Also recalculate on resize
             window.addEventListener('resize', () => {
-                setTimeout(setStickyTop, 100);
+                setTimeout(setStickyHeaderPositions, 50);
             });
-            
-            // Attach sort handlers to all sortable headers
-            attachPivotSortHandlers();
 
             // Build body
             const tbody = document.getElementById('pivot-body');
@@ -1952,6 +2096,7 @@
             
             // Re-setup event delegation after regenerating table
             setupPivotTableEventDelegation();
+            
         }
         
         function showHistory(historyKey) {

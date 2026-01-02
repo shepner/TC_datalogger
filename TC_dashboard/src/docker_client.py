@@ -28,24 +28,22 @@ class DockerClient:
             logger.warning("Docker socket not found, Docker features unavailable")
             return
         
-        # Try Docker SDK first, but always fall back to HTTP
-        sdk_worked = False
+        # Try Docker SDK first
         if docker:
             try:
-                self.client = docker.DockerClient(base_url=f'unix://{self.socket_path}')
+                # Use the socket path directly, not with unix:// prefix
+                self.client = docker.DockerClient(base_url='unix://' + self.socket_path)
                 self.client.ping()
                 logger.info("Successfully connected to Docker via SDK")
-                sdk_worked = True
             except Exception as e:
                 logger.warning(f"Docker SDK failed: {e}, falling back to HTTP")
                 self.client = None
-        
-        # Fall back to HTTP requests to Docker socket if SDK didn't work
-        if not sdk_worked:
+                self.use_http = True
+        else:
+            logger.warning("Docker SDK not available, using HTTP fallback")
             self.use_http = True
-            logger.info("Using HTTP requests to Docker socket")
 
-    def _docker_http_request(self, method: str, path: str) -> Dict:
+    def _docker_http_request(self, method: str, path: str, body: bytes = None) -> Dict:
         """Make HTTP request to Docker socket."""
         try:
             import socket
@@ -54,8 +52,13 @@ class DockerClient:
             sock.connect(self.socket_path)
             
             # Build HTTP request
-            request = f"{method} {path} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"
+            headers = f"Host: localhost\r\nConnection: close\r\n"
+            if body:
+                headers += f"Content-Type: application/json\r\nContent-Length: {len(body)}\r\n"
+            request = f"{method} {path} HTTP/1.1\r\n{headers}\r\n"
             sock.sendall(request.encode())
+            if body:
+                sock.sendall(body)
             
             # Read response
             response = b''
@@ -83,7 +86,8 @@ class DockerClient:
             
             if status_code == 404:
                 raise Exception("404 No such container")
-            if status_code != 200:
+            # 201 Created is valid for POST requests (like creating exec instances)
+            if status_code not in (200, 201):
                 raise Exception(f"HTTP {status_code}: {status_line}")
             
             # Find headers end (double CRLF) - use bytes for accurate position
@@ -256,7 +260,7 @@ class DockerClient:
             encoded_name = urllib.parse.quote(container_name, safe='')
             path = f'/containers/{encoded_name}/json'
             
-            container_info = self._docker_http_request('GET', path)
+            container_info = self._docker_http_request('GET', path, None)
             state = container_info.get('State', {})
             
             return {
@@ -292,4 +296,212 @@ class DockerClient:
         return {
             name: self.get_container_status(name) for name in container_names
         }
+
+    def execute_in_container(self, container_name: str, command: list, timeout: int = 300) -> Dict[str, any]:
+        """
+        Execute a command in a Docker container.
+
+        Args:
+            container_name: Name of the container
+            command: Command to execute as a list (e.g., ['python', '-m', 'src.main'])
+            timeout: Timeout in seconds (default: 300)
+
+        Returns:
+            Dictionary with:
+            - success: bool
+            - exit_code: int
+            - output: str
+            - error: str
+        """
+        if self.use_http:
+            return self._execute_in_container_http(container_name, command, timeout)
+        
+        if not self.client:
+            return {
+                "success": False,
+                "exit_code": -1,
+                "output": "",
+                "error": "Docker client not available",
+            }
+
+        try:
+            container = self.client.containers.get(container_name)
+            exec_result = container.exec_run(
+                command,
+                detach=False,
+                stdout=True,
+                stderr=True,
+                timeout=timeout
+            )
+            
+            output = exec_result.output.decode('utf-8', errors='ignore') if exec_result.output else ""
+            exit_code = exec_result.exit_code
+            
+            return {
+                "success": exit_code == 0,
+                "exit_code": exit_code,
+                "output": output,
+                "error": "" if exit_code == 0 else f"Command exited with code {exit_code}",
+            }
+        except Exception as e:
+            logger.error(f"Error executing command in container {container_name}: {e}")
+            return {
+                "success": False,
+                "exit_code": -1,
+                "output": "",
+                "error": str(e),
+            }
+
+    def _execute_in_container_http(self, container_name: str, command: list, timeout: int) -> Dict[str, any]:
+        """Execute command in container using HTTP requests to Docker socket."""
+        try:
+            import json
+            import urllib.parse
+            
+            # URL encode container name
+            encoded_name = urllib.parse.quote(container_name, safe='')
+            
+            # Create exec instance
+            exec_config = {
+                "AttachStdout": True,
+                "AttachStderr": True,
+                "Cmd": command,
+            }
+            
+            # POST to create exec instance
+            exec_data = self._docker_http_request('POST', f'/containers/{encoded_name}/exec', json.dumps(exec_config).encode('utf-8'))
+            exec_id = exec_data.get('Id')
+            if not exec_id:
+                raise Exception("Failed to create exec instance")
+            
+            # Start exec instance and read output
+            # Docker exec API uses a streaming response with multiplexed stdout/stderr
+            import socket
+            import struct
+            
+            start_config = {
+                "Detach": False,
+                "Tty": False,
+            }
+            
+            # Create socket connection
+            sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            sock.settimeout(timeout)
+            sock.connect(self.socket_path)
+            
+            # Build POST request to start exec
+            exec_id_encoded = urllib.parse.quote(exec_id, safe='')
+            start_body = json.dumps(start_config).encode('utf-8')
+            request = f"POST /exec/{exec_id_encoded}/start HTTP/1.1\r\n"
+            request += f"Host: localhost\r\n"
+            request += f"Content-Type: application/json\r\n"
+            request += f"Content-Length: {len(start_body)}\r\n"
+            request += f"Connection: close\r\n\r\n"
+            
+            sock.sendall(request.encode())
+            sock.sendall(start_body)
+            
+            # Read response headers
+            response_headers = b''
+            while b'\r\n\r\n' not in response_headers:
+                chunk = sock.recv(1)
+                if not chunk:
+                    break
+                response_headers += chunk
+            
+            # Read streaming output (Docker uses multiplexed stream format)
+            # Format: [8-byte header][payload]
+            # Header: [1 byte stream type][3 bytes padding][4 bytes size]
+            output = b''
+            stdout_data = b''
+            stderr_data = b''
+            
+            try:
+                while True:
+                    # Read 8-byte header
+                    header = sock.recv(8)
+                    if len(header) < 8:
+                        break
+                    
+                    stream_type = header[0]  # 1=stdout, 2=stderr
+                    size = struct.unpack('>I', header[4:8])[0]
+                    
+                    if size == 0:
+                        continue
+                    
+                    # Read payload
+                    payload = b''
+                    while len(payload) < size:
+                        chunk = sock.recv(size - len(payload))
+                        if not chunk:
+                            break
+                        payload += chunk
+                    
+                    if stream_type == 1:  # stdout
+                        stdout_data += payload
+                    elif stream_type == 2:  # stderr
+                        stderr_data += payload
+                    
+                    # Check for timeout
+                    if len(stdout_data) + len(stderr_data) > 10 * 1024 * 1024:  # 10MB limit
+                        break
+            except socket.timeout:
+                pass
+            except Exception as e:
+                logger.warning(f"Error reading exec output: {e}")
+            
+            sock.close()
+            
+            # Combine stdout and stderr
+            output = stdout_data + stderr_data
+            output_str = output.decode('utf-8', errors='ignore')
+            
+            # Get exit code by inspecting the exec instance
+            # Wait a moment for the exec to complete before checking
+            import time
+            time.sleep(0.5)
+            
+            exit_code = -1
+            max_retries = 5
+            for retry in range(max_retries):
+                try:
+                    exec_info = self._docker_http_request('GET', f'/exec/{exec_id_encoded}/json', None)
+                    exit_code = exec_info.get('ExitCode')
+                    # ExitCode can be None if exec hasn't finished yet, or 0/other int if finished
+                    if exit_code is not None:
+                        break
+                    # If still None, wait a bit and retry
+                    if retry < max_retries - 1:
+                        time.sleep(0.5)
+                except Exception as e:
+                    logger.warning(f"Error getting exec exit code (retry {retry + 1}/{max_retries}): {e}")
+                    if retry < max_retries - 1:
+                        time.sleep(0.5)
+            
+            # If exit_code is still None or -1, check if we got any error output
+            if exit_code is None or exit_code == -1:
+                # If we have stderr output, assume failure
+                if stderr_data and len(stderr_data) > 0:
+                    exit_code = 1  # Non-zero indicates failure
+                # If we have no output at all, might be an issue
+                elif len(output) == 0:
+                    exit_code = -1  # Unknown
+                else:
+                    # If we only have stdout, assume success (exit_code 0)
+                    exit_code = 0
+            
+            return {
+                "success": exit_code == 0,
+                "exit_code": exit_code,
+                "output": output_str,
+                "error": "" if exit_code == 0 else f"Command exited with code {exit_code}",
+            }
+        except Exception as e:
+            logger.error(f"Error executing command in container {container_name} via HTTP: {e}")
+            return {
+                "success": False,
+                "exit_code": -1,
+                "output": "",
+                "error": str(e),
+            }
 

@@ -7,6 +7,7 @@ from pathlib import Path
 from flask import Flask, jsonify, render_template, request
 
 from src.bigquery_client import BigQueryClient
+from src.docker_client import DockerClient
 from src.health_checker import HealthChecker
 from src.oc_email_generator import OCEmailGenerator
 from src.requirements_report import RequirementsReport
@@ -33,6 +34,9 @@ app = Flask(__name__,
 # Get base path from environment or use default
 base_path = os.getenv("DASHBOARD_BASE_PATH", str(Path(__file__).parent.parent.parent))
 health_checker = HealthChecker(base_path=base_path)
+
+# Initialize Docker client
+docker_client = DockerClient()
 
 # Initialize BigQuery client and feature modules
 try:
@@ -574,6 +578,139 @@ def get_requirements_report():
     except Exception as e:
         logger.error(f"Error getting requirements report: {e}", exc_info=True)
         return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/data-pull/trigger", methods=["POST"])
+def trigger_data_pull():
+    """Trigger data pull from TC API for all services."""
+    if not docker_client.is_available():
+        return jsonify({"error": "Docker client not available"}), 500
+    
+    from datetime import datetime, timedelta
+    from pathlib import Path
+    import json
+    
+    # Rate limiting: faction_crimes can only be pulled once every 30 minutes
+    LAST_PULL_FILE = Path("/app/logs/last_data_pull.json")
+    COOLDOWN_MINUTES = 30
+    
+    # Load last pull timestamps
+    last_pulls = {}
+    if LAST_PULL_FILE.exists():
+        try:
+            with open(LAST_PULL_FILE, 'r') as f:
+                last_pulls = json.load(f)
+        except Exception as e:
+            logger.warning(f"Could not read last pull file: {e}")
+    
+    # Check if faction_crimes was pulled recently
+    now = datetime.now()
+    last_crimes_pull_str = last_pulls.get("faction_crimes")
+    skip_crimes = False
+    time_until_next = None
+    
+    if last_crimes_pull_str:
+        try:
+            last_crimes_pull = datetime.fromisoformat(last_crimes_pull_str)
+            time_since_pull = now - last_crimes_pull
+            if time_since_pull < timedelta(minutes=COOLDOWN_MINUTES):
+                skip_crimes = True
+                remaining_seconds = (timedelta(minutes=COOLDOWN_MINUTES) - time_since_pull).total_seconds()
+                time_until_next = int(remaining_seconds / 60)  # minutes
+        except Exception as e:
+            logger.warning(f"Could not parse last crimes pull time: {e}")
+    
+    # List of services to trigger
+    # Only update services/tables used by the OC assignment page:
+    # - v2_faction_40832_crimes-raw (from faction_crimes) - rate limited to once per 30 min
+    # - v2_faction_40832_members-raw (from faction_members)
+    services = []
+    
+    if not skip_crimes:
+        services.append({
+            "name": "faction_crimes",
+            "container": "tc-faction-crimes-pipeline",
+            "command": ["python", "-m", "src.main"]
+        })
+    else:
+        logger.info(f"Skipping faction_crimes pull - last pull was less than {COOLDOWN_MINUTES} minutes ago")
+    
+    services.append({
+        "name": "faction_members",
+        "container": "tc-faction-members-pipeline",
+        "command": ["python", "-m", "src.main"]
+    })
+    
+    results = {}
+    all_success = True
+    skipped_services = []
+    
+    if skip_crimes:
+        skipped_services.append({
+            "name": "faction_crimes",
+            "reason": f"Rate limited - can only pull once every {COOLDOWN_MINUTES} minutes",
+            "time_until_next": time_until_next
+        })
+        results["faction_crimes"] = {
+            "success": False,
+            "exit_code": -1,
+            "output": "",
+            "error": f"Rate limited - please wait {time_until_next} more minute(s) before pulling again"
+        }
+    
+    for service in services:
+        logger.info(f"Triggering data pull for {service['name']}...")
+        try:
+            result = docker_client.execute_in_container(
+                service["container"],
+                service["command"],
+                timeout=600  # 10 minute timeout per service
+            )
+            # Include more output for debugging, especially if it failed
+            output_preview = result["output"] or ""
+            if not result["success"]:
+                # For failures, include more context (last 2000 chars)
+                output_preview = output_preview[-2000:] if len(output_preview) > 2000 else output_preview
+            else:
+                # For success, just last 500 chars
+                output_preview = output_preview[-500:] if len(output_preview) > 500 else output_preview
+            
+            results[service["name"]] = {
+                "success": result["success"],
+                "exit_code": result["exit_code"],
+                "output": output_preview,
+                "error": result["error"]
+            }
+            if not result["success"]:
+                all_success = False
+                logger.error(f"Data pull failed for {service['name']}: {result['error']}")
+            else:
+                logger.info(f"Data pull completed for {service['name']}")
+                # Update last pull timestamp for successful pulls
+                last_pulls[service["name"]] = now.isoformat()
+        except Exception as e:
+            logger.error(f"Error triggering data pull for {service['name']}: {e}", exc_info=True)
+            results[service["name"]] = {
+                "success": False,
+                "exit_code": -1,
+                "output": "",
+                "error": str(e)
+            }
+            all_success = False
+    
+    # Save last pull timestamps
+    try:
+        LAST_PULL_FILE.parent.mkdir(parents=True, exist_ok=True)
+        with open(LAST_PULL_FILE, 'w') as f:
+            json.dump(last_pulls, f)
+    except Exception as e:
+        logger.warning(f"Could not save last pull timestamps: {e}")
+    
+    return jsonify({
+        "success": all_success,
+        "results": results,
+        "skipped": skipped_services if skipped_services else None
+    }), 200 if all_success else 500
 
 
 if __name__ == "__main__":

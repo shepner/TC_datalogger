@@ -3,6 +3,10 @@ FROM python:3.13-slim
 # Set working directory
 WORKDIR /app
 
+# Build argument for cache busting (change this value to force rebuild of templates/static)
+# Usage: docker build --build-arg CACHE_BUST=$(date +%s) ...
+ARG CACHE_BUST=1
+
 # Install system dependencies including docker CLI
 RUN apt-get update && apt-get install -y \
     docker.io \
@@ -11,6 +15,9 @@ RUN apt-get update && apt-get install -y \
 # Copy requirements and install Python dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
+
+# Cache busting step - this will invalidate cache if CACHE_BUST changes
+RUN echo "Cache bust: ${CACHE_BUST}" > /tmp/cache_bust.txt
 
 # Copy application code
 COPY src/ /app/src/
