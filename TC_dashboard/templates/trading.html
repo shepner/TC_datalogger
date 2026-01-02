@@ -115,6 +115,22 @@
             margin-top: 8px;
             font-size: 13px;
         }
+        .progress {
+            background-color: #e3f2fd;
+            color: #1976d2;
+            border: 1px solid #90caf9;
+            padding: 12px 16px;
+            margin-top: 8px;
+            font-size: 13px;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .progress::before {
+            content: "⏳";
+            font-size: 16px;
+        }
         .paid {
             background-color: #e8f5e9;
         }
@@ -269,6 +285,7 @@
 
         <div id="error" class="error" style="display: none;"></div>
         <div id="success" class="success" style="display: none;"></div>
+        <div id="progress" class="progress" style="display: none;"></div>
 
         <!-- Modal for raw events -->
         <div id="rawEventsModal" class="modal">
@@ -341,6 +358,7 @@
 
             document.getElementById('error').style.display = 'none';
             document.getElementById('success').style.display = 'none';
+            hideProgress();
 
             try {
                 let url = `/api/trading/pending?days_back=${daysBack}&grouped=${isGrouped}&show_paid=${showPaid}`;
@@ -868,13 +886,20 @@
             try {
                 let successCount = 0;
                 let errorCount = 0;
+                const totalTrades = trades.length;
                 
-                for (const trade of trades) {
+                showProgress(`Marking ${totalTrades} trades for ${memberName} as paid...`);
+                
+                for (let i = 0; i < trades.length; i++) {
+                    const trade = trades[i];
                     if (!trade || !trade.event_id) {
                         console.error('Invalid trade:', trade);
                         errorCount++;
                         continue;
                     }
+                    
+                    // Update progress
+                    showProgress(`Processing trade ${i + 1} of ${totalTrades} for ${memberName}... (${successCount} successful, ${errorCount} failed)`);
                     
                     // Ensure trade has user_name/member_name for database saving
                     const tradeWithMember = {
@@ -908,7 +933,10 @@
                     }
                 }
                 
+                showProgress(`Validating ${totalTrades} trades in database...`);
+                
                 if (errorCount > 0) {
+                    hideProgress();
                     showError(`Marked ${successCount} trades as paid, but ${errorCount} failed`);
                 } else {
                     // Validate that all trades were actually saved to the database
@@ -924,6 +952,7 @@
                         
                         const validateData = await validateResponse.json();
                         
+                        hideProgress();
                         if (validateData.valid && validateData.found_count === eventIds.length) {
                             showSuccess(`Marked all ${successCount} trades for ${memberName} as paid and validated in database`);
                         } else {
@@ -932,6 +961,7 @@
                         }
                     } catch (validateError) {
                         console.error('Error validating paid trades:', validateError);
+                        hideProgress();
                         showSuccess(`Marked all ${successCount} trades for ${memberName} as paid (validation skipped)`);
                     }
                 }
@@ -939,6 +969,7 @@
                 // Reload trades to update the view
                 loadTrades();
             } catch (error) {
+                hideProgress();
                 console.error('Error in markAllAsPaid:', error);
                 showError(error.message || 'Failed to mark trades as paid');
             }
@@ -1422,6 +1453,8 @@
 
         async function markAsPaid(eventId, trade) {
             try {
+                showProgress('Marking trade as paid...');
+                
                 const response = await fetch('/api/trading/mark-paid', {
                     method: 'POST',
                     headers: {
@@ -1436,6 +1469,7 @@
                 const data = await response.json();
 
                 if (!response.ok) {
+                    hideProgress();
                     throw new Error(data.error || 'Failed to mark as paid');
                 }
 
@@ -1446,8 +1480,10 @@
                     row.querySelector('.actions').innerHTML = '<span style="color: green;">Paid</span>';
                 }
 
+                hideProgress();
                 showSuccess('Trade marked as paid!');
             } catch (error) {
+                hideProgress();
                 showError(error.message);
             }
         }
@@ -1468,6 +1504,17 @@
             setTimeout(() => {
                 successDiv.style.display = 'none';
             }, 3000);
+        }
+
+        function showProgress(message) {
+            const progressDiv = document.getElementById('progress');
+            progressDiv.textContent = message;
+            progressDiv.style.display = 'block';
+        }
+
+        function hideProgress() {
+            const progressDiv = document.getElementById('progress');
+            progressDiv.style.display = 'none';
         }
 
         // Load trades on page load
