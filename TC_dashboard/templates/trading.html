@@ -107,6 +107,68 @@
         .member-details th {
             font-size: 11px;
         }
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.4);
+        }
+        .modal-content {
+            background-color: #fefefe;
+            margin: 5% auto;
+            padding: 20px;
+            border: 1px solid #888;
+            width: 80%;
+            max-width: 800px;
+            border-radius: 4px;
+        }
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #ddd;
+        }
+        .modal-header h2 {
+            margin: 0;
+            font-size: 18px;
+        }
+        .close {
+            color: #aaa;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .close:hover {
+            color: #000;
+        }
+        .raw-events-detail {
+            display: none;
+            padding: 10px;
+            background-color: #f9f9f9;
+            border-top: 1px solid #ddd;
+            font-size: 11px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .raw-events-detail table {
+            width: 100%;
+            font-size: 11px;
+        }
+        .raw-events-detail th {
+            background-color: #e0e0e0;
+            color: #333;
+            padding: 4px 6px;
+        }
+        .raw-events-detail td {
+            padding: 4px 6px;
+        }
     </style>
 </head>
 <body>
@@ -216,7 +278,7 @@
 
             try {
                 let url = `/api/trading/pending?days_back=${daysBack}&grouped=${isGrouped}&show_paid=${showPaid}`;
-                if (memberFilter && !isGrouped) {
+                if (memberFilter) {
                     url += `&member=${encodeURIComponent(memberFilter)}`;
                 }
 
@@ -264,15 +326,15 @@
                 const buyPrice = trade.buy_price || 0;
                 const paymentAmount = trade.payment_amount || 0;
 
+                const userName = trade.user_name || 'Unknown';
+                const userId = trade.user_id;
+                
                 const actionButtons = isPaid 
                     ? `<button class="small" onclick="undoPaidStatus('${trade.event_id}')">Undo Paid Status</button>`
                     : `<button class="small" onclick="copyValue('${paymentAmount}')">Copy Payment</button>
                        <button class="small copy-chat-btn" data-trade="${JSON.stringify(trade).replace(/"/g, '&quot;')}" title="${formatChatMessage(trade).replace(/"/g, '&quot;')}">Copy Chat</button>
                        <button class="small" data-event-id="${trade.event_id}" data-trade='${JSON.stringify(trade).replace(/'/g, "&#39;")}' onclick="markAsPaidFromButton(this)">Mark Paid</button>
-                       <button class="small" onclick="showRawEvents('${userName.replace(/'/g, "&#39;")}')" title="Show raw event logs for ${userName}">Raw Events</button>`;
-
-                const userName = trade.user_name || 'Unknown';
-                const userId = trade.user_id || trade.user_id;
+                       <button class="small" onclick="toggleRawEvents('${trade.event_id}', '${userName.replace(/'/g, "&#39;")}')" title="Toggle raw event logs">Raw Events</button>`;
                 const memberNameCell = userId 
                     ? `<a href="https://www.torn.com/profiles.php?XID=${userId}" target="_blank" style="color: #4CAF50; text-decoration: none; font-weight: 500;">${userName}</a>`
                     : userName;
@@ -296,6 +358,18 @@
                 `;
 
                 tbody.appendChild(row);
+                
+                // Add expandable raw events row
+                const rawEventsRow = document.createElement('tr');
+                rawEventsRow.id = `raw-events-${trade.event_id}`;
+                rawEventsRow.className = 'raw-events-detail';
+                rawEventsRow.innerHTML = `
+                    <td colspan="11" style="padding: 10px;">
+                        <div style="font-weight: 600; margin-bottom: 8px;">Raw Event Logs for ${userName}:</div>
+                        <div id="raw-events-content-${trade.event_id}" style="font-size: 11px; color: #666;">Loading events...</div>
+                    </td>
+                `;
+                tbody.appendChild(rawEventsRow);
                 
                 // Attach event listener to copy chat button
                 const copyChatBtn = row.querySelector('.copy-chat-btn');
@@ -399,8 +473,8 @@
                 const tradesJson = JSON.stringify(trades).replace(/"/g, '&quot;');
                 
                 const memberName = member.member_name || 'Unknown';
-                const memberId = member.member_id || member.member_id;
-                const memberNameLink = memberId 
+                const memberId = member.member_id;
+                const memberNameLink = (memberId && memberId !== null && memberId !== undefined) 
                     ? `<a href="https://www.torn.com/profiles.php?XID=${memberId}" target="_blank" style="color: #4CAF50; text-decoration: none; font-weight: 500;">${memberName}</a>`
                     : memberName;
 

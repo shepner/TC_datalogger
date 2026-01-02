@@ -488,7 +488,8 @@ def get_pending_trades():
         if show_paid:
             if grouped:
                 trades = trading_dashboard.get_paid_trades_by_member(
-                    days_back=days_back
+                    days_back=days_back,
+                    member_filter=member_filter
                 )
             else:
                 trades = trading_dashboard.get_paid_trades(
@@ -498,7 +499,8 @@ def get_pending_trades():
         else:
             if grouped:
                 trades = trading_dashboard.get_pending_trades_by_member(
-                    days_back=days_back
+                    days_back=days_back,
+                    member_filter=member_filter
                 )
             else:
                 trades = trading_dashboard.get_pending_trades(

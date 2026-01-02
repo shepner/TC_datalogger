@@ -151,6 +151,7 @@ class TradingDashboard:
     def get_pending_trades_by_member(
         self,
         days_back: int = 30,
+        member_filter: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """
         Get pending trades grouped by member with totals.
@@ -259,11 +260,18 @@ class TradingDashboard:
           trades_with_payment
         GROUP BY
           user_name
-        ORDER BY
-          user_name ASC
         """
         
         query = query.replace("@days_back", str(days_back))
+        
+        if member_filter:
+            query = query.replace(
+                "GROUP BY\n          user_name",
+                f"GROUP BY\n          user_name\n        HAVING\n          LOWER(TRIM(user_name)) = LOWER(TRIM('{member_filter}'))"
+            )
+        
+        query += "\n        ORDER BY\n          LOWER(user_name) ASC"
+        
         results = self.bq.execute_query(query)
         return results
 
@@ -585,6 +593,7 @@ class TradingDashboard:
     def get_paid_trades_by_member(
         self,
         days_back: int = 30,
+        member_filter: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """
         Get paid trades grouped by member.
@@ -677,6 +686,7 @@ class TradingDashboard:
               event_id,
               timestamp,
               user_name,
+              user_id,
               item_name,
               quantity,
               market_price,
@@ -690,10 +700,17 @@ class TradingDashboard:
           trades_with_payment
         GROUP BY
           user_name
-        ORDER BY
-          user_name ASC
         """
         query = query.replace("@days_back", str(days_back))
+        
+        if member_filter:
+            query = query.replace(
+                "GROUP BY\n          user_name",
+                f"GROUP BY\n          user_name\n        HAVING\n          LOWER(TRIM(user_name)) = LOWER(TRIM('{member_filter}'))"
+            )
+        
+        query += "\n        ORDER BY\n          LOWER(user_name) ASC"
+        
         return self.bq.execute_query(query)
 
     def get_raw_events_for_user(
