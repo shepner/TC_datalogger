@@ -74,45 +74,6 @@
             text-decoration: line-through;
             color: #999;
         }
-        .copy-container {
-            display: inline-flex;
-            align-items: center;
-            gap: 4px;
-            margin: 10px 0;
-            padding: 8px 12px;
-            background-color: #f5f5f5;
-            border-radius: 4px;
-            font-family: monospace;
-            font-size: 13px;
-        }
-        .copy-button {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            width: 24px;
-            height: 24px;
-            padding: 0;
-            background-color: transparent;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            cursor: pointer;
-            color: #666;
-            font-size: 14px;
-            margin: 0;
-        }
-        .copy-button:hover {
-            background-color: #e8e8e8;
-            border-color: #999;
-            color: #333;
-        }
-        .copy-button:active {
-            background-color: #ddd;
-        }
-        .copy-text {
-            flex: 1;
-            user-select: all;
-            cursor: text;
-        }
     </style>
 </head>
 <body>
@@ -142,13 +103,6 @@
 
         <div id="error" class="error" style="display: none;"></div>
         <div id="success" class="success" style="display: none;"></div>
-
-        <div id="summary-container" style="display: none;">
-            <div class="copy-container">
-                <button class="copy-button" onclick="copySummary(this)" title="Copy to clipboard">📋</button>
-                <span class="copy-text" id="summary-text"></span>
-            </div>
-        </div>
 
         <div id="trades-container">
             <!-- Grouped view table -->
@@ -264,15 +218,6 @@
 
             document.getElementById('trades-table').style.display = 'table';
             document.getElementById('grouped-table').style.display = 'none';
-            
-            // Generate summary text for individual trades
-            const summaryLines = trades.map(trade => {
-                const paymentAmount = trade.payment_amount || 0;
-                return `${trade.user_name || 'Unknown'}: ${trade.item_name || 'Unknown'} x${trade.quantity || 0} = $${paymentAmount.toLocaleString()}`;
-            });
-            const summaryText = summaryLines.join('\n');
-            document.getElementById('summary-text').textContent = summaryText;
-            document.getElementById('summary-container').style.display = 'block';
         }
 
         function displayGroupedTrades(memberGroups) {
@@ -283,18 +228,8 @@
                 tbody.innerHTML = '<tr><td colspan="5">No pending trades found</td></tr>';
                 document.getElementById('grouped-table').style.display = 'table';
                 document.getElementById('trades-table').style.display = 'none';
-                document.getElementById('summary-container').style.display = 'none';
                 return;
             }
-
-            // Generate summary text for copy/paste
-            const summaryLines = memberGroups.map(member => {
-                const totalPayment = member.total_payment_amount || 0;
-                return `${member.member_name}: $${totalPayment.toLocaleString()}`;
-            });
-            const summaryText = summaryLines.join('\n');
-            document.getElementById('summary-text').textContent = summaryText;
-            document.getElementById('summary-container').style.display = 'block';
 
             memberGroups.forEach(member => {
                 const row = document.createElement('tr');
@@ -387,23 +322,6 @@
 
             document.getElementById('grouped-table').style.display = 'table';
             document.getElementById('trades-table').style.display = 'none';
-        }
-
-        function copySummary(button) {
-            const summaryText = document.getElementById('summary-text').textContent;
-            navigator.clipboard.writeText(summaryText).then(() => {
-                // Visual feedback
-                const originalContent = button.innerHTML;
-                button.innerHTML = '✓';
-                button.style.color = '#4CAF50';
-                setTimeout(() => {
-                    button.innerHTML = originalContent;
-                    button.style.color = '';
-                }, 2000);
-            }).catch(err => {
-                console.error('Failed to copy:', err);
-                alert('Failed to copy to clipboard');
-            });
         }
 
         function toggleMemberTrades(button) {
