@@ -350,32 +350,62 @@
         }
 
         async function markAllAsPaid(memberName, trades) {
+            if (!trades || !Array.isArray(trades) || trades.length === 0) {
+                showError('No trades to mark as paid');
+                return;
+            }
+            
             if (!confirm(`Mark all ${trades.length} trades for ${memberName} as paid?`)) {
                 return;
             }
             
             try {
+                let successCount = 0;
+                let errorCount = 0;
+                
                 for (const trade of trades) {
-                    const response = await fetch('/api/trading/mark-paid', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({
-                            event_id: trade.event_id,
-                            trade: trade
-                        })
-                    });
+                    if (!trade || !trade.event_id) {
+                        console.error('Invalid trade:', trade);
+                        errorCount++;
+                        continue;
+                    }
                     
-                    if (!response.ok) {
-                        throw new Error(`Failed to mark trade ${trade.event_id} as paid`);
+                    try {
+                        const response = await fetch('/api/trading/mark-paid', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({
+                                event_id: trade.event_id,
+                                trade: trade
+                            })
+                        });
+                        
+                        const data = await response.json();
+                        
+                        if (!response.ok) {
+                            throw new Error(data.error || `Failed to mark trade ${trade.event_id} as paid`);
+                        }
+                        
+                        successCount++;
+                    } catch (error) {
+                        console.error(`Error marking trade ${trade.event_id} as paid:`, error);
+                        errorCount++;
                     }
                 }
                 
-                showSuccess(`Marked all trades for ${memberName} as paid`);
+                if (errorCount > 0) {
+                    showError(`Marked ${successCount} trades as paid, but ${errorCount} failed`);
+                } else {
+                    showSuccess(`Marked all ${successCount} trades for ${memberName} as paid`);
+                }
+                
+                // Reload trades to update the view
                 loadTrades();
             } catch (error) {
-                showError(error.message);
+                console.error('Error in markAllAsPaid:', error);
+                showError(error.message || 'Failed to mark trades as paid');
             }
         }
 
