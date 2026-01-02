@@ -756,6 +756,24 @@ class OCEmailGenerator:
         
         ocs_for_active.sort(key=sort_key)
         ocs_for_inactive.sort(key=sort_key)
+        
+        # Create a combined sorted list for reference (used for output)
+        # This maintains the priority order for display
+        ocs_sorted = (ocs_for_active + ocs_for_inactive)
+        ocs_sorted.sort(key=sort_key)
+        
+        # Debug: Log Level 6 OCs to verify sorting
+        level_6_ocs = [oc for oc in ocs_sorted if oc.get('difficulty') == 6]
+        if level_6_ocs:
+            logger.info(f"DEBUG: Level 6 OCs after sorting:")
+            for oc in level_6_ocs:
+                oc_id = oc.get('oc_id')
+                oc_name = oc.get('oc_name')
+                filled = oc.get('filled_slots', 0)
+                total = oc.get('total_slots', 0)
+                needed = total - filled
+                is_partial = 1 if filled > 0 else 0
+                logger.info(f"  OC {oc_id} ({oc_name}): filled={filled}, total={total}, needed={needed}, is_partial={is_partial}, sort_key={sort_key(oc)}")
 
         # Assign all members to available OCs
         # Structure: oc_id -> [member_name]
@@ -1242,9 +1260,10 @@ class OCEmailGenerator:
 
         # Group assignments by level (6, 5, 4, 3, 2, 1), then by OC
         # Structure: level -> [oc_id] -> [assignments]
+        # Use sorted OCs list to maintain priority order
         assignments_by_level = {}  # level -> {oc_id: [assignments]}
         
-        for oc in ocs:
+        for oc in ocs_sorted:
             oc_id = oc['oc_id']
             if oc_id in assignments and assignments[oc_id]:
                 difficulty = oc.get('difficulty')
@@ -1264,8 +1283,9 @@ class OCEmailGenerator:
             
             # Get all OCs at this level that have assignments, and sort them by priority
             # Priority: partially filled OCs first, then by members needed
+            # Use sorted OCs list to maintain priority order
             level_ocs_with_assignments = []
-            for oc in ocs:
+            for oc in ocs_sorted:
                 oc_id = oc['oc_id']
                 if oc_id in level_assignments:
                     level_ocs_with_assignments.append(oc)
