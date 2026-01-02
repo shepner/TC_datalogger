@@ -66,8 +66,16 @@ class TradingDashboard:
             id AS event_id,
             DATETIME(TIMESTAMP_SECONDS(timestamp)) AS timestamp,
             event,
-            CAST(REGEXP_EXTRACT(event, r'You were sent (\d+)x ') AS INT64) AS quantity,
-            REGEXP_EXTRACT(event, r'You were sent \d+x (.+?) from ') AS item_name,
+            -- Parse quantity: Extract number if present, otherwise default to 1 (for "a/an/some" patterns)
+            COALESCE(
+              CAST(REGEXP_EXTRACT(event, r'You were sent (\d+)x ') AS INT64),
+              1
+            ) AS quantity,
+            -- Parse item_name: Handle both patterns
+            COALESCE(
+              REGEXP_EXTRACT(event, r'You were sent \d+x (.+?) from '),
+              REGEXP_EXTRACT(event, r'You were sent (?:a|an|some) (.+?) from ')
+            ) AS item_name,
             TRIM(REGEXP_EXTRACT(event, r' from (.+?)(?: with the message|$)')) AS user_name,
             REGEXP_EXTRACT(event, r' with the message (.+)$') AS comment
           FROM
@@ -78,7 +86,11 @@ class TradingDashboard:
             AND NOT REGEXP_CONTAINS(event, r'You were sent \$')
             -- Exclude events from specific users
             AND NOT REGEXP_CONTAINS(event, r' from Duke(?: |$)')
-            AND REGEXP_EXTRACT(event, r'You were sent (\d+)x ') IS NOT NULL
+            -- Include both formats: with quantity prefix OR with "a/an/some"
+            AND (
+              REGEXP_EXTRACT(event, r'You were sent (\d+)x ') IS NOT NULL
+              OR REGEXP_EXTRACT(event, r'You were sent (?:a|an|some) (.+?) from ') IS NOT NULL
+            )
             AND TIMESTAMP_SECONDS(SAFE_CAST(timestamp AS INT64)) >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL @days_back DAY)
         ),
         paid_events AS (
@@ -168,8 +180,16 @@ class TradingDashboard:
             id AS event_id,
             DATETIME(TIMESTAMP_SECONDS(timestamp)) AS timestamp,
             event,
-            CAST(REGEXP_EXTRACT(event, r'You were sent (\d+)x ') AS INT64) AS quantity,
-            REGEXP_EXTRACT(event, r'You were sent \d+x (.+?) from ') AS item_name,
+            -- Parse quantity: Extract number if present, otherwise default to 1 (for "a/an/some" patterns)
+            COALESCE(
+              CAST(REGEXP_EXTRACT(event, r'You were sent (\d+)x ') AS INT64),
+              1
+            ) AS quantity,
+            -- Parse item_name: Handle both patterns
+            COALESCE(
+              REGEXP_EXTRACT(event, r'You were sent \d+x (.+?) from '),
+              REGEXP_EXTRACT(event, r'You were sent (?:a|an|some) (.+?) from ')
+            ) AS item_name,
             TRIM(REGEXP_EXTRACT(event, r' from (.+?)(?: with the message|$)')) AS user_name
           FROM
             `torncity-402423.torn_data.v2_torn_user_events-raw`
@@ -179,7 +199,11 @@ class TradingDashboard:
             AND NOT REGEXP_CONTAINS(event, r'You were sent \$')
             -- Exclude events from specific users
             AND NOT REGEXP_CONTAINS(event, r' from Duke(?: |$)')
-            AND REGEXP_EXTRACT(event, r'You were sent (\d+)x ') IS NOT NULL
+            -- Include both formats: with quantity prefix OR with "a/an/some"
+            AND (
+              REGEXP_EXTRACT(event, r'You were sent (\d+)x ') IS NOT NULL
+              OR REGEXP_EXTRACT(event, r'You were sent (?:a|an|some) (.+?) from ') IS NOT NULL
+            )
             AND TIMESTAMP_SECONDS(SAFE_CAST(timestamp AS INT64)) >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL @days_back DAY)
         ),
         paid_events AS (
@@ -512,8 +536,16 @@ class TradingDashboard:
             id AS event_id,
             DATETIME(TIMESTAMP_SECONDS(timestamp)) AS timestamp,
             event,
-            CAST(REGEXP_EXTRACT(event, r'You were sent (\d+)x ') AS INT64) AS quantity,
-            REGEXP_EXTRACT(event, r'You were sent \d+x (.+?) from ') AS item_name,
+            -- Parse quantity: Extract number if present, otherwise default to 1 (for "a/an/some" patterns)
+            COALESCE(
+              CAST(REGEXP_EXTRACT(event, r'You were sent (\d+)x ') AS INT64),
+              1
+            ) AS quantity,
+            -- Parse item_name: Handle both patterns
+            COALESCE(
+              REGEXP_EXTRACT(event, r'You were sent \d+x (.+?) from '),
+              REGEXP_EXTRACT(event, r'You were sent (?:a|an|some) (.+?) from ')
+            ) AS item_name,
             TRIM(REGEXP_EXTRACT(event, r' from (.+?)(?: with the message|$)')) AS user_name
           FROM
             `torncity-402423.torn_data.v2_torn_user_events-raw`
@@ -521,7 +553,11 @@ class TradingDashboard:
             STARTS_WITH(event, 'You were sent')
             AND NOT REGEXP_CONTAINS(event, r'You were sent \$')
             AND NOT REGEXP_CONTAINS(event, r' from Duke(?: |$)')
-            AND REGEXP_EXTRACT(event, r'You were sent (\d+)x ') IS NOT NULL
+            -- Include both formats: with quantity prefix OR with "a/an/some"
+            AND (
+              REGEXP_EXTRACT(event, r'You were sent (\d+)x ') IS NOT NULL
+              OR REGEXP_EXTRACT(event, r'You were sent (?:a|an|some) (.+?) from ') IS NOT NULL
+            )
             AND TIMESTAMP_SECONDS(SAFE_CAST(timestamp AS INT64)) >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL @days_back DAY)
         ),
         paid_events AS (
@@ -610,8 +646,16 @@ class TradingDashboard:
             id AS event_id,
             DATETIME(TIMESTAMP_SECONDS(timestamp)) AS timestamp,
             event,
-            CAST(REGEXP_EXTRACT(event, r'You were sent (\d+)x ') AS INT64) AS quantity,
-            REGEXP_EXTRACT(event, r'You were sent \d+x (.+?) from ') AS item_name,
+            -- Parse quantity: Extract number if present, otherwise default to 1 (for "a/an/some" patterns)
+            COALESCE(
+              CAST(REGEXP_EXTRACT(event, r'You were sent (\d+)x ') AS INT64),
+              1
+            ) AS quantity,
+            -- Parse item_name: Handle both patterns
+            COALESCE(
+              REGEXP_EXTRACT(event, r'You were sent \d+x (.+?) from '),
+              REGEXP_EXTRACT(event, r'You were sent (?:a|an|some) (.+?) from ')
+            ) AS item_name,
             TRIM(REGEXP_EXTRACT(event, r' from (.+?)(?: with the message|$)')) AS user_name
           FROM
             `torncity-402423.torn_data.v2_torn_user_events-raw`
@@ -619,7 +663,11 @@ class TradingDashboard:
             STARTS_WITH(event, 'You were sent')
             AND NOT REGEXP_CONTAINS(event, r'You were sent \$')
             AND NOT REGEXP_CONTAINS(event, r' from Duke(?: |$)')
-            AND REGEXP_EXTRACT(event, r'You were sent (\d+)x ') IS NOT NULL
+            -- Include both formats: with quantity prefix OR with "a/an/some"
+            AND (
+              REGEXP_EXTRACT(event, r'You were sent (\d+)x ') IS NOT NULL
+              OR REGEXP_EXTRACT(event, r'You were sent (?:a|an|some) (.+?) from ') IS NOT NULL
+            )
             AND TIMESTAMP_SECONDS(SAFE_CAST(timestamp AS INT64)) >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL @days_back DAY)
         ),
         paid_events AS (
