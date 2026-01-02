@@ -721,7 +721,7 @@
                 if (copyAllChatBtn) {
                     // Function to update tooltip for copy all chat button
                     const updateCopyAllTooltip = () => {
-                        const checkboxes = document.querySelectorAll(`.member-trades-${memberId} .trade-checkbox`);
+                        const checkboxes = document.querySelectorAll(`.member-trades-${memberNameId} .trade-checkbox`);
                         const checkedTrades = [];
                         checkboxes.forEach((checkbox, index) => {
                             if (checkbox.checked && trades[index]) {
@@ -738,8 +738,8 @@
                         }
                     };
                     
-                    // Set initial tooltip
-                    updateCopyAllTooltip();
+                    // Set initial tooltip - use setTimeout to ensure DOM is ready
+                    setTimeout(updateCopyAllTooltip, 0);
                     
                     // Update tooltip when checkboxes change
                     const checkboxes = detailRow.querySelectorAll('.trade-checkbox');
