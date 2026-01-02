@@ -261,15 +261,15 @@
             <table id="trades-table" style="display: none;">
                 <thead>
                     <tr>
-                        <th>Date</th>
-                        <th>Member</th>
-                        <th>Item</th>
-                        <th>Quantity</th>
-                        <th>Market Price</th>
-                        <th>Sales Fee</th>
-                        <th>Buy Price</th>
-                        <th>Market Value</th>
-                        <th>Payment Amount</th>
+                        <th class="sortable" data-column="timestamp">Date</th>
+                        <th class="sortable" data-column="user_name">Member</th>
+                        <th class="sortable" data-column="item_name">Item</th>
+                        <th class="sortable" data-column="quantity">Quantity</th>
+                        <th class="sortable" data-column="market_price">Market Price</th>
+                        <th class="sortable" data-column="sales_fee">Sales Fee</th>
+                        <th class="sortable" data-column="buy_price">Buy Price</th>
+                        <th class="sortable" data-column="total_value">Market Value</th>
+                        <th class="sortable" data-column="payment_amount">Payment Amount</th>
                         <th>Comments</th>
                         <th>Actions</th>
                     </tr>
@@ -325,15 +325,70 @@
             }
         }
 
+        function sortTrades(trades, column, direction) {
+            const sorted = [...trades].sort((a, b) => {
+                let aVal = a[column];
+                let bVal = b[column];
+
+                if (aVal == null && bVal == null) return 0;
+                if (aVal == null) return 1;
+                if (bVal == null) return -1;
+
+                // Handle date columns
+                if (column === 'timestamp') {
+                    aVal = new Date(aVal).getTime();
+                    bVal = new Date(bVal).getTime();
+                    return direction === 'asc' ? aVal - bVal : bVal - aVal;
+                }
+
+                // Handle numeric columns
+                if (column === 'quantity' || column === 'market_price' || column === 'sales_fee' || 
+                    column === 'buy_price' || column === 'total_value' || column === 'payment_amount') {
+                    aVal = Number(aVal) || 0;
+                    bVal = Number(bVal) || 0;
+                    return direction === 'asc' ? aVal - bVal : bVal - aVal;
+                }
+
+                // Handle string columns (user_name, item_name)
+                if (typeof aVal === 'string') {
+                    aVal = aVal.toLowerCase();
+                    bVal = bVal.toLowerCase();
+                }
+
+                let comparison = 0;
+                if (aVal < bVal) comparison = -1;
+                if (aVal > bVal) comparison = 1;
+
+                return direction === 'asc' ? comparison : -comparison;
+            });
+
+            return sorted;
+        }
+
+        function updateSortIndicatorsForTrades(column) {
+            document.querySelectorAll('#trades-table th.sortable').forEach(th => {
+                th.classList.remove('sort-asc', 'sort-desc');
+                if (th.dataset.column === column) {
+                    th.classList.add(`sort-${currentSort.direction}`);
+                }
+            });
+        }
+
         function displayTrades(trades, isPaid = false) {
             const tbody = document.getElementById('trades-body');
             tbody.innerHTML = '';
 
             if (trades.length === 0) {
                 const message = isPaid ? 'No paid trades found' : 'No pending trades found';
-                tbody.innerHTML = `<tr><td colspan="10">${message}</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="11">${message}</td></tr>`;
                 document.getElementById('trades-table').style.display = 'table';
                 return;
+            }
+
+            // Sort the data if a sort is active
+            if (currentSort.column) {
+                trades = sortTrades(trades, currentSort.column, currentSort.direction);
+                updateSortIndicatorsForTrades(currentSort.column);
             }
 
             trades.forEach(trade => {
@@ -1417,6 +1472,7 @@
         }
 
         function attachSortHandlers() {
+            // Handle grouped table headers
             document.querySelectorAll('#grouped-table th.sortable').forEach(th => {
                 // Remove existing listeners by cloning
                 const newTh = th.cloneNode(true);
@@ -1438,6 +1494,32 @@
                     // Re-display with new sort
                     if (isGrouped && currentTrades.length > 0) {
                         displayGroupedTrades(currentTrades, showPaid);
+                    }
+                });
+            });
+            
+            // Handle individual trades table headers
+            document.querySelectorAll('#trades-table th.sortable').forEach(th => {
+                // Remove existing listeners by cloning
+                const newTh = th.cloneNode(true);
+                th.parentNode.replaceChild(newTh, th);
+                
+                // Add click listener
+                newTh.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    const column = newTh.dataset.column;
+                    
+                    // Toggle direction if clicking the same column
+                    if (currentSort.column === column) {
+                        currentSort.direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
+                    } else {
+                        currentSort.column = column;
+                        currentSort.direction = 'asc';
+                    }
+                    
+                    // Re-display with new sort
+                    if (!isGrouped && currentTrades.length > 0) {
+                        displayTrades(currentTrades, showPaid);
                     }
                 });
             });
