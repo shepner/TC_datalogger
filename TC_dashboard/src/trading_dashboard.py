@@ -434,3 +434,62 @@ class TradingDashboard:
         query = query.replace("@days_back", str(days_back))
         return self.bq.execute_query(query)
 
+    def validate_paid_trades(self, event_ids: List[str]) -> Dict[str, Any]:
+        """
+        Validate that trades were marked as paid in BigQuery.
+        
+        Args:
+            event_ids: List of event IDs to validate
+            
+        Returns:
+            Dictionary with validation results
+        """
+        if not event_ids:
+            return {
+                "valid": True,
+                "message": "No event IDs provided",
+                "found": [],
+                "missing": []
+            }
+        
+        # Build query to check which event_ids exist in paid trades table
+        event_ids_str = "', '".join(event_ids)
+        query = f"""
+        SELECT 
+            event_id,
+            member_name,
+            item_name,
+            quantity,
+            payment_amount,
+            paid_at
+        FROM
+            `{PAID_TRADES_TABLE}`
+        WHERE
+            event_id IN ('{event_ids_str}')
+        ORDER BY
+            paid_at DESC
+        """
+        
+        try:
+            results = self.bq.execute_query(query)
+            found_ids = {row['event_id'] for row in results}
+            missing_ids = set(event_ids) - found_ids
+            
+            return {
+                "valid": len(missing_ids) == 0,
+                "total_requested": len(event_ids),
+                "found_count": len(found_ids),
+                "missing_count": len(missing_ids),
+                "found": list(found_ids),
+                "missing": list(missing_ids),
+                "details": results
+            }
+        except Exception as e:
+            logger.error(f"Error validating paid trades: {e}", exc_info=True)
+            return {
+                "valid": False,
+                "error": str(e),
+                "found": [],
+                "missing": event_ids
+            }
+

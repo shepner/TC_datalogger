@@ -58,6 +58,13 @@ def index():
     return render_template("index.html")
 
 
+@app.route("/favicon.ico")
+def favicon():
+    """Handle favicon requests to prevent 404 errors."""
+    # Return 204 No Content to suppress favicon requests
+    return "", 204
+
+
 @app.route("/api/health")
 def get_all_health():
     """Get health status for all services."""
@@ -532,6 +539,29 @@ def unmark_trade_paid():
         return jsonify({"success": True})
     except Exception as e:
         logger.error(f"Error unmarking trade as paid: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/trading/validate-paid", methods=["POST"])
+def validate_paid_trades():
+    """Validate that trades were marked as paid in the database."""
+    if not trading_dashboard:
+        return jsonify({"error": "BigQuery client not available"}), 500
+    
+    try:
+        data = request.get_json()
+        event_ids = data.get("event_ids", [])
+        
+        if not event_ids:
+            return jsonify({"error": "event_ids array required"}), 400
+        
+        if not isinstance(event_ids, list):
+            return jsonify({"error": "event_ids must be an array"}), 400
+        
+        validation_result = trading_dashboard.validate_paid_trades(event_ids)
+        return jsonify(validation_result)
+    except Exception as e:
+        logger.error(f"Error validating paid trades: {e}", exc_info=True)
         return jsonify({"error": str(e)}), 500
 
 

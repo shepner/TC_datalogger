@@ -420,7 +420,29 @@
                 if (errorCount > 0) {
                     showError(`Marked ${successCount} trades as paid, but ${errorCount} failed`);
                 } else {
-                    showSuccess(`Marked all ${successCount} trades for ${memberName} as paid`);
+                    // Validate that all trades were actually saved to the database
+                    const eventIds = trades.map(t => t.event_id).filter(id => id);
+                    try {
+                        const validateResponse = await fetch('/api/trading/validate-paid', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({ event_ids: eventIds })
+                        });
+                        
+                        const validateData = await validateResponse.json();
+                        
+                        if (validateData.valid && validateData.found_count === eventIds.length) {
+                            showSuccess(`Marked all ${successCount} trades for ${memberName} as paid and validated in database`);
+                        } else {
+                            const missingCount = validateData.missing_count || 0;
+                            showError(`Marked ${successCount} trades as paid, but ${missingCount} were not found in database. Please check.`);
+                        }
+                    } catch (validateError) {
+                        console.error('Error validating paid trades:', validateError);
+                        showSuccess(`Marked all ${successCount} trades for ${memberName} as paid (validation skipped)`);
+                    }
                 }
                 
                 // Reload trades to update the view
