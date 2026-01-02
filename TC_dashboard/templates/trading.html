@@ -363,7 +363,7 @@
                     return t;
                 });
                 
-                const memberId = member.member_name.replace(/\s+/g, '-');
+                const memberNameId = member.member_name.replace(/\s+/g, '-');
                 const tradesHtml = trades.map((trade, index) => {
                     const date = new Date(trade.timestamp);
                     const individualPayment = trade.payment_amount || 0;
@@ -371,7 +371,7 @@
                     const salesFee = ((trade.sales_fee || 0) * 100).toFixed(1);
                     const buyPrice = trade.buy_price || 0;
                     const tradeJson = JSON.stringify(trade).replace(/'/g, "\\'");
-                    const checkboxId = `trade-checkbox-${memberId}-${index}`;
+                    const checkboxId = `trade-checkbox-${memberNameId}-${index}`;
                     return `
                         <tr class="trade-detail">
                             <td><input type="checkbox" class="trade-checkbox" id="${checkboxId}" data-trade-index="${index}" checked></td>
@@ -462,7 +462,7 @@
                                     <th>Actions</th>
                                 </tr>
                             </thead>
-                            <tbody class="member-trades-${memberId}" data-member-id="${memberId}">
+                            <tbody class="member-trades-${memberNameId}" data-member-id="${memberNameId}">
                                 ${tradesHtml}
                             </tbody>
                         </table>
