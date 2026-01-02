@@ -456,9 +456,10 @@
                        <button class="small copy-chat-btn" data-trade="${JSON.stringify(trade).replace(/"/g, '&quot;')}" title="${formatChatMessage(trade).replace(/"/g, '&quot;')}">Copy Chat</button>
                        <button class="small" data-event-id="${trade.event_id}" data-trade='${JSON.stringify(trade).replace(/'/g, "&#39;")}' onclick="markAsPaidFromButton(this)">Mark Paid</button>
                        <button class="small" onclick="toggleRawEvents('${trade.event_id}', '${userName.replace(/'/g, "&#39;")}')" title="Toggle raw event logs">Raw Events</button>`;
+                // If we have a user_id, use direct profile link, otherwise use search link
                 const memberNameCell = userId 
                     ? `<a href="https://www.torn.com/profiles.php?XID=${userId}" target="_blank" style="color: #4CAF50; text-decoration: none; font-weight: 500;">${userName}</a>`
-                    : userName;
+                    : `<a href="https://www.torn.com/search.php?search=${encodeURIComponent(userName)}" target="_blank" style="color: #4CAF50; text-decoration: none; font-weight: 500;">${userName}</a>`;
                 
                 const comment = trade.comment || '';
 
@@ -645,9 +646,10 @@
                 
                 const memberName = member.member_name || 'Unknown';
                 const memberId = member.member_id;
+                // If we have a member_id, use direct profile link, otherwise use search link
                 const memberNameLink = (memberId && memberId !== null && memberId !== undefined) 
                     ? `<a href="https://www.torn.com/profiles.php?XID=${memberId}" target="_blank" style="color: #4CAF50; text-decoration: none; font-weight: 500;">${memberName}</a>`
-                    : memberName;
+                    : `<a href="https://www.torn.com/search.php?search=${encodeURIComponent(memberName)}" target="_blank" style="color: #4CAF50; text-decoration: none; font-weight: 500;">${memberName}</a>`;
 
                 row.innerHTML = `
                     <td>
