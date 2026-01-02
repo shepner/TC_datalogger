@@ -620,6 +620,20 @@ def get_raw_events():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/api/trading/max-days-back", methods=["GET"])
+def get_max_days_back():
+    """Get maximum days back available in the events table."""
+    if not trading_dashboard:
+        return jsonify({"error": "BigQuery client not available"}), 500
+    
+    try:
+        max_days = trading_dashboard.get_max_days_back()
+        return jsonify({"max_days_back": max_days})
+    except Exception as e:
+        logger.error(f"Error getting max days back: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/api/trading/member-names", methods=["GET"])
 def get_member_names():
     """Get list of unique member names who have sent items."""

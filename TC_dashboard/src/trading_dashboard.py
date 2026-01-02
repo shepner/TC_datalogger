@@ -736,6 +736,40 @@ class TradingDashboard:
         results = self.bq.execute_query(query)
         return results
 
+    def get_max_days_back(self) -> int:
+        """
+        Get the maximum number of days back available in the events table.
+        
+        Returns:
+            Maximum number of days back (or 365 if calculation fails)
+        """
+        query = """
+        SELECT
+          DATE_DIFF(
+            CURRENT_DATE(),
+            DATE(TIMESTAMP_SECONDS(MIN(SAFE_CAST(timestamp AS INT64)))),
+            DAY
+          ) AS max_days_back
+        FROM
+          `torncity-402423.torn_data.v2_torn_user_events-raw`
+        WHERE
+          STARTS_WITH(event, 'You were sent')
+          AND NOT REGEXP_CONTAINS(event, r'You were sent \$')
+          AND NOT REGEXP_CONTAINS(event, r' from Duke(?: |$)')
+          AND REGEXP_EXTRACT(event, r'You were sent (\\d+)x ') IS NOT NULL
+        """
+        
+        try:
+            results = self.bq.execute_query(query)
+            if results and len(results) > 0:
+                max_days = results[0].get('max_days_back', 365)
+                # Cap at 365 days as a reasonable maximum
+                return min(int(max_days), 365) if max_days else 365
+            return 365
+        except Exception as e:
+            logger.error(f"Error calculating max days back: {e}", exc_info=True)
+            return 365
+
     def validate_paid_trades(self, event_ids: List[str]) -> Dict[str, Any]:
         """
         Validate that trades were marked as paid in BigQuery.

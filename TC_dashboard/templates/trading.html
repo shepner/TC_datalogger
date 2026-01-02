@@ -1189,7 +1189,33 @@
             }
         }
 
+        async function loadMaxDaysBack() {
+            try {
+                const response = await fetch('/api/trading/max-days-back');
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(data.error || 'Failed to load max days back');
+                }
+                
+                const maxDays = data.max_days_back || 365;
+                const daysBackInput = document.getElementById('days_back');
+                daysBackInput.setAttribute('max', maxDays);
+                
+                // If current value exceeds max, adjust it
+                if (parseInt(daysBackInput.value) > maxDays) {
+                    daysBackInput.value = maxDays;
+                }
+            } catch (error) {
+                console.error('Error loading max days back:', error);
+                // Default to 365 if there's an error
+                const daysBackInput = document.getElementById('days_back');
+                daysBackInput.setAttribute('max', 365);
+            }
+        }
+
         window.addEventListener('DOMContentLoaded', () => {
+            loadMaxDaysBack();
             loadMemberNames();
             loadTrades();
         });
