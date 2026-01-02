@@ -68,7 +68,8 @@ class TradingDashboard:
             event,
             CAST(REGEXP_EXTRACT(event, r'You were sent (\d+)x ') AS INT64) AS quantity,
             REGEXP_EXTRACT(event, r'You were sent \d+x (.+?) from ') AS item_name,
-            TRIM(REGEXP_EXTRACT(event, r' from (.+?)(?: with the message|$)')) AS user_name
+            TRIM(REGEXP_EXTRACT(event, r' from (.+?)(?: with the message|$)')) AS user_name,
+            REGEXP_EXTRACT(event, r' with the message (.+)$') AS comment
           FROM
             `torncity-402423.torn_data.v2_torn_user_events-raw`
           WHERE
@@ -115,6 +116,7 @@ class TradingDashboard:
               ELSE 0.04
             END))
           AS INT64) AS payment_amount,
+          pe.comment,
           pe.event_id
         FROM
           parsed_events AS pe
