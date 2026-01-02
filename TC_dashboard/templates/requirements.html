@@ -576,8 +576,10 @@
 
         function getCellClass(value, type) {
             if (type === 'oc_count') {
-                // Color scale: 0 = red, 1-2 = light red, 3 = yellow, 4-5 = light green, 6+ = green
-                if (value >= 6) return 'cell-green';
+                // Color scale: 0 = red, 1-2 = light red, 3 = yellow, 4-5 = light green, 6+ = progressive green (same shades as Trading)
+                if (value >= 10) return 'cell-green-dark';
+                if (value >= 8) return 'cell-green';
+                if (value >= 6) return 'cell-green-light';
                 if (value >= 4) return 'cell-green-light';
                 if (value === 3) return 'cell-yellow';
                 if (value >= 1) return 'cell-red-light';
