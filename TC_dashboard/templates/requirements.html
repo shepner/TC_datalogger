@@ -128,7 +128,8 @@
             border-radius: 3px;
             font-size: 11px;
         }
-        .action-remove {
+        .action-remove,
+        .action-kick {
             background-color: #f44336;
             color: white;
             padding: 3px 6px;
@@ -300,12 +301,12 @@
         // Role names must match EXACTLY as they appear in the "Position" column.
         // 
         // Example hierarchy (update with your actual roles):
-        // - Lowest role members can be REMOVED if requirements not met
+        // - Lowest role members can be KICKED if requirements not met
         // - Highest role members will show MAINTAIN (cannot be promoted further)
         // - Members between can be PROMOTED or DEMOTED based on requirements
         // ============================================================================
         const ROLE_HIERARCHY = [
-            'Member 1',      // Lowest role - can be removed if requirements not met
+            'Member 1',      // Lowest role - can be kicked if requirements not met
             'Member 2',
             'Member 3',
             'Lucky',
@@ -470,7 +471,7 @@
             const actions = {
                 promote: [],
                 demote: [],
-                remove: [],
+                kick: [],
                 maintain: [],
                 none: []
             };
@@ -491,7 +492,7 @@
                 if (atTopRole) {
                     actions.maintain.push(member);
                 } else if (atLowestRole && !allRequirementsMet) {
-                    actions.remove.push(member);
+                    actions.kick.push(member);
                 } else if (canPromote && allRequirementsMet) {
                     actions.promote.push(member);
                 } else if (!allRequirementsMet && !atLowestRole) {
@@ -506,7 +507,7 @@
             summaryContent.innerHTML = `
                 <div class="summary-item"><span class="summary-label">Promote:</span><span class="summary-value">${actions.promote.length}</span></div>
                 <div class="summary-item"><span class="summary-label">Demote:</span><span class="summary-value">${actions.demote.length}</span></div>
-                <div class="summary-item"><span class="summary-label">Remove:</span><span class="summary-value">${actions.remove.length}</span></div>
+                <div class="summary-item"><span class="summary-label">Kick:</span><span class="summary-value">${actions.kick.length}</span></div>
                 <div class="summary-item"><span class="summary-label">Maintain:</span><span class="summary-value">${actions.maintain.length}</span></div>
                 <div class="summary-item"><span class="summary-label">No Action:</span><span class="summary-value">${actions.none.length}</span></div>
             `;
@@ -564,9 +565,9 @@
                         roleActionClass = 'action-maintain';
                         roleActionTooltip = 'At top role - maintain current rank';
                     } else if (atLowestRole && !allRequirementsMet) {
-                        // At lowest role and requirements not met - remove
-                        roleActionDisplay = 'REMOVE';
-                        roleActionClass = 'action-remove';
+                        // At lowest role and requirements not met - kick from faction
+                        roleActionDisplay = 'KICK';
+                        roleActionClass = 'action-kick';
                         roleActionTooltip = getPromotionReason(member);
                     } else if (canPromote && allRequirementsMet) {
                         // Requirements met and active - promote
