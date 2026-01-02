@@ -257,6 +257,17 @@
         </div>
         <div id="data-pull-status" style="display: none; margin-bottom: 10px; padding: 8px; border-radius: 4px; font-size: 12px;"></div>
 
+        <div id="role-config-info" style="margin-bottom: 15px; padding: 12px; background-color: #e3f2fd; border: 1px solid #90caf9; border-radius: 4px; font-size: 12px;">
+            <strong style="color: #1976d2;">⚙️ Role Hierarchy Configuration:</strong>
+            <div style="margin-top: 6px; color: #555;">
+                To configure your faction's role hierarchy, edit the <code style="background-color: #fff; padding: 2px 4px; border-radius: 2px;">ROLE_HIERARCHY</code> array in the page source (around line 308). 
+                The array should list roles from <strong>lowest to highest</strong>, and role names must match <strong>exactly</strong> as they appear in the "Position" column.
+            </div>
+            <div style="margin-top: 6px; font-size: 11px; color: #666;">
+                Current hierarchy: <span id="current-hierarchy-display"></span>
+            </div>
+        </div>
+
         <div id="error" class="error" style="display: none;"></div>
 
         <div id="summary" class="summary" style="display: none;">
@@ -464,6 +475,40 @@
         function displayReport(data) {
             const report = data.report;
 
+            // Add computed role_action_sort property for sorting
+            report.forEach(member => {
+                const daysInFaction = member.days_in_faction || 0;
+                if (daysInFaction < 30) {
+                    member.role_action_sort = 'zzz_none'; // Sort N/A to end
+                    return;
+                }
+
+                const currentPosition = member.position || '';
+                const atTopRole = isAtTopRole(currentPosition);
+                const atLowestRole = isAtLowestRole(currentPosition);
+                const canPromote = member.can_promote || false;
+                const allRequirementsMet = member.all_requirements_met || false;
+
+                // Create sort key: maintain < kick < demote < none < promote
+                if (atTopRole) {
+                    member.role_action_sort = '0_maintain';
+                } else if (atLowestRole && !allRequirementsMet) {
+                    member.role_action_sort = '1_kick';
+                } else if (!allRequirementsMet && !atLowestRole) {
+                    member.role_action_sort = '2_demote';
+                } else if (canPromote && allRequirementsMet) {
+                    member.role_action_sort = '4_promote';
+                } else {
+                    member.role_action_sort = '3_none';
+                }
+            });
+
+            // Display current hierarchy
+            const hierarchyDisplay = document.getElementById('current-hierarchy-display');
+            if (hierarchyDisplay) {
+                hierarchyDisplay.textContent = ROLE_HIERARCHY.join(' → ');
+            }
+
             // Store report data for sorting
             reportData = report;
 
@@ -625,6 +670,14 @@
             }
 
             reportData.sort((a, b) => {
+                // Special handling for role_action column
+                if (column === 'role_action') {
+                    const aVal = a.role_action_sort || 'zzz_unknown';
+                    const bVal = b.role_action_sort || 'zzz_unknown';
+                    const comparison = aVal.localeCompare(bVal);
+                    return currentSort.direction === 'asc' ? comparison : -comparison;
+                }
+
                 let aVal = a[column];
                 let bVal = b[column];
 
