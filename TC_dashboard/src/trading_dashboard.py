@@ -260,7 +260,7 @@ class TradingDashboard:
         GROUP BY
           user_name
         ORDER BY
-          total_payment_amount DESC
+          user_name ASC
         """
         
         query = query.replace("@days_back", str(days_back))
@@ -691,7 +691,7 @@ class TradingDashboard:
         GROUP BY
           user_name
         ORDER BY
-          total_payment_amount DESC
+          user_name ASC
         """
         query = query.replace("@days_back", str(days_back))
         return self.bq.execute_query(query)
