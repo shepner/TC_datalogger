@@ -934,11 +934,15 @@ class OCEmailGenerator:
             # If member wasn't assigned and has OC history, try all OCs (not just activity-based list)
             if member_name not in assigned_members and has_oc_history:
                 # Fallback: try all OCs regardless of activity status
+                # Use sorted list (combine active and inactive, then sort) to maintain priority
+                all_ocs_sorted = (ocs_for_active + ocs_for_inactive)
+                all_ocs_sorted.sort(key=sort_key)
+                
                 member_perf = member_performance.get(member_name, {})
                 member_max_oc = member_perf.get('max_recommended_oc')
                 member_level_rates = member_perf.get('level_rates', {})
                 
-                for oc in ocs:
+                for oc in all_ocs_sorted:
                     # Skip No Reserve OC
                     if is_excluded_oc(oc):
                         continue
