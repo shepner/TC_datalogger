@@ -337,6 +337,26 @@ class TradingDashboard:
                    If not provided, will query for these values
         """
         try:
+            # Check if this event_id already exists in the paid trades table
+            check_query = f"""
+            SELECT COUNT(*) as count
+            FROM `{PAID_TRADES_TABLE}`
+            WHERE event_id = @event_id
+            """
+            
+            job_config = bigquery.QueryJobConfig(
+                query_parameters=[
+                    bigquery.ScalarQueryParameter("event_id", "STRING", event_id)
+                ]
+            )
+            
+            result = self.bq.client.query(check_query, job_config=job_config).result()
+            row = next(result, None)
+            
+            if row and row.count > 0:
+                logger.warning(f"Event {event_id} is already marked as paid. Skipping duplicate insert.")
+                return
+            
             # If trade info not provided, get it from the event
             if trade is None:
                 trade = self._get_trade_info(event_id)
