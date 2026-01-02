@@ -105,14 +105,15 @@ class TradingDashboard:
               ELSE 0.04
             END)
           AS INT64) AS buy_price,
-          -- Calculate payment amount: quantity * market_price * sales_fee
+          -- Calculate payment amount: buy_price * quantity
           CAST(
-            pe.quantity * SAFE_CAST(items.value.market_price AS INT64) * 
-            CASE 
+            pe.quantity * 
+            (SAFE_CAST(items.value.market_price AS INT64) * 
+            (1 - CASE 
               WHEN LOWER(TRIM(pe.item_name)) = 'xanax' THEN 0.05
               ELSE 0.04
-            END AS INT64
-          ) AS payment_amount,
+            END))
+          AS INT64) AS payment_amount,
           pe.event_id
         FROM
           parsed_events AS pe
@@ -199,13 +200,15 @@ class TradingDashboard:
                 ELSE 0.04
               END)
             AS INT64) AS buy_price,
+            -- Calculate payment amount: buy_price * quantity
             CAST(
-              pe.quantity * SAFE_CAST(items.value.market_price AS INT64) * 
-              CASE 
+              pe.quantity * 
+              (SAFE_CAST(items.value.market_price AS INT64) * 
+              (1 - CASE 
                 WHEN LOWER(TRIM(pe.item_name)) = 'xanax' THEN 0.05
                 ELSE 0.04
-              END AS INT64
-            ) AS payment_amount
+              END))
+            AS INT64) AS payment_amount
           FROM
             parsed_events AS pe
           LEFT JOIN
@@ -356,13 +359,23 @@ class TradingDashboard:
           pe.item_name,
           pe.quantity,
           SAFE_CAST(items.value.market_price AS INT64) AS market_price,
+          -- Calculate buy price: market_price * (1 - sales_fee)
           CAST(
-            pe.quantity * SAFE_CAST(items.value.market_price AS INT64) * 
-            CASE 
+            SAFE_CAST(items.value.market_price AS INT64) * 
+            (1 - CASE 
               WHEN LOWER(TRIM(pe.item_name)) = 'xanax' THEN 0.05
               ELSE 0.04
-            END AS INT64
-          ) AS payment_amount
+            END)
+          AS INT64) AS buy_price,
+          -- Calculate payment amount: buy_price * quantity
+          CAST(
+            pe.quantity * 
+            (SAFE_CAST(items.value.market_price AS INT64) * 
+            (1 - CASE 
+              WHEN LOWER(TRIM(pe.item_name)) = 'xanax' THEN 0.05
+              ELSE 0.04
+            END))
+          AS INT64) AS payment_amount
         FROM
           parsed_events AS pe
         LEFT JOIN
