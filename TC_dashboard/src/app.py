@@ -1,5 +1,6 @@
 """Flask application for health dashboard."""
 
+import json
 import logging
 import os
 from pathlib import Path
@@ -674,6 +675,82 @@ def get_requirements_report():
         })
     except Exception as e:
         logger.error(f"Error getting requirements report: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/requirements/role-hierarchy", methods=["GET"])
+def get_role_hierarchy():
+    """Get saved role hierarchy configuration."""
+    ROLE_HIERARCHY_FILE = Path("/app/logs/role_hierarchy.json")
+    DEFAULT_HIERARCHY = [
+        'Member 1',
+        'Member 2',
+        'Member 3',
+        'Lucky',
+        'Mgt 1',
+        'Mgt 2',
+        'Mgt 3',
+        'Co-Leader',
+        'Leader'
+    ]
+    
+    try:
+        if ROLE_HIERARCHY_FILE.exists():
+            with open(ROLE_HIERARCHY_FILE, 'r') as f:
+                hierarchy = json.load(f)
+                if isinstance(hierarchy, list) and len(hierarchy) > 0:
+                    return jsonify({
+                        "hierarchy": hierarchy,
+                        "is_default": False
+                    })
+        
+        # Return default if file doesn't exist or is invalid
+        return jsonify({
+            "hierarchy": DEFAULT_HIERARCHY,
+            "is_default": True
+        })
+    except Exception as e:
+        logger.error(f"Error reading role hierarchy: {e}", exc_info=True)
+        return jsonify({
+            "hierarchy": DEFAULT_HIERARCHY,
+            "is_default": True,
+            "error": str(e)
+        })
+
+
+@app.route("/api/requirements/role-hierarchy", methods=["POST"])
+def save_role_hierarchy():
+    """Save role hierarchy configuration."""
+    ROLE_HIERARCHY_FILE = Path("/app/logs/role_hierarchy.json")
+    
+    try:
+        data = request.get_json()
+        if not data or 'hierarchy' not in data:
+            return jsonify({"error": "Missing 'hierarchy' in request body"}), 400
+        
+        hierarchy = data['hierarchy']
+        if not isinstance(hierarchy, list):
+            return jsonify({"error": "Hierarchy must be a list"}), 400
+        
+        if len(hierarchy) == 0:
+            return jsonify({"error": "Hierarchy cannot be empty"}), 400
+        
+        # Validate all items are strings
+        if not all(isinstance(item, str) and item.strip() for item in hierarchy):
+            return jsonify({"error": "All hierarchy items must be non-empty strings"}), 400
+        
+        # Save to file
+        ROLE_HIERARCHY_FILE.parent.mkdir(parents=True, exist_ok=True)
+        with open(ROLE_HIERARCHY_FILE, 'w') as f:
+            json.dump(hierarchy, f, indent=2)
+        
+        logger.info(f"Role hierarchy saved: {hierarchy}")
+        return jsonify({
+            "success": True,
+            "hierarchy": hierarchy
+        })
+    except Exception as e:
+        logger.error(f"Error saving role hierarchy: {e}", exc_info=True)
         return jsonify({"error": str(e)}), 500
 
 

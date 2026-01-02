@@ -261,9 +261,10 @@
             <div style="display: flex; justify-content: space-between; align-items: center;">
                 <div>
                     <strong style="color: #1976d2;">⚙️ Role Hierarchy Configuration:</strong>
-                    <div style="margin-top: 6px; font-size: 11px; color: #666;">
-                        Current hierarchy: <span id="current-hierarchy-display"></span>
-                    </div>
+            <div style="margin-top: 6px; font-size: 11px; color: #666;">
+                Current hierarchy: <span id="current-hierarchy-display"></span>
+                <span id="config-status" style="margin-left: 8px; font-style: italic;"></span>
+            </div>
                 </div>
                 <button id="configure-roles-btn" onclick="toggleRoleConfig()" style="padding: 6px 12px; font-size: 12px; background-color: #1976d2; color: white; border: none; border-radius: 3px; cursor: pointer;">Configure Roles</button>
             </div>
@@ -344,28 +345,65 @@
             'Leader'
         ];
 
-        // Load role hierarchy from localStorage or use default
+        // Load role hierarchy from server
         let ROLE_HIERARCHY = [];
-        function loadRoleHierarchy() {
-            const saved = localStorage.getItem('tc_role_hierarchy');
-            if (saved) {
-                try {
-                    ROLE_HIERARCHY = JSON.parse(saved);
-                } catch (e) {
-                    console.error('Failed to parse saved role hierarchy:', e);
+        async function loadRoleHierarchy() {
+            try {
+                const response = await fetch('/api/requirements/role-hierarchy');
+                const data = await response.json();
+                
+                if (data.hierarchy && Array.isArray(data.hierarchy) && data.hierarchy.length > 0) {
+                    ROLE_HIERARCHY = data.hierarchy;
+                    console.log('Loaded role hierarchy from server:', ROLE_HIERARCHY);
+                    updateConfigStatus(!data.is_default);
+                } else {
                     ROLE_HIERARCHY = [...DEFAULT_ROLE_HIERARCHY];
+                    console.log('Using default role hierarchy (invalid server response)');
+                    updateConfigStatus(false);
                 }
-            } else {
+            } catch (e) {
+                console.error('Failed to load role hierarchy from server:', e);
                 ROLE_HIERARCHY = [...DEFAULT_ROLE_HIERARCHY];
+                updateConfigStatus(false);
             }
         }
 
-        function saveRoleHierarchy() {
-            localStorage.setItem('tc_role_hierarchy', JSON.stringify(ROLE_HIERARCHY));
+        function updateConfigStatus(isSaved) {
+            const statusEl = document.getElementById('config-status');
+            if (statusEl) {
+                if (isSaved) {
+                    statusEl.textContent = '(saved on server)';
+                    statusEl.style.color = '#4CAF50';
+                } else {
+                    statusEl.textContent = '(using default)';
+                    statusEl.style.color = '#999';
+                }
+            }
         }
 
-        // Initialize on page load
-        loadRoleHierarchy();
+        async function saveRoleHierarchy() {
+            try {
+                const response = await fetch('/api/requirements/role-hierarchy', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ hierarchy: ROLE_HIERARCHY })
+                });
+                
+                const data = await response.json();
+                if (response.ok && data.success) {
+                    console.log('Saved role hierarchy to server:', ROLE_HIERARCHY);
+                    return true;
+                } else {
+                    console.error('Failed to save role hierarchy:', data.error || 'Unknown error');
+                    return false;
+                }
+            } catch (e) {
+                console.error('Error saving role hierarchy to server:', e);
+                return false;
+            }
+        }
 
         // Get next role in hierarchy
         function getNextRole(currentPosition) {
@@ -1057,31 +1095,38 @@
             updateHierarchyDisplay();
         }
 
-        function saveRoleConfig() {
+        async function saveRoleConfig() {
             // Validate no empty roles
             if (ROLE_HIERARCHY.some(r => !r || !r.trim())) {
                 alert('Please remove any empty roles before saving.');
                 return;
             }
 
-            saveRoleHierarchy();
-            updateHierarchyDisplay();
-            
-            // Reload the report to apply changes
-            if (reportData.length > 0) {
-                displayReport({ report: reportData });
+            const success = await saveRoleHierarchy();
+            if (success) {
+                updateHierarchyDisplay();
+                updateConfigStatus(true);
+                
+                // Reload the report to apply changes
+                if (reportData.length > 0) {
+                    displayReport({ report: reportData });
+                }
+                
+                alert('Role hierarchy saved successfully! Your configuration is stored on the server and will persist across page reloads and browsers.');
+                toggleRoleConfig();
+            } else {
+                alert('Failed to save role hierarchy. Please try again.');
             }
-            
-            alert('Role hierarchy saved successfully!');
-            toggleRoleConfig();
         }
 
-        function resetRoleConfig() {
+        async function resetRoleConfig() {
             if (confirm('Reset to default role hierarchy? This will discard your current configuration.')) {
                 ROLE_HIERARCHY = [...DEFAULT_ROLE_HIERARCHY];
-                localStorage.removeItem('tc_role_hierarchy');
+                // Save the default to server (effectively clearing custom config)
+                await saveRoleHierarchy();
                 renderRoleList();
                 updateHierarchyDisplay();
+                updateConfigStatus(false);
                 
                 // Reload the report
                 if (reportData.length > 0) {
@@ -1119,10 +1164,12 @@
             }
         });
 
-        // Load report on page load
-        window.addEventListener('DOMContentLoaded', () => {
-            loadReport();
+        // Load report and role hierarchy on page load
+        window.addEventListener('DOMContentLoaded', async () => {
+            // Load role hierarchy first, then load report
+            await loadRoleHierarchy();
             updateHierarchyDisplay();
+            await loadReport();
         });
     </script>
 </body>
