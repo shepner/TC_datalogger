@@ -8,13 +8,31 @@ WORKDIR /app
 ARG CACHE_BUST=1
 
 # Install system dependencies including docker CLI
-RUN apt-get update && apt-get install -y \
-    docker.io \
-    && rm -rf /var/lib/apt/lists/*
+# Aggressively clean up to minimize image size
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        docker.io \
+    && apt-get clean && \
+    rm -rf /var/lib/apt/lists/* \
+           /var/cache/apt/archives/* \
+           /var/cache/apt/archives/partial/* \
+           /var/cache/debconf/* \
+           /tmp/* \
+           /var/tmp/* \
+    && find /usr/share -name "*.md" -delete \
+    && find /usr/share -name "*.txt" -type f ! -name "copyright" -delete \
+    && find /usr/share/doc -type f ! -name "copyright" -delete \
+    && find /usr/share/man -type f -delete
 
 # Copy requirements and install Python dependencies
+# Clean pip cache and temporary files aggressively
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt && \
+    pip cache purge && \
+    rm -rf /root/.cache/pip/* \
+           /tmp/* \
+           /var/tmp/*
 
 # Cache busting step - this will invalidate cache if CACHE_BUST changes
 RUN echo "Cache bust: ${CACHE_BUST}" > /tmp/cache_bust.txt
@@ -24,8 +42,11 @@ COPY src/ /app/src/
 COPY templates/ /app/templates/
 COPY static/ /app/static/
 
-# Create logs directory (for consistency, though dashboard doesn't write logs)
-RUN mkdir -p /app/logs
+# Create logs directory and final cleanup
+RUN mkdir -p /app/logs && \
+    rm -rf /tmp/* /var/tmp/* && \
+    find /app -type f -name "*.pyc" -delete && \
+    find /app -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
 
 # Expose dashboard port
 EXPOSE 8080
