@@ -138,6 +138,48 @@
         .action-none {
             color: #999;
         }
+        .action-maintain {
+            background-color: #9e9e9e;
+            color: white;
+            padding: 3px 6px;
+            border-radius: 3px;
+            font-size: 11px;
+        }
+        .role-action-cell {
+            position: relative;
+            cursor: help;
+        }
+        .role-action-tooltip {
+            position: fixed;
+            z-index: 99999;
+            background-color: #333;
+            color: white;
+            padding: 12px;
+            border-radius: 6px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+            max-width: 400px;
+            font-size: 11px;
+            line-height: 1.5;
+            pointer-events: none;
+            display: none;
+        }
+        .role-action-tooltip.show {
+            display: block;
+        }
+        .role-action-tooltip .reason-title {
+            font-weight: 600;
+            margin-bottom: 6px;
+            color: #4CAF50;
+        }
+        .role-action-tooltip .reason-item {
+            margin: 4px 0;
+        }
+        .role-action-tooltip .reason-item.met {
+            color: #4CAF50;
+        }
+        .role-action-tooltip .reason-item.not-met {
+            color: #ffcdd2;
+        }
         /* Max Recommended OC level colors */
         .oc-level-1 { background-color: #e3f2fd; }
         .oc-level-2 { background-color: #bbdefb; }
@@ -239,8 +281,7 @@
                             <th class="sortable" data-column="trading_requirement_met">Trading Met</th>
                             <th class="sortable" data-column="chain_participation">Chains</th>
                             <th class="sortable" data-column="all_requirements_met">All Met</th>
-                            <th class="sortable" data-column="can_promote">Can Promote</th>
-                            <th class="sortable" data-column="action">Action</th>
+                            <th class="sortable" data-column="role_action">Role Action</th>
                         </tr>
                     </thead>
                     <tbody id="report-body">
@@ -251,6 +292,121 @@
     </div>
 
     <script>
+        // ============================================================================
+        // ROLE HIERARCHY CONFIGURATION
+        // ============================================================================
+        // IMPORTANT: Update this array to match your faction's actual role hierarchy.
+        // The array should be ordered from LOWEST (entry level) to HIGHEST (top role).
+        // Role names must match EXACTLY as they appear in the "Position" column.
+        // 
+        // Example hierarchy (update with your actual roles):
+        // - Lowest role members can be REMOVED if requirements not met
+        // - Highest role members will show MAINTAIN (cannot be promoted further)
+        // - Members between can be PROMOTED or DEMOTED based on requirements
+        // ============================================================================
+        const ROLE_HIERARCHY = [
+            'Member 1',      // Lowest role - can be removed if requirements not met
+            'Member 2',
+            'Member 3',
+            'Lucky',
+            'Mgt 1',
+            'Mgt 2',
+            'Mgt 3',
+            'Co-Leader',
+            'Leader'         // Highest role - will show MAINTAIN
+        ];
+
+        // Get next role in hierarchy
+        function getNextRole(currentPosition) {
+            if (!currentPosition) return null;
+            const currentIndex = ROLE_HIERARCHY.indexOf(currentPosition);
+            if (currentIndex === -1 || currentIndex === ROLE_HIERARCHY.length - 1) {
+                return null; // Not in hierarchy or already at top
+            }
+            return ROLE_HIERARCHY[currentIndex + 1];
+        }
+
+        // Get previous role in hierarchy
+        function getPreviousRole(currentPosition) {
+            if (!currentPosition) return null;
+            const currentIndex = ROLE_HIERARCHY.indexOf(currentPosition);
+            if (currentIndex <= 0) {
+                return null; // Not in hierarchy or already at bottom
+            }
+            return ROLE_HIERARCHY[currentIndex - 1];
+        }
+
+        // Check if member is at top role
+        function isAtTopRole(position) {
+            if (!position) return false;
+            const index = ROLE_HIERARCHY.indexOf(position);
+            return index === ROLE_HIERARCHY.length - 1;
+        }
+
+        // Check if member is at lowest role
+        function isAtLowestRole(position) {
+            if (!position) return false;
+            const index = ROLE_HIERARCHY.indexOf(position);
+            return index === 0;
+        }
+
+        // Generate promotion reason text
+        function getPromotionReason(member) {
+            const reasons = [];
+            const daysInFaction = member.days_in_faction || 0;
+            
+            if (daysInFaction < 30) {
+                return 'N/A - Less than 30 days in faction';
+            }
+
+            const ocCount = member.oc_count_30d || 0;
+            const tradingCount = member.trading_count_30d || 0;
+            const daysInactive = member.days_inactive || 0;
+            const hasChains = member.chain_participation || false;
+            const ocMet = member.oc_requirement_met || false;
+            const tradingMet = member.trading_requirement_met || false;
+            const allMet = member.all_requirements_met || false;
+
+            if (isAtTopRole(member.position)) {
+                return 'At top role - maintain current rank';
+            }
+
+            if (allMet && daysInactive <= 2) {
+                reasons.push('✓ All requirements met');
+                if (ocMet) {
+                    reasons.push(`✓ OC requirement met (${ocCount} OCs in 30d)`);
+                } else if (tradingMet) {
+                    reasons.push(`✓ Trading requirement met (${tradingCount} items in 30d)`);
+                }
+                if (hasChains) {
+                    reasons.push('✓ Chain participation');
+                }
+                if (daysInactive <= 2) {
+                    reasons.push(`✓ Active (${daysInactive} days inactive)`);
+                }
+                return reasons.join('\\n');
+            } else {
+                // Show why they can't be promoted
+                if (!allMet) {
+                    if (!ocMet && !tradingMet) {
+                        reasons.push(`✗ OC requirement not met (${ocCount} < 3)`);
+                        reasons.push(`✗ Trading requirement not met (${tradingCount} ≤ 480)`);
+                    } else if (!ocMet) {
+                        reasons.push(`✗ OC requirement not met (${ocCount} < 3)`);
+                    } else if (!tradingMet) {
+                        reasons.push(`✗ Trading requirement not met (${tradingCount} ≤ 480)`);
+                    }
+                    if (!hasChains) {
+                        reasons.push('✗ No chain participation');
+                    }
+                }
+                if (daysInactive > 2) {
+                    reasons.push(`✗ Inactive (${daysInactive} days inactive, need ≤ 2)`);
+                }
+                return reasons.length > 0 ? reasons.join('\\n') : 'Cannot determine reason';
+            }
+        }
+
         async function loadReport() {
             document.getElementById('error').style.display = 'none';
 
@@ -306,10 +462,44 @@
 
         function displayReport(data) {
             const report = data.report;
-            const actions = data.actions;
 
             // Store report data for sorting
             reportData = report;
+
+            // Calculate role-based action summary
+            const actions = {
+                promote: [],
+                demote: [],
+                remove: [],
+                maintain: [],
+                none: []
+            };
+
+            report.forEach(member => {
+                const daysInFaction = member.days_in_faction || 0;
+                if (daysInFaction < 30) {
+                    actions.none.push(member);
+                    return;
+                }
+
+                const currentPosition = member.position || '';
+                const atTopRole = isAtTopRole(currentPosition);
+                const atLowestRole = isAtLowestRole(currentPosition);
+                const canPromote = member.can_promote || false;
+                const allRequirementsMet = member.all_requirements_met || false;
+
+                if (atTopRole) {
+                    actions.maintain.push(member);
+                } else if (atLowestRole && !allRequirementsMet) {
+                    actions.remove.push(member);
+                } else if (canPromote && allRequirementsMet) {
+                    actions.promote.push(member);
+                } else if (!allRequirementsMet && !atLowestRole) {
+                    actions.demote.push(member);
+                } else {
+                    actions.none.push(member);
+                }
+            });
 
             // Display summary
             const summaryContent = document.getElementById('summary-content');
@@ -317,6 +507,7 @@
                 <div class="summary-item"><span class="summary-label">Promote:</span><span class="summary-value">${actions.promote.length}</span></div>
                 <div class="summary-item"><span class="summary-label">Demote:</span><span class="summary-value">${actions.demote.length}</span></div>
                 <div class="summary-item"><span class="summary-label">Remove:</span><span class="summary-value">${actions.remove.length}</span></div>
+                <div class="summary-item"><span class="summary-label">Maintain:</span><span class="summary-value">${actions.maintain.length}</span></div>
                 <div class="summary-item"><span class="summary-label">No Action:</span><span class="summary-value">${actions.none.length}</span></div>
             `;
             document.getElementById('summary').style.display = 'block';
@@ -341,24 +532,61 @@
                 const tradingMet = member.trading_requirement_met ? '<span class="met">✓</span>' : '<span class="not-met">✗</span>';
                 const chainsMet = member.chain_participation ? '<span class="met">✓</span>' : '<span class="not-met">✗</span>';
                 const allMet = member.all_requirements_met ? '<span class="met">✓</span>' : '<span class="not-met">✗</span>';
-                const canPromote = member.can_promote ? '<span class="met">✓</span>' : '<span class="not-met">✗</span>';
-                
-                const action = member.action || 'none';
-                const actionClass = `action-${action}`;
-                const actionDisplay = action === 'none' ? '-' : `<span class="${actionClass}">${action.toUpperCase()}</span>`;
 
                 const ocCount = member.oc_count_30d || 0;
                 const tradingCount = member.trading_count_30d || 0;
                 const daysInactive = member.days_inactive || 0;
                 const daysInFaction = member.days_in_faction || 0;
                 const level = member.level || 0;
+                const currentPosition = member.position || '';
                 
                 // Handle N/A case (days_in_faction < 30)
                 const isNA = daysInFaction < 30;
                 const allMetDisplay = isNA ? 'N/A' : (member.all_requirements_met ? '<span class="met">✓</span>' : '<span class="not-met">✗</span>');
-                const canPromoteDisplay = isNA ? 'N/A' : (member.can_promote ? '<span class="met">✓</span>' : '<span class="not-met">✗</span>');
                 const allMetClass = isNA ? getCellClass(null, 'na') : (member.all_requirements_met ? '' : 'cell-red');
-                const canPromoteClass = isNA ? getCellClass(null, 'na') : (member.can_promote ? '' : 'cell-red');
+
+                // Determine role action based on role hierarchy
+                let roleActionDisplay = '-';
+                let roleActionClass = 'action-none';
+                let roleActionTooltip = '';
+                
+                if (!isNA) {
+                    const nextRole = getNextRole(currentPosition);
+                    const prevRole = getPreviousRole(currentPosition);
+                    const atTopRole = isAtTopRole(currentPosition);
+                    const atLowestRole = isAtLowestRole(currentPosition);
+                    const canPromote = member.can_promote || false;
+                    const allRequirementsMet = member.all_requirements_met || false;
+                    
+                    if (atTopRole) {
+                        // At top role - always maintain
+                        roleActionDisplay = 'MAINTAIN';
+                        roleActionClass = 'action-maintain';
+                        roleActionTooltip = 'At top role - maintain current rank';
+                    } else if (atLowestRole && !allRequirementsMet) {
+                        // At lowest role and requirements not met - remove
+                        roleActionDisplay = 'REMOVE';
+                        roleActionClass = 'action-remove';
+                        roleActionTooltip = getPromotionReason(member);
+                    } else if (canPromote && allRequirementsMet) {
+                        // Requirements met and active - promote
+                        roleActionDisplay = `PROMOTE → ${nextRole || 'Next Role'}`;
+                        roleActionClass = 'action-promote';
+                        roleActionTooltip = getPromotionReason(member);
+                    } else if (!allRequirementsMet && !atLowestRole) {
+                        // Requirements not met and not at lowest role - demote
+                        roleActionDisplay = `DEMOTE → ${prevRole || 'Previous Role'}`;
+                        roleActionClass = 'action-demote';
+                        roleActionTooltip = getPromotionReason(member);
+                    } else {
+                        // No action needed
+                        roleActionDisplay = 'NONE';
+                        roleActionClass = 'action-none';
+                        roleActionTooltip = getPromotionReason(member);
+                    }
+                } else {
+                    roleActionTooltip = 'N/A - Less than 30 days in faction';
+                }
 
                 row.innerHTML = `
                     <td>${member.member_name}</td>
@@ -374,8 +602,13 @@
                     <td class="${member.trading_requirement_met ? '' : 'cell-red'}">${tradingMet}</td>
                     <td class="${member.chain_participation ? '' : 'cell-red'}">${chainsMet}</td>
                     <td class="${allMetClass}">${allMetDisplay}</td>
-                    <td class="${canPromoteClass}">${canPromoteDisplay}</td>
-                    <td>${actionDisplay}</td>
+                    <td class="role-action-cell" 
+                        data-tooltip="${roleActionTooltip.replace(/"/g, '&quot;')}"
+                        onmouseenter="showRoleActionTooltip(event)"
+                        onmouseleave="hideRoleActionTooltip()"
+                        onmousemove="updateRoleActionTooltipPosition(event)">
+                        <span class="${roleActionClass}">${roleActionDisplay}</span>
+                    </td>
                 `;
 
                 tbody.appendChild(row);
@@ -574,6 +807,54 @@
                 statusDiv.innerHTML = `❌ Error: ${error.message}`;
                 btn.disabled = false;
                 btn.textContent = 'Pull Data from TC API';
+            }
+        }
+
+        // Role action tooltip management
+        let roleActionTooltip = null;
+
+        function showRoleActionTooltip(event) {
+            if (!roleActionTooltip) {
+                roleActionTooltip = document.createElement('div');
+                roleActionTooltip.className = 'role-action-tooltip';
+                document.body.appendChild(roleActionTooltip);
+            }
+            
+            const cell = event.currentTarget;
+            const tooltipText = cell.getAttribute('data-tooltip');
+            if (!tooltipText) return;
+            
+            // Parse tooltip text (handles \n for line breaks)
+            const lines = tooltipText.split('\\n');
+            let html = '';
+            lines.forEach(line => {
+                if (line.startsWith('✓')) {
+                    html += `<div class="reason-item met">${line}</div>`;
+                } else if (line.startsWith('✗')) {
+                    html += `<div class="reason-item not-met">${line}</div>`;
+                } else if (line.includes(':')) {
+                    html += `<div class="reason-title">${line}</div>`;
+                } else {
+                    html += `<div class="reason-item">${line}</div>`;
+                }
+            });
+            roleActionTooltip.innerHTML = html;
+            roleActionTooltip.classList.add('show');
+            updateRoleActionTooltipPosition(event);
+        }
+
+        function updateRoleActionTooltipPosition(event) {
+            if (!roleActionTooltip || !roleActionTooltip.classList.contains('show')) return;
+            
+            const x = event.clientX + 10;
+            const y = event.clientY + 10;
+            roleActionTooltip.style.left = x + 'px';
+            roleActionTooltip.style.top = y + 'px';
+        }
+
+        function hideRoleActionTooltip() {
+            if (roleActionTooltip) {
+                roleActionTooltip.classList.remove('show');
             }
         }
 
