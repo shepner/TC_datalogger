@@ -122,16 +122,16 @@
 
         <div class="toolbar">
             <label>Days Back:</label>
-            <input type="number" id="days_back" value="30" min="1" max="365" style="width: 60px;">
+            <input type="number" id="days_back" value="30" min="1" max="365" style="width: 60px;" onchange="loadTrades()">
             
             <label>View:</label>
-            <select id="view_mode">
+            <select id="view_mode" onchange="loadTrades()">
                 <option value="grouped" selected>Grouped by Member</option>
                 <option value="individual">Individual Trades</option>
             </select>
             
             <label>Member Filter:</label>
-            <select id="member_filter" style="width: 180px;">
+            <select id="member_filter" style="width: 180px;" onchange="loadTrades()">
                 <option value="">All Members</option>
             </select>
             
@@ -140,7 +140,7 @@
                 <span>Show Paid</span>
             </label>
             
-            <button onclick="loadTrades()">Load Trades</button>
+            <button onclick="loadTrades()" title="Manually refresh the trades list">Refresh</button>
         </div>
 
         <div id="error" class="error" style="display: none;"></div>
@@ -278,7 +278,7 @@
                     : userName;
                 
                 const comment = trade.comment || '';
-                
+
                 row.innerHTML = `
                     <td>${date.toLocaleString()}</td>
                     <td>${memberNameCell}</td>
@@ -403,7 +403,7 @@
                 const memberNameLink = memberId 
                     ? `<a href="https://www.torn.com/profiles.php?XID=${memberId}" target="_blank" style="color: #4CAF50; text-decoration: none; font-weight: 500;">${memberName}</a>`
                     : memberName;
-                
+
                 row.innerHTML = `
                     <td>
                         <button class="small" onclick="toggleMemberTrades(this)" style="margin-right: 5px;">▶</button>
@@ -628,20 +628,20 @@
                     };
                     
                     try {
-                        const response = await fetch('/api/trading/mark-paid', {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                            },
-                            body: JSON.stringify({
-                                event_id: trade.event_id,
+                    const response = await fetch('/api/trading/mark-paid', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            event_id: trade.event_id,
                                 trade: tradeWithMember
-                            })
-                        });
+                        })
+                    });
                         
                         const data = await response.json();
-                        
-                        if (!response.ok) {
+                    
+                    if (!response.ok) {
                             throw new Error(data.error || `Failed to mark trade ${trade.event_id} as paid`);
                         }
                         
