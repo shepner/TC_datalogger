@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Faction Requirements Report - Torn City Faction Management</title>
+    <title>Requirements Report - Torn City Faction Management</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='dashboard.css') }}">
     <style>
         .container {
@@ -149,13 +149,13 @@
 </head>
 <body>
     <div class="container">
-        <header>
-            <h1>Faction Requirements Report</h1>
-            <p>Track member compliance with faction requirements</p>
-        </header>
-
-        <button onclick="loadReport()">Refresh Report</button>
-        <a href="/"><button class="secondary">Back to Dashboard</button></a>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #ddd;">
+            <h1 style="margin: 0; font-size: 18px; font-weight: 600; color: #333;">Requirements Report</h1>
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <button onclick="loadReport()" style="padding: 6px 12px; font-size: 12px; background-color: #4CAF50; color: white; border: none; border-radius: 3px; cursor: pointer;">Refresh Report</button>
+                <a href="/" style="text-decoration: none; font-size: 12px; color: #666; padding: 4px 8px; border: 1px solid #ccc; border-radius: 3px; background-color: #f5f5f5;">← Back to Dashboard</a>
+            </div>
+        </div>
 
         <div id="error" class="error" style="display: none;"></div>
 

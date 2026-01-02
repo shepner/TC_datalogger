@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Trading Items Dashboard - Torn City Faction Management</title>
+    <title>Trading Dashboard - Torn City Faction Management</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='dashboard.css') }}">
     <style>
         .container {
@@ -117,10 +117,12 @@
 </head>
 <body>
     <div class="container">
-        <header>
-            <h1>Trading Items Dashboard</h1>
-            <p>View and manage pending trades from members</p>
-        </header>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #ddd;">
+            <h1 style="margin: 0; font-size: 18px; font-weight: 600; color: #333;">Trading Dashboard</h1>
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <a href="/" style="text-decoration: none; font-size: 12px; color: #666; padding: 4px 8px; border: 1px solid #ccc; border-radius: 3px; background-color: #f5f5f5;">← Back to Dashboard</a>
+            </div>
+        </div>
 
         <div class="filters">
             <label>Days Back:</label>
@@ -136,7 +138,6 @@
             <input type="text" id="member_filter" placeholder="Optional member name">
             
             <button onclick="loadTrades()">Load Trades</button>
-            <a href="/"><button class="secondary">Back to Dashboard</button></a>
         </div>
 
         <div id="error" class="error" style="display: none;"></div>

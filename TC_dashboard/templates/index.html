@@ -3,19 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Torn City Data Logger - Health Dashboard</title>
+    <title>Health Dashboard - Torn City Faction Management</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='dashboard.css') }}">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 <body>
     <div class="container">
-        <header>
-            <h1>Torn City Data Logger - Health Dashboard</h1>
-            <div class="header-controls">
-                <button id="refreshBtn" class="btn btn-primary">Refresh</button>
-                <span id="lastUpdate" class="last-update">Never updated</span>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #ddd;">
+            <h1 style="margin: 0; font-size: 18px; font-weight: 600; color: #333;">Health Dashboard</h1>
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <button id="refreshBtn" class="btn btn-primary" style="padding: 6px 12px; font-size: 12px;">Refresh</button>
+                <span id="lastUpdate" class="last-update" style="font-size: 12px; color: #666;">Never updated</span>
             </div>
-        </header>
+        </div>
 
         <nav style="margin: 20px 0; padding: 15px; background-color: #f5f5f5; border-radius: 4px;">
             <h3 style="margin-top: 0;">Faction Management Tools:</h3>
