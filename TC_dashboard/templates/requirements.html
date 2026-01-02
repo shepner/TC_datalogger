@@ -556,7 +556,8 @@
                 if (value >= 3) return 'cell-yellow';
                 return 'cell-red';
             } else if (type === 'oc_count_7d') {
-                // Stoplight scale: 0 = red, 2 = yellow, 3+ = green
+                // Color scale: minpoint 0 (red), midpoint 50% (yellow at ~1.5), maxpoint 3 (green)
+                // Discrete mapping: 0-1 = red, 2 = yellow, 3+ = green
                 if (value >= 3) return 'cell-green';
                 if (value >= 2) return 'cell-yellow';
                 return 'cell-red';
