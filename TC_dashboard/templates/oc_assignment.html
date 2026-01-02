@@ -414,10 +414,42 @@
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                    }
+                    },
+                    body: JSON.stringify({
+                        services: services
+                    })
                 });
                 
                 clearInterval(timeInterval);
+                
+                // Check if response is OK and is JSON
+                if (!response.ok) {
+                    // Try to get error message from response
+                    let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+                    try {
+                        const errorData = await response.json();
+                        errorMessage = errorData.error || errorMessage;
+                    } catch (e) {
+                        // If not JSON, try to get text
+                        try {
+                            const errorText = await response.text();
+                            if (errorText) {
+                                errorMessage = errorText.substring(0, 200); // Limit length
+                            }
+                        } catch (e2) {
+                            // Ignore if we can't read it
+                        }
+                    }
+                    throw new Error(errorMessage);
+                }
+                
+                // Check content type to ensure it's JSON
+                const contentType = response.headers.get('content-type');
+                if (!contentType || !contentType.includes('application/json')) {
+                    const text = await response.text();
+                    throw new Error(`Expected JSON response but got ${contentType}. Response: ${text.substring(0, 200)}`);
+                }
+                
                 const data = await response.json();
                 const totalTime = Math.floor((Date.now() - startTime) / 1000);
                 const minutes = Math.floor(totalTime / 60);
