@@ -694,11 +694,21 @@ def get_role_hierarchy():
         'Leader'
     ]
     
+    # Convert default to new format (all promotable by default)
+    DEFAULT_HIERARCHY_OBJ = [{"role": r, "promotable": True} for r in DEFAULT_HIERARCHY]
+    
     try:
         if ROLE_HIERARCHY_FILE.exists():
             with open(ROLE_HIERARCHY_FILE, 'r') as f:
                 hierarchy = json.load(f)
                 if isinstance(hierarchy, list) and len(hierarchy) > 0:
+                    # Handle both old format (array of strings) and new format (array of objects)
+                    if isinstance(hierarchy[0], str):
+                        # Old format - convert to new format
+                        hierarchy = [{"role": r, "promotable": True} for r in hierarchy]
+                    elif isinstance(hierarchy[0], dict) and 'role' in hierarchy[0]:
+                        # New format - ensure all have promotable flag
+                        hierarchy = [{"role": r.get("role", r), "promotable": r.get("promotable", True)} for r in hierarchy]
                     return jsonify({
                         "hierarchy": hierarchy,
                         "is_default": False
@@ -706,13 +716,13 @@ def get_role_hierarchy():
         
         # Return default if file doesn't exist or is invalid
         return jsonify({
-            "hierarchy": DEFAULT_HIERARCHY,
+            "hierarchy": DEFAULT_HIERARCHY_OBJ,
             "is_default": True
         })
     except Exception as e:
         logger.error(f"Error reading role hierarchy: {e}", exc_info=True)
         return jsonify({
-            "hierarchy": DEFAULT_HIERARCHY,
+            "hierarchy": DEFAULT_HIERARCHY_OBJ,
             "is_default": True,
             "error": str(e)
         })
@@ -735,19 +745,33 @@ def save_role_hierarchy():
         if len(hierarchy) == 0:
             return jsonify({"error": "Hierarchy cannot be empty"}), 400
         
-        # Validate all items are strings
-        if not all(isinstance(item, str) and item.strip() for item in hierarchy):
-            return jsonify({"error": "All hierarchy items must be non-empty strings"}), 400
+        # Validate format - can be array of strings (old format) or array of objects (new format)
+        validated_hierarchy = []
+        for item in hierarchy:
+            if isinstance(item, str):
+                # Old format - convert to new format
+                validated_hierarchy.append({"role": item.strip(), "promotable": True})
+            elif isinstance(item, dict) and 'role' in item:
+                # New format
+                role = item.get('role', '').strip()
+                if not role:
+                    return jsonify({"error": "All hierarchy items must have non-empty role names"}), 400
+                validated_hierarchy.append({
+                    "role": role,
+                    "promotable": item.get("promotable", True)
+                })
+            else:
+                return jsonify({"error": "Invalid hierarchy format - items must be strings or objects with 'role' field"}), 400
         
         # Save to file
         ROLE_HIERARCHY_FILE.parent.mkdir(parents=True, exist_ok=True)
         with open(ROLE_HIERARCHY_FILE, 'w') as f:
-            json.dump(hierarchy, f, indent=2)
+            json.dump(validated_hierarchy, f, indent=2)
         
-        logger.info(f"Role hierarchy saved: {hierarchy}")
+        logger.info(f"Role hierarchy saved: {validated_hierarchy}")
         return jsonify({
             "success": True,
-            "hierarchy": hierarchy
+            "hierarchy": validated_hierarchy
         })
     except Exception as e:
         logger.error(f"Error saving role hierarchy: {e}", exc_info=True)

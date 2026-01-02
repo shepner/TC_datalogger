@@ -276,7 +276,7 @@
                 <button onclick="toggleRoleConfig()" style="padding: 4px 8px; font-size: 11px; background-color: #999; color: white; border: none; border-radius: 2px; cursor: pointer;">Close</button>
             </div>
             <div style="margin-bottom: 10px; padding: 8px; background-color: #fff3cd; border: 1px solid #ffc107; border-radius: 3px; font-size: 11px; color: #856404;">
-                <strong>Tip:</strong> Drag roles to reorder, or use ↑/↓ buttons. Role names must match <strong>exactly</strong> as they appear in the "Position" column.
+                <strong>Tip:</strong> Use ↑/↓ buttons to reorder. Check "Promotable" to include role in promotion chain. Uncheck for organizational roles (e.g., management) that shouldn't be used for promotions. Role names must match <strong>exactly</strong> as they appear in the "Position" column.
             </div>
             <div id="role-list" style="margin-bottom: 10px;"></div>
             <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 10px;">
@@ -346,24 +346,47 @@
         ];
 
         // Load role hierarchy from server
+        // Format: array of {role: string, promotable: boolean}
         let ROLE_HIERARCHY = [];
+        
+        // Get only promotable roles for promotion logic
+        function getPromotableRoles() {
+            return ROLE_HIERARCHY.filter(r => r.promotable).map(r => r.role);
+        }
+        
+        // Get all roles (for display and hierarchy)
+        function getAllRoles() {
+            return ROLE_HIERARCHY.map(r => r.role);
+        }
+        
         async function loadRoleHierarchy() {
             try {
                 const response = await fetch('/api/requirements/role-hierarchy');
                 const data = await response.json();
                 
                 if (data.hierarchy && Array.isArray(data.hierarchy) && data.hierarchy.length > 0) {
-                    ROLE_HIERARCHY = data.hierarchy;
+                    // Handle both old format (array of strings) and new format (array of objects)
+                    if (typeof data.hierarchy[0] === 'string') {
+                        // Old format - convert to new format
+                        ROLE_HIERARCHY = data.hierarchy.map(r => ({role: r, promotable: true}));
+                    } else {
+                        // New format
+                        ROLE_HIERARCHY = data.hierarchy.map(r => ({
+                            role: r.role || r,
+                            promotable: r.promotable !== undefined ? r.promotable : true
+                        }));
+                    }
                     console.log('Loaded role hierarchy from server:', ROLE_HIERARCHY);
                     updateConfigStatus(!data.is_default);
                 } else {
-                    ROLE_HIERARCHY = [...DEFAULT_ROLE_HIERARCHY];
+                    // Use default
+                    ROLE_HIERARCHY = DEFAULT_ROLE_HIERARCHY.map(r => ({role: r, promotable: true}));
                     console.log('Using default role hierarchy (invalid server response)');
                     updateConfigStatus(false);
                 }
             } catch (e) {
                 console.error('Failed to load role hierarchy from server:', e);
-                ROLE_HIERARCHY = [...DEFAULT_ROLE_HIERARCHY];
+                ROLE_HIERARCHY = DEFAULT_ROLE_HIERARCHY.map(r => ({role: r, promotable: true}));
                 updateConfigStatus(false);
             }
         }
@@ -394,6 +417,10 @@
                 const data = await response.json();
                 if (response.ok && data.success) {
                     console.log('Saved role hierarchy to server:', ROLE_HIERARCHY);
+                    // Update local copy if server returned validated data
+                    if (data.hierarchy) {
+                        ROLE_HIERARCHY = data.hierarchy;
+                    }
                     return true;
                 } else {
                     console.error('Failed to save role hierarchy:', data.error || 'Unknown error');
@@ -405,38 +432,42 @@
             }
         }
 
-        // Get next role in hierarchy
+        // Get next promotable role in hierarchy
         function getNextRole(currentPosition) {
             if (!currentPosition) return null;
-            const currentIndex = ROLE_HIERARCHY.indexOf(currentPosition);
-            if (currentIndex === -1 || currentIndex === ROLE_HIERARCHY.length - 1) {
-                return null; // Not in hierarchy or already at top
+            const promotableRoles = getPromotableRoles();
+            const currentIndex = promotableRoles.indexOf(currentPosition);
+            if (currentIndex === -1 || currentIndex === promotableRoles.length - 1) {
+                return null; // Not in promotable hierarchy or already at top
             }
-            return ROLE_HIERARCHY[currentIndex + 1];
+            return promotableRoles[currentIndex + 1];
         }
 
-        // Get previous role in hierarchy
+        // Get previous promotable role in hierarchy
         function getPreviousRole(currentPosition) {
             if (!currentPosition) return null;
-            const currentIndex = ROLE_HIERARCHY.indexOf(currentPosition);
+            const promotableRoles = getPromotableRoles();
+            const currentIndex = promotableRoles.indexOf(currentPosition);
             if (currentIndex <= 0) {
-                return null; // Not in hierarchy or already at bottom
+                return null; // Not in promotable hierarchy or already at bottom
             }
-            return ROLE_HIERARCHY[currentIndex - 1];
+            return promotableRoles[currentIndex - 1];
         }
 
-        // Check if member is at top role
+        // Check if member is at top promotable role
         function isAtTopRole(position) {
             if (!position) return false;
-            const index = ROLE_HIERARCHY.indexOf(position);
-            return index === ROLE_HIERARCHY.length - 1;
+            const promotableRoles = getPromotableRoles();
+            if (promotableRoles.length === 0) return false;
+            return promotableRoles[promotableRoles.length - 1] === position;
         }
 
-        // Check if member is at lowest role
+        // Check if member is at lowest promotable role
         function isAtLowestRole(position) {
             if (!position) return false;
-            const index = ROLE_HIERARCHY.indexOf(position);
-            return index === 0;
+            const promotableRoles = getPromotableRoles();
+            if (promotableRoles.length === 0) return false;
+            return promotableRoles[0] === position;
         }
 
         // Generate promotion reason text
@@ -596,10 +627,16 @@
                 }
             });
 
-            // Display current hierarchy
+            // Display current hierarchy (show promotable roles in bold)
             const hierarchyDisplay = document.getElementById('current-hierarchy-display');
             if (hierarchyDisplay) {
-                hierarchyDisplay.textContent = ROLE_HIERARCHY.join(' → ');
+                const allRoles = getAllRoles();
+                const promotableRoles = getPromotableRoles();
+                const displayParts = allRoles.map(role => {
+                    const isPromotable = promotableRoles.includes(role);
+                    return isPromotable ? `<strong>${role}</strong>` : role;
+                });
+                hierarchyDisplay.innerHTML = displayParts.join(' → ');
             }
 
             // Store report data for sorting
@@ -1020,7 +1057,9 @@
             const container = document.getElementById('role-list');
             container.innerHTML = '';
             
-            ROLE_HIERARCHY.forEach((role, index) => {
+            ROLE_HIERARCHY.forEach((roleObj, index) => {
+                const role = roleObj.role || roleObj;
+                const promotable = roleObj.promotable !== undefined ? roleObj.promotable : true;
                 const item = document.createElement('div');
                 item.style.cssText = 'display: flex; align-items: center; gap: 8px; padding: 8px; margin-bottom: 4px; background-color: white; border: 1px solid #ddd; border-radius: 3px;';
                 item.innerHTML = `
@@ -1028,6 +1067,13 @@
                     <input type="text" value="${role}" data-index="${index}" 
                            onchange="updateRole(this)" 
                            style="flex: 1; padding: 4px; border: 1px solid #ccc; border-radius: 2px; font-size: 12px;">
+                    <label style="display: flex; align-items: center; gap: 4px; font-size: 11px; color: #666; cursor: pointer; white-space: nowrap;">
+                        <input type="checkbox" ${promotable ? 'checked' : ''} 
+                               data-index="${index}" 
+                               onchange="togglePromotable(${index})"
+                               style="cursor: pointer;">
+                        <span>Promotable</span>
+                    </label>
                     <button onclick="moveRoleUp(${index})" ${index === 0 ? 'disabled' : ''} 
                             style="padding: 4px 8px; font-size: 11px; background-color: #2196F3; color: white; border: none; border-radius: 2px; cursor: pointer; ${index === 0 ? 'opacity: 0.5; cursor: not-allowed;' : ''}">↑</button>
                     <button onclick="moveRoleDown(${index})" ${index === ROLE_HIERARCHY.length - 1 ? 'disabled' : ''} 
@@ -1041,8 +1087,16 @@
 
         function updateRole(input) {
             const index = parseInt(input.dataset.index);
-            ROLE_HIERARCHY[index] = input.value.trim();
+            ROLE_HIERARCHY[index].role = input.value.trim();
             updateHierarchyDisplay();
+        }
+
+        function togglePromotable(index) {
+            const checkbox = document.querySelector(`input[type="checkbox"][data-index="${index}"]`);
+            if (checkbox) {
+                ROLE_HIERARCHY[index].promotable = checkbox.checked;
+                updateHierarchyDisplay();
+            }
         }
 
         function moveRoleUp(index) {
@@ -1085,20 +1139,31 @@
                 return;
             }
 
-            if (ROLE_HIERARCHY.includes(roleName)) {
+            // Check if role already exists
+            if (ROLE_HIERARCHY.some(r => (r.role || r) === roleName)) {
                 alert('This role is already in the hierarchy.');
                 return;
             }
 
-            ROLE_HIERARCHY.push(roleName);
+            ROLE_HIERARCHY.push({role: roleName, promotable: true});
             renderRoleList();
             updateHierarchyDisplay();
         }
 
         async function saveRoleConfig() {
             // Validate no empty roles
-            if (ROLE_HIERARCHY.some(r => !r || !r.trim())) {
+            if (ROLE_HIERARCHY.some(r => {
+                const roleName = r.role || r;
+                return !roleName || !roleName.trim();
+            })) {
                 alert('Please remove any empty roles before saving.');
+                return;
+            }
+            
+            // Ensure at least one promotable role
+            const promotableCount = ROLE_HIERARCHY.filter(r => r.promotable !== false).length;
+            if (promotableCount === 0) {
+                alert('At least one role must be marked as promotable.');
                 return;
             }
 
@@ -1121,7 +1186,7 @@
 
         async function resetRoleConfig() {
             if (confirm('Reset to default role hierarchy? This will discard your current configuration.')) {
-                ROLE_HIERARCHY = [...DEFAULT_ROLE_HIERARCHY];
+                ROLE_HIERARCHY = DEFAULT_ROLE_HIERARCHY.map(r => ({role: r, promotable: true}));
                 // Save the default to server (effectively clearing custom config)
                 await saveRoleHierarchy();
                 renderRoleList();
@@ -1138,7 +1203,13 @@
         function updateHierarchyDisplay() {
             const display = document.getElementById('current-hierarchy-display');
             if (display) {
-                display.textContent = ROLE_HIERARCHY.join(' → ');
+                const allRoles = getAllRoles();
+                const promotableRoles = getPromotableRoles();
+                const displayParts = allRoles.map(role => {
+                    const isPromotable = promotableRoles.includes(role);
+                    return isPromotable ? `<strong>${role}</strong>` : role;
+                });
+                display.innerHTML = displayParts.join(' → ');
             }
         }
 
