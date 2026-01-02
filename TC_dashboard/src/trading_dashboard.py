@@ -88,6 +88,7 @@ class TradingDashboard:
         SELECT
           pe.timestamp,
           pe.user_name,
+          fm.id AS user_id,
           pe.item_name,
           pe.quantity,
           SAFE_CAST(items.value.market_price AS INT64) AS market_price,
@@ -121,6 +122,10 @@ class TradingDashboard:
           `torncity-402423.torn_data.v2_torn_items-raw` AS items
         ON
           LOWER(TRIM(pe.item_name)) = LOWER(TRIM(items.name))
+        LEFT JOIN
+          `torncity-402423.torn_data.v2_faction_40832_members-raw` AS fm
+        ON
+          LOWER(TRIM(pe.user_name)) = LOWER(TRIM(fm.name))
         LEFT JOIN
           paid_events AS paid
         ON
@@ -182,6 +187,7 @@ class TradingDashboard:
         trades_with_payment AS (
           SELECT
             pe.user_name,
+            fm.id AS user_id,
             pe.event_id,
             pe.timestamp,
             pe.item_name,
@@ -216,6 +222,10 @@ class TradingDashboard:
           ON
             LOWER(TRIM(pe.item_name)) = LOWER(TRIM(items.name))
           LEFT JOIN
+            `torncity-402423.torn_data.v2_faction_40832_members-raw` AS fm
+          ON
+            LOWER(TRIM(pe.user_name)) = LOWER(TRIM(fm.name))
+          LEFT JOIN
             paid_events AS paid
           ON
             pe.event_id = paid.event_id
@@ -224,6 +234,7 @@ class TradingDashboard:
         )
         SELECT
           user_name AS member_name,
+          MAX(user_id) AS member_id,
           COUNT(*) AS trade_count,
           SUM(quantity) AS total_quantity,
           SUM(payment_amount) AS total_payment_amount,
@@ -232,6 +243,7 @@ class TradingDashboard:
               event_id,
               timestamp,
               user_name,
+              user_id,
               item_name,
               quantity,
               market_price,
@@ -479,6 +491,7 @@ class TradingDashboard:
         SELECT
           pe.timestamp,
           pe.user_name,
+          fm.id AS user_id,
           pe.item_name,
           pe.quantity,
           SAFE_CAST(items.value.market_price AS INT64) AS market_price,
@@ -512,6 +525,10 @@ class TradingDashboard:
           `torncity-402423.torn_data.v2_torn_items-raw` AS items
         ON
           LOWER(TRIM(pe.item_name)) = LOWER(TRIM(items.name))
+        LEFT JOIN
+          `torncity-402423.torn_data.v2_faction_40832_members-raw` AS fm
+        ON
+          LOWER(TRIM(pe.user_name)) = LOWER(TRIM(fm.name))
         INNER JOIN
           paid_events AS paid
         ON
@@ -571,6 +588,7 @@ class TradingDashboard:
         trades_with_payment AS (
           SELECT
             pe.user_name,
+            fm.id AS user_id,
             pe.event_id,
             pe.timestamp,
             pe.item_name,
@@ -604,6 +622,10 @@ class TradingDashboard:
             `torncity-402423.torn_data.v2_torn_items-raw` AS items
           ON
             LOWER(TRIM(pe.item_name)) = LOWER(TRIM(items.name))
+          LEFT JOIN
+            `torncity-402423.torn_data.v2_faction_40832_members-raw` AS fm
+          ON
+            LOWER(TRIM(pe.user_name)) = LOWER(TRIM(fm.name))
           INNER JOIN
             paid_events AS paid
           ON
@@ -613,6 +635,7 @@ class TradingDashboard:
         )
         SELECT
           user_name AS member_name,
+          MAX(user_id) AS member_id,
           COUNT(*) AS trade_count,
           SUM(quantity) AS total_quantity,
           SUM(payment_amount) AS total_payment_amount,

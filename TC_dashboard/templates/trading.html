@@ -252,9 +252,15 @@
                        <button class="small copy-chat-btn" data-trade="${JSON.stringify(trade).replace(/"/g, '&quot;')}" title="${formatChatMessage(trade).replace(/"/g, '&quot;')}">Copy Chat</button>
                        <button class="small" data-event-id="${trade.event_id}" data-trade='${JSON.stringify(trade).replace(/'/g, "&#39;")}' onclick="markAsPaidFromButton(this)">Mark Paid</button>`;
 
+                const userName = trade.user_name || 'Unknown';
+                const userId = trade.user_id || trade.user_id;
+                const memberNameCell = userId 
+                    ? `<a href="https://www.torn.com/profiles.php?XID=${userId}" target="_blank" style="color: #4CAF50; text-decoration: none; font-weight: 500;">${userName}</a>`
+                    : userName;
+                
                 row.innerHTML = `
                     <td>${date.toLocaleString()}</td>
-                    <td>${trade.user_name || 'Unknown'}</td>
+                    <td>${memberNameCell}</td>
                     <td>${trade.item_name || 'Unknown Item'}</td>
                     <td>${trade.quantity || 0}</td>
                     <td>$${marketPrice.toLocaleString()}</td>
@@ -323,6 +329,7 @@
                             event_id: t.event_id || t.get && t.get('event_id'),
                             timestamp: t.timestamp || t.get && t.get('timestamp'),
                             user_name: t.user_name || t.get && t.get('user_name') || member.member_name,
+                            user_id: t.user_id || t.get && t.get('user_id'),
                             item_name: t.item_name || t.get && t.get('item_name'),
                             quantity: t.quantity || t.get && t.get('quantity'),
                             market_price: t.market_price || t.get && t.get('market_price'),
@@ -369,10 +376,16 @@
                 // Store trades in data attribute - escape quotes for HTML attribute
                 const tradesJson = JSON.stringify(trades).replace(/"/g, '&quot;');
                 
+                const memberName = member.member_name || 'Unknown';
+                const memberId = member.member_id || member.member_id;
+                const memberNameLink = memberId 
+                    ? `<a href="https://www.torn.com/profiles.php?XID=${memberId}" target="_blank" style="color: #4CAF50; text-decoration: none; font-weight: 500;">${memberName}</a>`
+                    : memberName;
+                
                 row.innerHTML = `
                     <td>
                         <button class="small" onclick="toggleMemberTrades(this)" style="margin-right: 5px;">▶</button>
-                        ${member.member_name || 'Unknown'}
+                        ${memberNameLink}
                     </td>
                     <td class="trade-count-${memberId}">${tradeCount}</td>
                     <td class="total-quantity-${memberId}">${totalQuantity}</td>
