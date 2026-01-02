@@ -409,15 +409,15 @@
                         <button class="small" onclick="toggleMemberTrades(this)" style="margin-right: 5px;">▶</button>
                         ${memberNameLink}
                     </td>
-                    <td class="trade-count-${memberId}">${tradeCount}</td>
-                    <td class="total-quantity-${memberId}">${totalQuantity}</td>
-                    <td class="total-payment-${memberId}">$${totalPayment.toLocaleString()}</td>
+                    <td class="trade-count-${memberNameId}">${tradeCount}</td>
+                    <td class="total-quantity-${memberNameId}">${totalQuantity}</td>
+                    <td class="total-payment-${memberNameId}">$${totalPayment.toLocaleString()}</td>
                     <td class="actions">
                         ${isPaid 
                             ? `<button class="small undo-all-paid-btn" data-member-name="${memberNameEscaped}" data-trades="${tradesJson}">Undo All Paid</button>`
-                            : `<button class="small copy-total-btn" data-member-id="${memberId}" title="${totalPayment.toLocaleString()}">Copy Total</button>
+                            : `<button class="small copy-total-btn" data-member-id="${memberNameId}" title="${totalPayment.toLocaleString()}">Copy Total</button>
                                <button class="small copy-all-chat-btn" 
-                                       data-member-id="${memberId}"
+                                       data-member-id="${memberNameId}"
                                        data-trades="${tradesJson}">Copy Chat</button>
                                <button class="small" onclick="showRawEvents('${memberName.replace(/'/g, "&#39;")}')" title="Show raw event logs for ${memberName}">Raw Events</button>
                                <button class="small mark-all-paid-btn" 
@@ -451,7 +451,7 @@
                         <table style="width: 100%; margin-left: 10px; font-size: 11px;">
                             <thead>
                                 <tr style="background-color: #e8f5e9;">
-                                    <th><input type="checkbox" class="select-all-checkbox" id="select-all-${memberId}" checked></th>
+                                    <th><input type="checkbox" class="select-all-checkbox" id="select-all-${memberNameId}" checked></th>
                                     <th>Date</th>
                                     <th>Item</th>
                                     <th>Quantity</th>
