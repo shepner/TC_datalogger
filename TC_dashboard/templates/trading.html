@@ -238,7 +238,7 @@
                     <td>$${paymentAmount.toLocaleString()}</td>
                     <td class="actions">
                         <button class="small" onclick="copyValue('${paymentAmount}')">Copy Payment</button>
-                        <button class="small copy-chat-btn" data-trade="${JSON.stringify(trade).replace(/"/g, '&quot;')}">Copy Chat</button>
+                        <button class="small copy-chat-btn" data-trade="${JSON.stringify(trade).replace(/"/g, '&quot;')}" title="${formatChatMessage(trade).replace(/"/g, '&quot;')}">Copy Chat</button>
                         <button class="small" data-event-id="${trade.event_id}" data-trade='${JSON.stringify(trade).replace(/'/g, "&#39;")}' onclick="markAsPaidFromButton(this)">Mark Paid</button>
                         <button class="small" onclick="unmarkAsPaid('${trade.event_id}')">Unmark Paid</button>
                     </td>
@@ -327,7 +327,7 @@
                             <td>$${buyPrice.toLocaleString()}</td>
                             <td>$${individualPayment.toLocaleString()}</td>
                             <td class="actions">
-                                <button class="small copy-chat-btn" data-trade="${JSON.stringify(trade).replace(/"/g, '&quot;')}">Copy Chat</button>
+                                <button class="small copy-chat-btn" data-trade="${JSON.stringify(trade).replace(/"/g, '&quot;')}" title="${formatChatMessage(trade).replace(/"/g, '&quot;')}">Copy Chat</button>
                                 <button class="small" data-event-id="${trade.event_id}" data-trade='${JSON.stringify(trade).replace(/'/g, "&#39;")}' onclick="markAsPaidFromButton(this)">Mark Paid</button>
                             </td>
                         </tr>
@@ -433,6 +433,34 @@
                 // Attach event listener to copy all chat button
                 const copyAllChatBtn = row.querySelector('.copy-all-chat-btn');
                 if (copyAllChatBtn) {
+                    // Function to update tooltip for copy all chat button
+                    const updateCopyAllTooltip = () => {
+                        const checkboxes = document.querySelectorAll(`.member-trades-${memberId} .trade-checkbox`);
+                        const checkedTrades = [];
+                        checkboxes.forEach((checkbox, index) => {
+                            if (checkbox.checked && trades[index]) {
+                                checkedTrades.push(trades[index]);
+                            }
+                        });
+                        if (checkedTrades.length === 0) {
+                            copyAllChatBtn.title = 'No trades selected';
+                        } else {
+                            const messages = checkedTrades.map(t => formatChatMessage(t));
+                            const totalPayment = checkedTrades.reduce((sum, t) => sum + (t.payment_amount || 0), 0);
+                            messages.push(`$${totalPayment.toLocaleString()} deposited to the vault!`);
+                            copyAllChatBtn.title = messages.join('\\n');
+                        }
+                    };
+                    
+                    // Set initial tooltip
+                    updateCopyAllTooltip();
+                    
+                    // Update tooltip when checkboxes change
+                    const checkboxes = detailRow.querySelectorAll('.trade-checkbox');
+                    checkboxes.forEach(checkbox => {
+                        checkbox.addEventListener('change', updateCopyAllTooltip);
+                    });
+                    
                     copyAllChatBtn.addEventListener('click', function() {
                         const memberId = this.dataset.memberId;
                         try {
@@ -578,6 +606,14 @@
             navigator.clipboard.writeText(value).then(() => {
                 showSuccess('Value copied to clipboard!');
             });
+        }
+
+        function formatChatMessage(trade) {
+            const quantity = trade.quantity || 0;
+            const item_name = trade.item_name || 'Unknown Item';
+            const payment_amount = trade.payment_amount || 0;
+            const individual_payment = quantity > 0 ? Math.floor(payment_amount / quantity) : 0;
+            return `${quantity} ${item_name} * $${individual_payment} = $${payment_amount} deposited to the vault!`;
         }
 
         function updateMemberTotals(memberId, trades) {
