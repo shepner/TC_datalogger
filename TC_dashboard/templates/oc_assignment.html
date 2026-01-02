@@ -2008,9 +2008,15 @@
                             
                             if (aggregated && aggregated.range) {
                                 const rangeText = aggregated.range;
+                                // Color scale: minpoint 70 (red), midpoint 75 (yellow), maxpoint 85 (green)
+                                // Check if any values are below 70 (red) or if all values are below 85 (not all green)
                                 let cellClass = '';
-                                if (aggregated.values && aggregated.values.some(v => v < 80 || v > 90)) {
+                                if (aggregated.values && aggregated.values.some(v => v < 70)) {
                                     cellClass = 'cell-red';
+                                } else if (aggregated.values && aggregated.values.every(v => v >= 85)) {
+                                    cellClass = 'cell-green';
+                                } else if (aggregated.values && aggregated.values.some(v => v >= 70)) {
+                                    cellClass = 'cell-yellow';
                                 }
                                 
                                 const cell = document.createElement('td');
@@ -2041,9 +2047,15 @@
                                     
                                     if (aggregated && aggregated.range) {
                                         const rangeText = aggregated.range;
+                                        // Color scale: minpoint 70 (red), midpoint 75 (yellow), maxpoint 85 (green)
+                                        // Check if any values are below 70 (red) or if all values are below 85 (not all green)
                                         let cellClass = '';
-                                        if (aggregated.values && aggregated.values.some(v => v < 80 || v > 90)) {
+                                        if (aggregated.values && aggregated.values.some(v => v < 70)) {
                                             cellClass = 'cell-red';
+                                        } else if (aggregated.values && aggregated.values.every(v => v >= 85)) {
+                                            cellClass = 'cell-green';
+                                        } else if (aggregated.values && aggregated.values.some(v => v >= 70)) {
+                                            cellClass = 'cell-yellow';
                                         }
                                         
                                         const cell = document.createElement('td');
@@ -2600,8 +2612,15 @@
                 html += `<thead><tr><th style="padding: 4px 6px;">OC Name</th><th style="padding: 4px 6px; text-align: center;">Range</th></tr></thead><tbody>`;
                 
                 summaryData.forEach(item => {
-                    const hasIssue = item.values && item.values.some(v => v < 80 || v > 90);
-                    const rowClass = hasIssue ? 'cell-red' : '';
+                    // Color scale: minpoint 70 (red), midpoint 75 (yellow), maxpoint 85 (green)
+                    let rowClass = '';
+                    if (item.values && item.values.some(v => v < 70)) {
+                        rowClass = 'cell-red';
+                    } else if (item.values && item.values.every(v => v >= 85)) {
+                        rowClass = 'cell-green';
+                    } else if (item.values && item.values.some(v => v >= 70)) {
+                        rowClass = 'cell-yellow';
+                    }
                     html += `<tr class="${rowClass}">`;
                     html += `<td style="padding: 4px 6px;">${item.ocName}</td>`;
                     html += `<td style="padding: 4px 6px; text-align: center; font-weight: bold;">${item.range}</td>`;
@@ -2613,8 +2632,15 @@
                 html += `<thead><tr><th style="padding: 4px 6px;">Position</th><th style="padding: 4px 6px; text-align: center;">Range</th></tr></thead><tbody>`;
                 
                 summaryData.forEach(item => {
-                    const hasIssue = item.values && item.values.some(v => v < 80 || v > 90);
-                    const rowClass = hasIssue ? 'cell-red' : '';
+                    // Color scale: minpoint 70 (red), midpoint 75 (yellow), maxpoint 85 (green)
+                    let rowClass = '';
+                    if (item.values && item.values.some(v => v < 70)) {
+                        rowClass = 'cell-red';
+                    } else if (item.values && item.values.every(v => v >= 85)) {
+                        rowClass = 'cell-green';
+                    } else if (item.values && item.values.some(v => v >= 70)) {
+                        rowClass = 'cell-yellow';
+                    }
                     html += `<tr class="${rowClass}">`;
                     html += `<td style="padding: 4px 6px;">${item.positionName} (${item.positionId})</td>`;
                     html += `<td style="padding: 4px 6px; text-align: center; font-weight: bold;">${item.range}</td>`;
