@@ -799,7 +799,11 @@
                         if (checkedTrades.length === 0) {
                             tooltipContent.textContent = 'No trades selected';
                         } else {
-                            const messages = checkedTrades.map(t => formatChatMessage(t));
+                            // For bulk copy, remove "deposited to the vault!" from individual lines
+                            const messages = checkedTrades.map(t => {
+                                const msg = formatChatMessage(t);
+                                return msg.replace(/\s+deposited to the vault!$/, '');
+                            });
                             const totalPayment = checkedTrades.reduce((sum, t) => sum + (t.payment_amount || 0), 0);
                             messages.push(`$${totalPayment.toLocaleString()} deposited to the vault!`);
                             tooltipContent.textContent = messages.join('\n');
@@ -1066,7 +1070,9 @@
                         throw new Error(data.error || 'Failed to format message');
                     }
                     
-                    messages.push(data.message);
+                    // For bulk copy, remove "deposited to the vault!" from individual lines
+                    const message = data.message.replace(/\s+deposited to the vault!$/, '');
+                    messages.push(message);
                     totalPayment += trade.payment_amount || 0;
                 }
                 
