@@ -596,6 +596,30 @@ def get_chat_message():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/api/trading/raw-events", methods=["GET"])
+def get_raw_events():
+    """Get raw event logs for a user."""
+    if not trading_dashboard:
+        return jsonify({"error": "BigQuery client not available"}), 500
+    
+    try:
+        user_name = request.args.get("user_name")
+        days_back = int(request.args.get("days_back", 30))
+        
+        if not user_name:
+            return jsonify({"error": "user_name required"}), 400
+        
+        events = trading_dashboard.get_raw_events_for_user(
+            user_name=user_name,
+            days_back=days_back
+        )
+        
+        return jsonify({"events": events})
+    except Exception as e:
+        logger.error(f"Error getting raw events: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/requirements")
 def requirements():
     """Faction requirements report page."""

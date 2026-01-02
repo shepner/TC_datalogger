@@ -142,6 +142,19 @@
         <div id="error" class="error" style="display: none;"></div>
         <div id="success" class="success" style="display: none;"></div>
 
+        <!-- Modal for raw events -->
+        <div id="rawEventsModal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2 id="rawEventsModalTitle">Raw Event Logs</h2>
+                    <button class="close" onclick="closeRawEventsModal()">&times;</button>
+                </div>
+                <div id="rawEventsContent">
+                    <p>Loading events...</p>
+                </div>
+            </div>
+        </div>
+
         <div id="trades-container">
             <!-- Grouped view table -->
             <table id="grouped-table" style="display: none;">
@@ -250,7 +263,8 @@
                     ? `<button class="small" onclick="undoPaidStatus('${trade.event_id}')">Undo Paid Status</button>`
                     : `<button class="small" onclick="copyValue('${paymentAmount}')">Copy Payment</button>
                        <button class="small copy-chat-btn" data-trade="${JSON.stringify(trade).replace(/"/g, '&quot;')}" title="${formatChatMessage(trade).replace(/"/g, '&quot;')}">Copy Chat</button>
-                       <button class="small" data-event-id="${trade.event_id}" data-trade='${JSON.stringify(trade).replace(/'/g, "&#39;")}' onclick="markAsPaidFromButton(this)">Mark Paid</button>`;
+                       <button class="small" data-event-id="${trade.event_id}" data-trade='${JSON.stringify(trade).replace(/'/g, "&#39;")}' onclick="markAsPaidFromButton(this)">Mark Paid</button>
+                       <button class="small" onclick="showRawEvents('${userName.replace(/'/g, "&#39;")}')" title="Show raw event logs for ${userName}">Raw Events</button>`;
 
                 const userName = trade.user_name || 'Unknown';
                 const userId = trade.user_id || trade.user_id;
@@ -397,6 +411,7 @@
                                <button class="small copy-all-chat-btn" 
                                        data-member-id="${memberId}"
                                        data-trades="${tradesJson}">Copy Chat</button>
+                               <button class="small" onclick="showRawEvents('${memberName.replace(/'/g, "&#39;")}')" title="Show raw event logs for ${memberName}">Raw Events</button>
                                <button class="small mark-all-paid-btn" 
                                        data-member-name="${memberNameEscaped}" 
                                        data-trades="${tradesJson}">Mark All Paid</button>`
@@ -826,6 +841,85 @@
 
         async function undoPaidStatus(eventId) {
             await unmarkAsPaid(eventId);
+        }
+
+        async function showRawEvents(userName) {
+            const modal = document.getElementById('rawEventsModal');
+            const modalTitle = document.getElementById('rawEventsModalTitle');
+            const modalContent = document.getElementById('rawEventsContent');
+            const daysBack = document.getElementById('days_back').value;
+            
+            modalTitle.textContent = `Raw Event Logs for ${userName}`;
+            modalContent.innerHTML = '<p>Loading events...</p>';
+            modal.style.display = 'block';
+            
+            try {
+                const response = await fetch(`/api/trading/raw-events?user_name=${encodeURIComponent(userName)}&days_back=${daysBack}`);
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(data.error || 'Failed to load raw events');
+                }
+                
+                const events = data.events || [];
+                
+                if (events.length === 0) {
+                    modalContent.innerHTML = `<p>No raw events found for ${userName} in the last ${daysBack} days.</p>`;
+                    return;
+                }
+                
+                let tableHtml = `
+                    <table class="raw-events-table">
+                        <thead>
+                            <tr>
+                                <th>Timestamp</th>
+                                <th>Event ID</th>
+                                <th>Event Text</th>
+                                <th>Fetched At</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                `;
+                
+                events.forEach(event => {
+                    const timestamp = event.timestamp ? new Date(event.timestamp).toLocaleString() : 'N/A';
+                    const fetchedAt = event.fetched_at ? new Date(event.fetched_at).toLocaleString() : 'N/A';
+                    const eventText = (event.event || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                    
+                    tableHtml += `
+                        <tr>
+                            <td>${timestamp}</td>
+                            <td>${event.event_id || 'N/A'}</td>
+                            <td class="event-text">${eventText}</td>
+                            <td>${fetchedAt}</td>
+                        </tr>
+                    `;
+                });
+                
+                tableHtml += `
+                        </tbody>
+                    </table>
+                    <p style="margin-top: 10px; font-size: 11px; color: #666;">Showing ${events.length} event(s)</p>
+                `;
+                
+                modalContent.innerHTML = tableHtml;
+            } catch (error) {
+                console.error('Error loading raw events:', error);
+                modalContent.innerHTML = `<p style="color: red;">Error loading raw events: ${error.message}</p>`;
+            }
+        }
+        
+        function closeRawEventsModal() {
+            const modal = document.getElementById('rawEventsModal');
+            modal.style.display = 'none';
+        }
+        
+        // Close modal when clicking outside of it
+        window.onclick = function(event) {
+            const modal = document.getElementById('rawEventsModal');
+            if (event.target === modal) {
+                modal.style.display = 'none';
+            }
         }
 
         async function undoAllPaidStatus(memberName, trades) {

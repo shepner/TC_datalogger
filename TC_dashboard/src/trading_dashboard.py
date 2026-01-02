@@ -663,6 +663,46 @@ class TradingDashboard:
         query = query.replace("@days_back", str(days_back))
         return self.bq.execute_query(query)
 
+    def get_raw_events_for_user(
+        self,
+        user_name: str,
+        days_back: int = 30,
+    ) -> List[Dict[str, Any]]:
+        """
+        Get raw event logs for a specific user.
+
+        Args:
+            user_name: Username to get events for
+            days_back: Number of days to look back
+
+        Returns:
+            List of raw event dictionaries
+        """
+        query = """
+        SELECT
+          id AS event_id,
+          DATETIME(TIMESTAMP_SECONDS(timestamp)) AS timestamp,
+          event,
+          DATETIME(TIMESTAMP_SECONDS(SAFE_CAST(fetched_at AS INT64))) AS fetched_at
+        FROM
+          `torncity-402423.torn_data.v2_torn_user_events-raw`
+        WHERE
+          STARTS_WITH(event, 'You were sent')
+          AND NOT REGEXP_CONTAINS(event, r'You were sent \$')
+          AND NOT REGEXP_CONTAINS(event, r' from Duke(?: |$)')
+          AND LOWER(TRIM(REGEXP_EXTRACT(event, r' from (.+?)(?: with the message|$)'))) = LOWER(TRIM(@user_name))
+          AND TIMESTAMP_SECONDS(SAFE_CAST(timestamp AS INT64)) >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL @days_back DAY)
+        ORDER BY
+          timestamp DESC
+        """
+        
+        # Replace parameters
+        query = query.replace("@user_name", f"'{user_name}'")
+        query = query.replace("@days_back", str(days_back))
+        
+        results = self.bq.execute_query(query)
+        return results
+
     def validate_paid_trades(self, event_ids: List[str]) -> Dict[str, Any]:
         """
         Validate that trades were marked as paid in BigQuery.
