@@ -459,7 +459,7 @@
                 // If we have a user_id, use direct profile link, otherwise use search link
                 const memberNameCell = userId 
                     ? `<a href="https://www.torn.com/profiles.php?XID=${userId}" target="_blank" style="color: #4CAF50; text-decoration: none; font-weight: 500;">${userName}</a>`
-                    : `<a href="https://www.torn.com/search.php?search=${encodeURIComponent(userName)}" target="_blank" style="color: #4CAF50; text-decoration: none; font-weight: 500;">${userName}</a>`;
+                    : userName;
                 
                 const comment = trade.comment || '';
 
@@ -646,10 +646,9 @@
                 
                 const memberName = member.member_name || 'Unknown';
                 const memberId = member.member_id;
-                // If we have a member_id, use direct profile link, otherwise use search link
                 const memberNameLink = (memberId && memberId !== null && memberId !== undefined) 
                     ? `<a href="https://www.torn.com/profiles.php?XID=${memberId}" target="_blank" style="color: #4CAF50; text-decoration: none; font-weight: 500;">${memberName}</a>`
-                    : `<a href="https://www.torn.com/search.php?search=${encodeURIComponent(memberName)}" target="_blank" style="color: #4CAF50; text-decoration: none; font-weight: 500;">${memberName}</a>`;
+                    : memberName;
 
                 row.innerHTML = `
                     <td>
