@@ -550,8 +550,9 @@
 
         function getCellClass(value, type) {
             if (type === 'oc_count') {
-                // Stoplight scale: 0 = red, 3 = yellow, 8+ = green
-                if (value >= 8) return 'cell-green';
+                // Color scale: minpoint 2.5 (red), midpoint 3 (yellow), maxpoint 7 (green)
+                // Discrete mapping: <= 2 = red, 3-6 = yellow, >= 7 = green
+                if (value >= 7) return 'cell-green';
                 if (value >= 3) return 'cell-yellow';
                 return 'cell-red';
             } else if (type === 'oc_count_7d') {
