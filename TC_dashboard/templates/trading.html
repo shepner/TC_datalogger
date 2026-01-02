@@ -83,6 +83,9 @@
         th.sortable:hover {
             background-color: #45a049;
         }
+        .member-details th.sortable:hover {
+            background-color: #c8e6c9;
+        }
         th.sortable::after {
             content: ' ↕';
             opacity: 0.5;
@@ -697,13 +700,13 @@
                             <thead>
                                 <tr style="background-color: #e8f5e9;">
                                     <th><input type="checkbox" class="select-all-checkbox" id="select-all-${memberNameId}" checked></th>
-                                    <th>Date</th>
-                                    <th>Item</th>
-                                    <th>Quantity</th>
-                                    <th>Market Price</th>
-                                    <th>Sales Fee</th>
-                                    <th>Buy Price</th>
-                                    <th>Payment</th>
+                                    <th class="sortable" data-column="timestamp" data-member-id="${memberNameId}">Date</th>
+                                    <th class="sortable" data-column="item_name" data-member-id="${memberNameId}">Item</th>
+                                    <th class="sortable" data-column="quantity" data-member-id="${memberNameId}">Quantity</th>
+                                    <th class="sortable" data-column="market_price" data-member-id="${memberNameId}">Market Price</th>
+                                    <th class="sortable" data-column="sales_fee" data-member-id="${memberNameId}">Sales Fee</th>
+                                    <th class="sortable" data-column="buy_price" data-member-id="${memberNameId}">Buy Price</th>
+                                    <th class="sortable" data-column="payment_amount" data-member-id="${memberNameId}">Payment</th>
                                     <th>Actions</th>
                                 </tr>
                             </thead>
@@ -829,6 +832,9 @@
                 // Initialize select-all state and totals (all checked by default)
                 updateSelectAllState(memberId);
                 // Totals are already correct from backend, but we can verify if needed
+                
+                // Attach sort handlers to the member detail table
+                attachMemberDetailSortHandlers(detailRow, memberNameId, trades);
             });
 
             document.getElementById('grouped-table').style.display = 'table';
@@ -1523,6 +1529,93 @@
                 const daysBackInput = document.getElementById('days_back');
                 daysBackInput.setAttribute('max', 365);
             }
+        }
+
+        function attachMemberDetailSortHandlers(detailRow, memberId, trades) {
+            const table = detailRow.querySelector('table');
+            if (!table) return;
+            
+            const tbody = table.querySelector('tbody');
+            if (!tbody) return;
+            
+            // Store sort state per member
+            if (!window.memberSortStates) {
+                window.memberSortStates = {};
+            }
+            if (!window.memberSortStates[memberId]) {
+                window.memberSortStates[memberId] = { column: null, direction: 'asc' };
+            }
+            const sortState = window.memberSortStates[memberId];
+            
+            // Attach handlers to sortable headers
+            table.querySelectorAll('th.sortable').forEach(th => {
+                const newTh = th.cloneNode(true);
+                th.parentNode.replaceChild(newTh, th);
+                
+                newTh.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const column = newTh.dataset.column;
+                    
+                    // Toggle direction if clicking the same column
+                    if (sortState.column === column) {
+                        sortState.direction = sortState.direction === 'asc' ? 'desc' : 'asc';
+                    } else {
+                        sortState.column = column;
+                        sortState.direction = 'asc';
+                    }
+                    
+                    // Sort the rows
+                    const rows = Array.from(tbody.querySelectorAll('tr'));
+                    rows.sort((a, b) => {
+                        let aVal, bVal;
+                        
+                        // Get values based on column
+                        if (column === 'timestamp') {
+                            aVal = new Date(a.cells[1].textContent);
+                            bVal = new Date(b.cells[1].textContent);
+                        } else if (column === 'item_name') {
+                            aVal = a.cells[2].textContent.trim().toLowerCase();
+                            bVal = b.cells[2].textContent.trim().toLowerCase();
+                        } else if (column === 'quantity') {
+                            aVal = parseInt(a.cells[3].textContent) || 0;
+                            bVal = parseInt(b.cells[3].textContent) || 0;
+                        } else if (column === 'market_price') {
+                            aVal = parseInt(a.cells[4].textContent.replace(/[$,]/g, '')) || 0;
+                            bVal = parseInt(b.cells[4].textContent.replace(/[$,]/g, '')) || 0;
+                        } else if (column === 'sales_fee') {
+                            aVal = parseFloat(a.cells[5].textContent.replace('%', '')) || 0;
+                            bVal = parseFloat(b.cells[5].textContent.replace('%', '')) || 0;
+                        } else if (column === 'buy_price') {
+                            aVal = parseInt(a.cells[6].textContent.replace(/[$,]/g, '')) || 0;
+                            bVal = parseInt(b.cells[6].textContent.replace(/[$,]/g, '')) || 0;
+                        } else if (column === 'payment_amount') {
+                            aVal = parseInt(a.cells[7].textContent.replace(/[$,]/g, '')) || 0;
+                            bVal = parseInt(b.cells[7].textContent.replace(/[$,]/g, '')) || 0;
+                        } else {
+                            return 0;
+                        }
+                        
+                        // Compare values
+                        let comparison = 0;
+                        if (aVal < bVal) comparison = -1;
+                        else if (aVal > bVal) comparison = 1;
+                        
+                        return sortState.direction === 'asc' ? comparison : -comparison;
+                    });
+                    
+                    // Re-append sorted rows
+                    rows.forEach(row => tbody.appendChild(row));
+                    
+                    // Update sort indicators
+                    table.querySelectorAll('th.sortable').forEach(header => {
+                        header.classList.remove('sort-asc', 'sort-desc');
+                        if (header.dataset.column === column) {
+                            header.classList.add(`sort-${sortState.direction}`);
+                        }
+                    });
+                });
+            });
         }
 
         function attachSortHandlers() {
