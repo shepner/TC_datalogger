@@ -98,52 +98,60 @@ class TradingDashboard:
           FROM
             `torncity-402423.torn_data.trading_paid_events`
         )
+        trades_with_prices AS (
+          SELECT
+            pe.timestamp,
+            pe.user_name,
+            pe.item_name,
+            pe.quantity,
+            pe.comment,
+            pe.event_id,
+            SAFE_CAST(items.value.market_price AS INT64) AS market_price,
+            pe.quantity * SAFE_CAST(items.value.market_price AS INT64) AS total_value,
+            -- Calculate sales fee: 5% for Xanax, 4% for others
+            CASE 
+              WHEN LOWER(TRIM(pe.item_name)) = 'xanax' THEN 0.05
+              ELSE 0.04
+            END AS sales_fee,
+            -- Calculate buy price: market_price * (1 - sales_fee), rounded
+            CAST(
+              SAFE_CAST(items.value.market_price AS INT64) * 
+              (1 - CASE 
+                WHEN LOWER(TRIM(pe.item_name)) = 'xanax' THEN 0.05
+                ELSE 0.04
+              END)
+            AS INT64) AS buy_price
+          FROM
+            parsed_events AS pe
+          LEFT JOIN
+            `torncity-402423.torn_data.v2_torn_items-raw` AS items
+          ON
+            LOWER(TRIM(pe.item_name)) = LOWER(TRIM(items.name))
+        )
         SELECT
-          pe.timestamp,
-          pe.user_name,
+          tp.timestamp,
+          tp.user_name,
           fm.id AS user_id,
-          pe.item_name,
-          pe.quantity,
-          SAFE_CAST(items.value.market_price AS INT64) AS market_price,
-          pe.quantity * SAFE_CAST(items.value.market_price AS INT64) AS total_value,
-          -- Calculate sales fee: 5% for Xanax, 4% for others
-          CASE 
-            WHEN LOWER(TRIM(pe.item_name)) = 'xanax' THEN 0.05
-            ELSE 0.04
-          END AS sales_fee,
-          -- Calculate buy price: market_price * (1 - sales_fee)
-          CAST(
-            SAFE_CAST(items.value.market_price AS INT64) * 
-            (1 - CASE 
-              WHEN LOWER(TRIM(pe.item_name)) = 'xanax' THEN 0.05
-              ELSE 0.04
-            END)
-          AS INT64) AS buy_price,
-          -- Calculate payment amount: buy_price * quantity
-          CAST(
-            pe.quantity * 
-            (SAFE_CAST(items.value.market_price AS INT64) * 
-            (1 - CASE 
-              WHEN LOWER(TRIM(pe.item_name)) = 'xanax' THEN 0.05
-              ELSE 0.04
-            END))
-          AS INT64) AS payment_amount,
-          pe.comment,
-          pe.event_id
+          tp.item_name,
+          tp.quantity,
+          tp.market_price,
+          tp.total_value,
+          tp.sales_fee,
+          tp.buy_price,
+          -- Calculate payment amount using rounded buy_price: buy_price * quantity
+          CAST(tp.buy_price * tp.quantity AS INT64) AS payment_amount,
+          tp.comment,
+          tp.event_id
         FROM
-          parsed_events AS pe
-        LEFT JOIN
-          `torncity-402423.torn_data.v2_torn_items-raw` AS items
-        ON
-          LOWER(TRIM(pe.item_name)) = LOWER(TRIM(items.name))
+          trades_with_prices AS tp
         LEFT JOIN
           `torncity-402423.torn_data.v2_faction_40832_members-raw` AS fm
         ON
-          LOWER(TRIM(pe.user_name)) = LOWER(TRIM(fm.name))
+          LOWER(TRIM(tp.user_name)) = LOWER(TRIM(fm.name))
         LEFT JOIN
           paid_events AS paid
         ON
-          pe.event_id = paid.event_id
+          tp.event_id = paid.event_id
         WHERE
           paid.event_id IS NULL
         """
@@ -211,10 +219,9 @@ class TradingDashboard:
           FROM
             `torncity-402423.torn_data.trading_paid_events`
         ),
-        trades_with_payment AS (
+        trades_with_prices AS (
           SELECT
             pe.user_name,
-            fm.id AS user_id,
             pe.event_id,
             pe.timestamp,
             pe.item_name,
@@ -225,23 +232,14 @@ class TradingDashboard:
               WHEN LOWER(TRIM(pe.item_name)) = 'xanax' THEN 0.05
               ELSE 0.04
             END AS sales_fee,
-            -- Calculate buy price: market_price * (1 - sales_fee)
+            -- Calculate buy price: market_price * (1 - sales_fee), rounded
             CAST(
               SAFE_CAST(items.value.market_price AS INT64) * 
               (1 - CASE 
                 WHEN LOWER(TRIM(pe.item_name)) = 'xanax' THEN 0.05
                 ELSE 0.04
               END)
-            AS INT64) AS buy_price,
-            -- Calculate payment amount: buy_price * quantity
-            CAST(
-              pe.quantity * 
-              (SAFE_CAST(items.value.market_price AS INT64) * 
-              (1 - CASE 
-                WHEN LOWER(TRIM(pe.item_name)) = 'xanax' THEN 0.05
-                ELSE 0.04
-              END))
-            AS INT64) AS payment_amount
+            AS INT64) AS buy_price
           FROM
             parsed_events AS pe
           LEFT JOIN
@@ -249,15 +247,31 @@ class TradingDashboard:
           ON
             LOWER(TRIM(pe.item_name)) = LOWER(TRIM(items.name))
           LEFT JOIN
-            `torncity-402423.torn_data.v2_faction_40832_members-raw` AS fm
-          ON
-            LOWER(TRIM(pe.user_name)) = LOWER(TRIM(fm.name))
-          LEFT JOIN
             paid_events AS paid
           ON
             pe.event_id = paid.event_id
           WHERE
             paid.event_id IS NULL
+        ),
+        trades_with_payment AS (
+          SELECT
+            tp.user_name,
+            fm.id AS user_id,
+            tp.event_id,
+            tp.timestamp,
+            tp.item_name,
+            tp.quantity,
+            tp.market_price,
+            tp.sales_fee,
+            tp.buy_price,
+            -- Calculate payment amount using rounded buy_price: buy_price * quantity
+            CAST(tp.buy_price * tp.quantity AS INT64) AS payment_amount
+          FROM
+            trades_with_prices AS tp
+          LEFT JOIN
+            `torncity-402423.torn_data.v2_faction_40832_members-raw` AS fm
+          ON
+            LOWER(TRIM(tp.user_name)) = LOWER(TRIM(fm.name))
         )
         SELECT
           user_name AS member_name,
@@ -424,28 +438,35 @@ class TradingDashboard:
           WHERE
             id = @event_id
         )
+        trades_with_prices AS (
+          SELECT
+            pe.user_name,
+            pe.item_name,
+            pe.quantity,
+            SAFE_CAST(items.value.market_price AS INT64) AS market_price,
+            -- Calculate buy price: market_price * (1 - sales_fee), rounded
+            CAST(
+              SAFE_CAST(items.value.market_price AS INT64) * 
+              (1 - CASE 
+                WHEN LOWER(TRIM(pe.item_name)) = 'xanax' THEN 0.05
+                ELSE 0.04
+              END)
+            AS INT64) AS buy_price
+          FROM
+            parsed_events AS pe
+          LEFT JOIN
+            `torncity-402423.torn_data.v2_torn_items-raw` AS items
+          ON
+            LOWER(TRIM(pe.item_name)) = LOWER(TRIM(items.name))
+        )
         SELECT
-          pe.user_name,
-          pe.item_name,
-          pe.quantity,
-          SAFE_CAST(items.value.market_price AS INT64) AS market_price,
-          -- Calculate buy price: market_price * (1 - sales_fee)
-          CAST(
-            SAFE_CAST(items.value.market_price AS INT64) * 
-            (1 - CASE 
-              WHEN LOWER(TRIM(pe.item_name)) = 'xanax' THEN 0.05
-              ELSE 0.04
-            END)
-          AS INT64) AS buy_price,
-          -- Calculate payment amount: buy_price * quantity
-          CAST(
-            pe.quantity * 
-            (SAFE_CAST(items.value.market_price AS INT64) * 
-            (1 - CASE 
-              WHEN LOWER(TRIM(pe.item_name)) = 'xanax' THEN 0.05
-              ELSE 0.04
-            END))
-          AS INT64) AS payment_amount
+          tp.user_name,
+          tp.item_name,
+          tp.quantity,
+          tp.market_price,
+          tp.buy_price,
+          -- Calculate payment amount using rounded buy_price: buy_price * quantity
+          CAST(tp.buy_price * tp.quantity AS INT64) AS payment_amount
         FROM
           parsed_events AS pe
         LEFT JOIN
@@ -646,53 +667,60 @@ class TradingDashboard:
           FROM
             `torncity-402423.torn_data.trading_paid_events`
         )
+        trades_with_prices AS (
+          SELECT
+            pe.timestamp,
+            pe.user_name,
+            pe.item_name,
+            pe.quantity,
+            pe.event_id,
+            SAFE_CAST(items.value.market_price AS INT64) AS market_price,
+            pe.quantity * SAFE_CAST(items.value.market_price AS INT64) AS total_value,
+            -- Calculate sales fee: 5% for Xanax, 4% for others
+            CASE 
+              WHEN LOWER(TRIM(pe.item_name)) = 'xanax' THEN 0.05
+              ELSE 0.04
+            END AS sales_fee,
+            -- Calculate buy price: market_price * (1 - sales_fee), rounded
+            CAST(
+              SAFE_CAST(items.value.market_price AS INT64) * 
+              (1 - CASE 
+                WHEN LOWER(TRIM(pe.item_name)) = 'xanax' THEN 0.05
+                ELSE 0.04
+              END)
+            AS INT64) AS buy_price
+          FROM
+            parsed_events AS pe
+          LEFT JOIN
+            `torncity-402423.torn_data.v2_torn_items-raw` AS items
+          ON
+            LOWER(TRIM(pe.item_name)) = LOWER(TRIM(items.name))
+          INNER JOIN
+            paid_events AS paid
+          ON
+            pe.event_id = paid.event_id
+          WHERE
+            paid.event_id IS NOT NULL
+        )
         SELECT
-          pe.timestamp,
-          pe.user_name,
+          tp.timestamp,
+          tp.user_name,
           fm.id AS user_id,
-          pe.item_name,
-          pe.quantity,
-          SAFE_CAST(items.value.market_price AS INT64) AS market_price,
-          pe.quantity * SAFE_CAST(items.value.market_price AS INT64) AS total_value,
-          -- Calculate sales fee: 5% for Xanax, 4% for others
-          CASE 
-            WHEN LOWER(TRIM(pe.item_name)) = 'xanax' THEN 0.05
-            ELSE 0.04
-          END AS sales_fee,
-          -- Calculate buy price: market_price * (1 - sales_fee)
-          CAST(
-            SAFE_CAST(items.value.market_price AS INT64) * 
-            (1 - CASE 
-              WHEN LOWER(TRIM(pe.item_name)) = 'xanax' THEN 0.05
-              ELSE 0.04
-            END)
-          AS INT64) AS buy_price,
-          -- Calculate payment amount: buy_price * quantity
-          CAST(
-            pe.quantity * 
-            (SAFE_CAST(items.value.market_price AS INT64) * 
-            (1 - CASE 
-              WHEN LOWER(TRIM(pe.item_name)) = 'xanax' THEN 0.05
-              ELSE 0.04
-            END))
-          AS INT64) AS payment_amount,
-          pe.event_id
+          tp.item_name,
+          tp.quantity,
+          tp.market_price,
+          tp.total_value,
+          tp.sales_fee,
+          tp.buy_price,
+          -- Calculate payment amount using rounded buy_price: buy_price * quantity
+          CAST(tp.buy_price * tp.quantity AS INT64) AS payment_amount,
+          tp.event_id
         FROM
-          parsed_events AS pe
-        LEFT JOIN
-          `torncity-402423.torn_data.v2_torn_items-raw` AS items
-        ON
-          LOWER(TRIM(pe.item_name)) = LOWER(TRIM(items.name))
+          trades_with_prices AS tp
         LEFT JOIN
           `torncity-402423.torn_data.v2_faction_40832_members-raw` AS fm
         ON
-          LOWER(TRIM(pe.user_name)) = LOWER(TRIM(fm.name))
-        INNER JOIN
-          paid_events AS paid
-        ON
-          pe.event_id = paid.event_id
-        WHERE
-          paid.event_id IS NOT NULL
+          LOWER(TRIM(tp.user_name)) = LOWER(TRIM(fm.name))
         """
         
         # Replace parameter
@@ -756,10 +784,9 @@ class TradingDashboard:
           FROM
             `torncity-402423.torn_data.trading_paid_events`
         ),
-        trades_with_payment AS (
+        trades_with_prices AS (
           SELECT
             pe.user_name,
-            fm.id AS user_id,
             pe.event_id,
             pe.timestamp,
             pe.item_name,
@@ -770,39 +797,46 @@ class TradingDashboard:
               WHEN LOWER(TRIM(pe.item_name)) = 'xanax' THEN 0.05
               ELSE 0.04
             END AS sales_fee,
-            -- Calculate buy price: market_price * (1 - sales_fee)
+            -- Calculate buy price: market_price * (1 - sales_fee), rounded
             CAST(
               SAFE_CAST(items.value.market_price AS INT64) *
               (1 - CASE
                 WHEN LOWER(TRIM(pe.item_name)) = 'xanax' THEN 0.05
                 ELSE 0.04
               END)
-            AS INT64) AS buy_price,
-            -- Calculate payment amount: buy_price * quantity
-            CAST(
-              pe.quantity *
-              (SAFE_CAST(items.value.market_price AS INT64) *
-              (1 - CASE
-                WHEN LOWER(TRIM(pe.item_name)) = 'xanax' THEN 0.05
-                ELSE 0.04
-              END))
-            AS INT64) AS payment_amount
+            AS INT64) AS buy_price
           FROM
             parsed_events AS pe
           LEFT JOIN
             `torncity-402423.torn_data.v2_torn_items-raw` AS items
           ON
             LOWER(TRIM(pe.item_name)) = LOWER(TRIM(items.name))
-          LEFT JOIN
-            `torncity-402423.torn_data.v2_faction_40832_members-raw` AS fm
-          ON
-            LOWER(TRIM(pe.user_name)) = LOWER(TRIM(fm.name))
           INNER JOIN
             paid_events AS paid
           ON
             pe.event_id = paid.event_id
           WHERE
             paid.event_id IS NOT NULL
+        ),
+        trades_with_payment AS (
+          SELECT
+            tp.user_name,
+            fm.id AS user_id,
+            tp.event_id,
+            tp.timestamp,
+            tp.item_name,
+            tp.quantity,
+            tp.market_price,
+            tp.sales_fee,
+            tp.buy_price,
+            -- Calculate payment amount using rounded buy_price: buy_price * quantity
+            CAST(tp.buy_price * tp.quantity AS INT64) AS payment_amount
+          FROM
+            trades_with_prices AS tp
+          LEFT JOIN
+            `torncity-402423.torn_data.v2_faction_40832_members-raw` AS fm
+          ON
+            LOWER(TRIM(tp.user_name)) = LOWER(TRIM(fm.name))
         )
         SELECT
           user_name AS member_name,
