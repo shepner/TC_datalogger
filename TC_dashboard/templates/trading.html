@@ -925,6 +925,60 @@
             await unmarkAsPaid(eventId);
         }
 
+        async function toggleRawEvents(eventId, userName) {
+            const rawEventsRow = document.getElementById(`raw-events-${eventId}`);
+            const rawEventsContent = document.getElementById(`raw-events-content-${eventId}`);
+            
+            if (!rawEventsRow || !rawEventsContent) {
+                return;
+            }
+            
+            // Toggle display
+            if (rawEventsRow.style.display === 'none' || rawEventsRow.style.display === '') {
+                rawEventsRow.style.display = 'table-row';
+                
+                // Only load if not already loaded
+                if (rawEventsContent.textContent === 'Loading events...' || rawEventsContent.textContent.trim() === '') {
+                    const daysBack = document.getElementById('days_back').value;
+                    
+                    try {
+                        const response = await fetch(`/api/trading/raw-events?user_name=${encodeURIComponent(userName)}&days_back=${daysBack}`);
+                        const data = await response.json();
+                        
+                        if (!response.ok) {
+                            throw new Error(data.error || 'Failed to load raw events');
+                        }
+                        
+                        const events = data.events || [];
+                        
+                        if (events.length === 0) {
+                            rawEventsContent.innerHTML = `<p style="color: #666;">No raw events found for ${userName} in the last ${daysBack} days.</p>`;
+                            return;
+                        }
+                        
+                        let eventsHtml = '<table style="width: 100%; font-size: 11px; border-collapse: collapse;"><thead><tr style="background-color: #e0e0e0;"><th style="padding: 4px 6px;">Event ID</th><th style="padding: 4px 6px;">Timestamp</th><th style="padding: 4px 6px;">Event</th><th style="padding: 4px 6px;">Fetched At</th></tr></thead><tbody>';
+                        events.forEach(event => {
+                            const eventDate = new Date(event.timestamp);
+                            const fetchedDate = event.fetched_at ? new Date(event.fetched_at) : null;
+                            eventsHtml += `<tr style="border-bottom: 1px solid #ddd;">
+                                <td style="padding: 4px 6px;">${event.event_id || 'N/A'}</td>
+                                <td style="padding: 4px 6px;">${eventDate.toLocaleString()}</td>
+                                <td style="padding: 4px 6px; max-width: 400px; word-wrap: break-word;">${(event.event || 'N/A').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</td>
+                                <td style="padding: 4px 6px;">${fetchedDate ? fetchedDate.toLocaleString() : 'N/A'}</td>
+                            </tr>`;
+                        });
+                        eventsHtml += '</tbody></table>';
+                        rawEventsContent.innerHTML = eventsHtml;
+                    } catch (error) {
+                        console.error('Error loading raw events:', error);
+                        rawEventsContent.innerHTML = `<p style="color: red;">Error loading raw events: ${error.message}</p>`;
+                    }
+                }
+            } else {
+                rawEventsRow.style.display = 'none';
+            }
+        }
+
         async function showRawEvents(userName) {
             const modal = document.getElementById('rawEventsModal');
             const modalTitle = document.getElementById('rawEventsModalTitle');
