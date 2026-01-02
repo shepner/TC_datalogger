@@ -214,13 +214,27 @@
                     <td>$${paymentAmount.toLocaleString()}</td>
                     <td class="actions">
                         <button class="small" onclick="copyValue('${paymentAmount}')">Copy Payment</button>
-                        <button class="small" onclick="copyChatMessage(${JSON.stringify(trade)})">Copy Chat</button>
-                        <button class="small" data-event-id="${trade.event_id}" data-trade='${JSON.stringify(trade)}' onclick="markAsPaidFromButton(this)">Mark Paid</button>
+                        <button class="small copy-chat-btn" data-trade="${JSON.stringify(trade).replace(/"/g, '&quot;')}">Copy Chat</button>
+                        <button class="small" data-event-id="${trade.event_id}" data-trade='${JSON.stringify(trade).replace(/'/g, "&#39;")}' onclick="markAsPaidFromButton(this)">Mark Paid</button>
                         <button class="small" onclick="unmarkAsPaid('${trade.event_id}')">Unmark Paid</button>
                     </td>
                 `;
 
                 tbody.appendChild(row);
+                
+                // Attach event listener to copy chat button
+                const copyChatBtn = row.querySelector('.copy-chat-btn');
+                if (copyChatBtn) {
+                    copyChatBtn.addEventListener('click', function() {
+                        try {
+                            const tradeData = JSON.parse(this.dataset.trade);
+                            copyChatMessage(tradeData);
+                        } catch (error) {
+                            console.error('Error parsing trade data:', error);
+                            showError('Failed to parse trade data');
+                        }
+                    });
+                }
             });
 
             document.getElementById('trades-table').style.display = 'table';
@@ -285,8 +299,8 @@
                             <td>$${buyPrice.toLocaleString()}</td>
                             <td>$${individualPayment.toLocaleString()}</td>
                             <td class="actions">
-                                <button class="small" onclick="copyChatMessage(${JSON.stringify(trade)})">Copy Chat</button>
-                                <button class="small" data-event-id="${trade.event_id}" data-trade='${JSON.stringify(trade)}' onclick="markAsPaidFromButton(this)">Mark Paid</button>
+                                <button class="small copy-chat-btn" data-trade="${JSON.stringify(trade).replace(/"/g, '&quot;')}">Copy Chat</button>
+                                <button class="small" data-event-id="${trade.event_id}" data-trade='${JSON.stringify(trade).replace(/'/g, "&#39;")}' onclick="markAsPaidFromButton(this)">Mark Paid</button>
                             </td>
                         </tr>
                     `;
@@ -356,6 +370,20 @@
                 detailRow.style.display = 'none';
                 detailRow.className = 'member-details';
                 tbody.appendChild(detailRow);
+                
+                // Attach event listeners to copy chat buttons in the detail row
+                const copyChatBtns = detailRow.querySelectorAll('.copy-chat-btn');
+                copyChatBtns.forEach(btn => {
+                    btn.addEventListener('click', function() {
+                        try {
+                            const tradeData = JSON.parse(this.dataset.trade);
+                            copyChatMessage(tradeData);
+                        } catch (error) {
+                            console.error('Error parsing trade data:', error);
+                            showError('Failed to parse trade data');
+                        }
+                    });
+                });
             });
 
             document.getElementById('grouped-table').style.display = 'table';
