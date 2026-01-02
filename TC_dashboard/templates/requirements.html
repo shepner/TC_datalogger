@@ -258,13 +258,36 @@
         <div id="data-pull-status" style="display: none; margin-bottom: 10px; padding: 8px; border-radius: 4px; font-size: 12px;"></div>
 
         <div id="role-config-info" style="margin-bottom: 15px; padding: 12px; background-color: #e3f2fd; border: 1px solid #90caf9; border-radius: 4px; font-size: 12px;">
-            <strong style="color: #1976d2;">⚙️ Role Hierarchy Configuration:</strong>
-            <div style="margin-top: 6px; color: #555;">
-                To configure your faction's role hierarchy, edit the <code style="background-color: #fff; padding: 2px 4px; border-radius: 2px;">ROLE_HIERARCHY</code> array in the page source (around line 308). 
-                The array should list roles from <strong>lowest to highest</strong>, and role names must match <strong>exactly</strong> as they appear in the "Position" column.
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <strong style="color: #1976d2;">⚙️ Role Hierarchy Configuration:</strong>
+                    <div style="margin-top: 6px; font-size: 11px; color: #666;">
+                        Current hierarchy: <span id="current-hierarchy-display"></span>
+                    </div>
+                </div>
+                <button id="configure-roles-btn" onclick="toggleRoleConfig()" style="padding: 6px 12px; font-size: 12px; background-color: #1976d2; color: white; border: none; border-radius: 3px; cursor: pointer;">Configure Roles</button>
             </div>
-            <div style="margin-top: 6px; font-size: 11px; color: #666;">
-                Current hierarchy: <span id="current-hierarchy-display"></span>
+        </div>
+
+        <div id="role-config-panel" style="display: none; margin-bottom: 15px; padding: 15px; background-color: #f5f5f5; border: 1px solid #ddd; border-radius: 4px; font-size: 12px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <strong style="color: #333; font-size: 14px;">Configure Role Hierarchy (Lowest → Highest)</strong>
+                <button onclick="toggleRoleConfig()" style="padding: 4px 8px; font-size: 11px; background-color: #999; color: white; border: none; border-radius: 2px; cursor: pointer;">Close</button>
+            </div>
+            <div style="margin-bottom: 10px; padding: 8px; background-color: #fff3cd; border: 1px solid #ffc107; border-radius: 3px; font-size: 11px; color: #856404;">
+                <strong>Tip:</strong> Drag roles to reorder, or use ↑/↓ buttons. Role names must match <strong>exactly</strong> as they appear in the "Position" column.
+            </div>
+            <div id="role-list" style="margin-bottom: 10px;"></div>
+            <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 10px;">
+                <input type="text" id="new-role-input" placeholder="Enter role name" style="padding: 6px; border: 1px solid #ccc; border-radius: 3px; font-size: 12px; flex: 1;">
+                <select id="available-roles-select" style="padding: 6px; border: 1px solid #ccc; border-radius: 3px; font-size: 12px; flex: 1;">
+                    <option value="">-- Select from available positions --</option>
+                </select>
+                <button onclick="addRole()" style="padding: 6px 12px; font-size: 12px; background-color: #4CAF50; color: white; border: none; border-radius: 3px; cursor: pointer;">Add Role</button>
+            </div>
+            <div style="display: flex; gap: 8px;">
+                <button onclick="saveRoleConfig()" style="padding: 8px 16px; font-size: 12px; background-color: #2196F3; color: white; border: none; border-radius: 3px; cursor: pointer; font-weight: 600;">Save Configuration</button>
+                <button onclick="resetRoleConfig()" style="padding: 8px 16px; font-size: 12px; background-color: #999; color: white; border: none; border-radius: 3px; cursor: pointer;">Reset to Default</button>
             </div>
         </div>
 
@@ -307,17 +330,10 @@
         // ============================================================================
         // ROLE HIERARCHY CONFIGURATION
         // ============================================================================
-        // IMPORTANT: Update this array to match your faction's actual role hierarchy.
-        // The array should be ordered from LOWEST (entry level) to HIGHEST (top role).
-        // Role names must match EXACTLY as they appear in the "Position" column.
-        // 
-        // Example hierarchy (update with your actual roles):
-        // - Lowest role members can be KICKED if requirements not met
-        // - Highest role members will show MAINTAIN (cannot be promoted further)
-        // - Members between can be PROMOTED or DEMOTED based on requirements
+        // Default role hierarchy - can be overridden by user configuration
         // ============================================================================
-        const ROLE_HIERARCHY = [
-            'Member 1',      // Lowest role - can be kicked if requirements not met
+        const DEFAULT_ROLE_HIERARCHY = [
+            'Member 1',
             'Member 2',
             'Member 3',
             'Lucky',
@@ -325,8 +341,31 @@
             'Mgt 2',
             'Mgt 3',
             'Co-Leader',
-            'Leader'         // Highest role - will show MAINTAIN
+            'Leader'
         ];
+
+        // Load role hierarchy from localStorage or use default
+        let ROLE_HIERARCHY = [];
+        function loadRoleHierarchy() {
+            const saved = localStorage.getItem('tc_role_hierarchy');
+            if (saved) {
+                try {
+                    ROLE_HIERARCHY = JSON.parse(saved);
+                } catch (e) {
+                    console.error('Failed to parse saved role hierarchy:', e);
+                    ROLE_HIERARCHY = [...DEFAULT_ROLE_HIERARCHY];
+                }
+            } else {
+                ROLE_HIERARCHY = [...DEFAULT_ROLE_HIERARCHY];
+            }
+        }
+
+        function saveRoleHierarchy() {
+            localStorage.setItem('tc_role_hierarchy', JSON.stringify(ROLE_HIERARCHY));
+        }
+
+        // Initialize on page load
+        loadRoleHierarchy();
 
         // Get next role in hierarchy
         function getNextRole(currentPosition) {
@@ -474,6 +513,22 @@
 
         function displayReport(data) {
             const report = data.report;
+
+            // Extract unique positions from data for role selector
+            const uniquePositions = [...new Set(report.map(m => m.position).filter(p => p && p.trim()))].sort();
+            const roleSelect = document.getElementById('available-roles-select');
+            if (roleSelect) {
+                // Clear existing options except the first one
+                while (roleSelect.options.length > 1) {
+                    roleSelect.remove(1);
+                }
+                uniquePositions.forEach(pos => {
+                    const option = document.createElement('option');
+                    option.value = pos;
+                    option.textContent = pos;
+                    roleSelect.appendChild(option);
+                });
+            }
 
             // Add computed role_action_sort property for sorting
             report.forEach(member => {
@@ -912,8 +967,163 @@
             }
         }
 
+        // Role configuration UI functions
+        function toggleRoleConfig() {
+            const panel = document.getElementById('role-config-panel');
+            if (panel.style.display === 'none') {
+                panel.style.display = 'block';
+                renderRoleList();
+            } else {
+                panel.style.display = 'none';
+            }
+        }
+
+        function renderRoleList() {
+            const container = document.getElementById('role-list');
+            container.innerHTML = '';
+            
+            ROLE_HIERARCHY.forEach((role, index) => {
+                const item = document.createElement('div');
+                item.style.cssText = 'display: flex; align-items: center; gap: 8px; padding: 8px; margin-bottom: 4px; background-color: white; border: 1px solid #ddd; border-radius: 3px;';
+                item.innerHTML = `
+                    <span style="color: #666; font-size: 11px; min-width: 30px;">${index + 1}.</span>
+                    <input type="text" value="${role}" data-index="${index}" 
+                           onchange="updateRole(this)" 
+                           style="flex: 1; padding: 4px; border: 1px solid #ccc; border-radius: 2px; font-size: 12px;">
+                    <button onclick="moveRoleUp(${index})" ${index === 0 ? 'disabled' : ''} 
+                            style="padding: 4px 8px; font-size: 11px; background-color: #2196F3; color: white; border: none; border-radius: 2px; cursor: pointer; ${index === 0 ? 'opacity: 0.5; cursor: not-allowed;' : ''}">↑</button>
+                    <button onclick="moveRoleDown(${index})" ${index === ROLE_HIERARCHY.length - 1 ? 'disabled' : ''} 
+                            style="padding: 4px 8px; font-size: 11px; background-color: #2196F3; color: white; border: none; border-radius: 2px; cursor: pointer; ${index === ROLE_HIERARCHY.length - 1 ? 'opacity: 0.5; cursor: not-allowed;' : ''}">↓</button>
+                    <button onclick="removeRole(${index})" 
+                            style="padding: 4px 8px; font-size: 11px; background-color: #f44336; color: white; border: none; border-radius: 2px; cursor: pointer;">Remove</button>
+                `;
+                container.appendChild(item);
+            });
+        }
+
+        function updateRole(input) {
+            const index = parseInt(input.dataset.index);
+            ROLE_HIERARCHY[index] = input.value.trim();
+            updateHierarchyDisplay();
+        }
+
+        function moveRoleUp(index) {
+            if (index === 0) return;
+            [ROLE_HIERARCHY[index - 1], ROLE_HIERARCHY[index]] = [ROLE_HIERARCHY[index], ROLE_HIERARCHY[index - 1]];
+            renderRoleList();
+            updateHierarchyDisplay();
+        }
+
+        function moveRoleDown(index) {
+            if (index === ROLE_HIERARCHY.length - 1) return;
+            [ROLE_HIERARCHY[index], ROLE_HIERARCHY[index + 1]] = [ROLE_HIERARCHY[index + 1], ROLE_HIERARCHY[index]];
+            renderRoleList();
+            updateHierarchyDisplay();
+        }
+
+        function removeRole(index) {
+            if (ROLE_HIERARCHY.length <= 1) {
+                alert('You must have at least one role in the hierarchy.');
+                return;
+            }
+            ROLE_HIERARCHY.splice(index, 1);
+            renderRoleList();
+            updateHierarchyDisplay();
+        }
+
+        function addRole() {
+            const textInput = document.getElementById('new-role-input');
+            const selectInput = document.getElementById('available-roles-select');
+            
+            let roleName = '';
+            if (selectInput.value) {
+                roleName = selectInput.value;
+                selectInput.value = '';
+            } else if (textInput.value.trim()) {
+                roleName = textInput.value.trim();
+                textInput.value = '';
+            } else {
+                alert('Please enter a role name or select one from the dropdown.');
+                return;
+            }
+
+            if (ROLE_HIERARCHY.includes(roleName)) {
+                alert('This role is already in the hierarchy.');
+                return;
+            }
+
+            ROLE_HIERARCHY.push(roleName);
+            renderRoleList();
+            updateHierarchyDisplay();
+        }
+
+        function saveRoleConfig() {
+            // Validate no empty roles
+            if (ROLE_HIERARCHY.some(r => !r || !r.trim())) {
+                alert('Please remove any empty roles before saving.');
+                return;
+            }
+
+            saveRoleHierarchy();
+            updateHierarchyDisplay();
+            
+            // Reload the report to apply changes
+            if (reportData.length > 0) {
+                displayReport({ report: reportData });
+            }
+            
+            alert('Role hierarchy saved successfully!');
+            toggleRoleConfig();
+        }
+
+        function resetRoleConfig() {
+            if (confirm('Reset to default role hierarchy? This will discard your current configuration.')) {
+                ROLE_HIERARCHY = [...DEFAULT_ROLE_HIERARCHY];
+                localStorage.removeItem('tc_role_hierarchy');
+                renderRoleList();
+                updateHierarchyDisplay();
+                
+                // Reload the report
+                if (reportData.length > 0) {
+                    displayReport({ report: reportData });
+                }
+            }
+        }
+
+        function updateHierarchyDisplay() {
+            const display = document.getElementById('current-hierarchy-display');
+            if (display) {
+                display.textContent = ROLE_HIERARCHY.join(' → ');
+            }
+        }
+
+        // Allow Enter key to add role
+        document.addEventListener('DOMContentLoaded', () => {
+            const textInput = document.getElementById('new-role-input');
+            const selectInput = document.getElementById('available-roles-select');
+            
+            if (textInput) {
+                textInput.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') {
+                        addRole();
+                    }
+                });
+            }
+            
+            if (selectInput) {
+                selectInput.addEventListener('change', () => {
+                    if (selectInput.value) {
+                        addRole();
+                    }
+                });
+            }
+        });
+
         // Load report on page load
-        window.addEventListener('DOMContentLoaded', loadReport);
+        window.addEventListener('DOMContentLoaded', () => {
+            loadReport();
+            updateHierarchyDisplay();
+        });
     </script>
 </body>
 </html>
