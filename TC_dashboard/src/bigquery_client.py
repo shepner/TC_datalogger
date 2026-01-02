@@ -253,3 +253,86 @@ class BigQueryClient:
             logger.error(f"Error deleting rows from {table_name}: {e}", exc_info=True)
             raise
 
+    def merge_row(self, table_name: str, row: Dict[str, Any], match_key: str) -> None:
+        """
+        Insert or update a row in a BigQuery table using MERGE for atomic operations.
+        This prevents race conditions by performing check-and-insert atomically.
+        
+        The MERGE statement ensures that even if multiple requests try to insert
+        the same row simultaneously, only one will succeed, preventing duplicates.
+
+        Args:
+            table_name: Table name (can be just table name or full project.dataset.table)
+            row: Dictionary of column names to values
+            match_key: Column name to use for matching (typically the primary key)
+        """
+        try:
+            # Parse table name
+            if "." in table_name:
+                # Full table ID provided
+                table_id = table_name
+            else:
+                # Just table name, construct full ID
+                table_id = f"{self.project_id}.{self.dataset_id}.{table_name}"
+
+            # Verify match_key exists in row
+            if match_key not in row:
+                raise ValueError(f"Match key '{match_key}' not found in row data")
+
+            # Build column names for MERGE
+            columns = list(row.keys())
+            
+            # Build parameterized query for safety
+            query_params = []
+            param_placeholders = []
+            
+            for col in columns:
+                val = row[col]
+                param_name = f"param_{col}"
+                
+                # Determine BigQuery type and create parameter
+                if val is None:
+                    # For NULL values, use NULL directly (no parameter needed)
+                    param_placeholders.append(f"NULL AS {col}")
+                elif isinstance(val, str):
+                    query_params.append(bigquery.ScalarQueryParameter(param_name, "STRING", val))
+                    param_placeholders.append(f"@{param_name} AS {col}")
+                elif isinstance(val, int):
+                    query_params.append(bigquery.ScalarQueryParameter(param_name, "INT64", val))
+                    param_placeholders.append(f"@{param_name} AS {col}")
+                elif isinstance(val, float):
+                    query_params.append(bigquery.ScalarQueryParameter(param_name, "FLOAT64", val))
+                    param_placeholders.append(f"@{param_name} AS {col}")
+                else:
+                    # For other types (like datetime strings), convert to string
+                    query_params.append(bigquery.ScalarQueryParameter(param_name, "STRING", str(val)))
+                    # Try to detect if it's a timestamp string
+                    if col == "paid_at" or "timestamp" in col.lower() or "at" in col.lower():
+                        param_placeholders.append(f"PARSE_TIMESTAMP('%Y-%m-%dT%H:%M:%S.%fZ', @{param_name}) AS {col}")
+                    else:
+                        param_placeholders.append(f"@{param_name} AS {col}")
+
+            # Construct MERGE statement with parameterized values
+            # MERGE will only insert if the match_key doesn't exist (WHEN NOT MATCHED)
+            # This is atomic and prevents race conditions
+            merge_query = f"""
+            MERGE `{table_id}` AS target
+            USING (
+                SELECT {', '.join(param_placeholders)}
+            ) AS source
+            ON target.{match_key} = source.{match_key}
+            WHEN NOT MATCHED THEN
+                INSERT ({', '.join(columns)})
+                VALUES ({', '.join([f'source.{col}' for col in columns])})
+            """
+
+            logger.debug(f"Executing MERGE query for {table_id}")
+            job_config = bigquery.QueryJobConfig(query_parameters=query_params)
+            query_job = self.client.query(merge_query, job_config=job_config)
+            query_job.result()  # Wait for completion
+            logger.debug(f"Merged row into {table_id} (inserted if not exists)")
+
+        except Exception as e:
+            logger.error(f"Error merging row into {table_name}: {e}", exc_info=True)
+            raise
+

@@ -38,7 +38,14 @@ class TradingDashboard:
         self._ensure_paid_trades_table()
 
     def _ensure_paid_trades_table(self) -> None:
-        """Ensure the paid trades table exists in BigQuery."""
+        """
+        Ensure the paid trades table exists in BigQuery.
+        
+        Note: The table uses event_id as the unique identifier. While BigQuery
+        doesn't enforce unique constraints on streaming tables, the mark_as_paid
+        method uses MERGE statements for atomic insert-if-not-exists operations
+        to prevent duplicates and race conditions.
+        """
         try:
             self.bq.ensure_table_exists(PAID_TRADES_TABLE, PAID_TRADES_SCHEMA)
         except Exception as e:
@@ -343,7 +350,9 @@ class TradingDashboard:
 
     def mark_as_paid(self, event_id: str, trade: Optional[Dict[str, Any]] = None) -> None:
         """
-        Mark a trade as paid in BigQuery.
+        Mark a trade as paid in BigQuery using atomic MERGE operation.
+        This prevents race conditions when multiple dashboards or automatic updates
+        try to mark the same trade as paid simultaneously.
 
         Args:
             event_id: Event ID to mark as paid
@@ -351,26 +360,6 @@ class TradingDashboard:
                    If not provided, will query for these values
         """
         try:
-            # Check if this event_id already exists in the paid trades table
-            check_query = f"""
-            SELECT COUNT(*) as count
-            FROM `{PAID_TRADES_TABLE}`
-            WHERE event_id = @event_id
-            """
-            
-            job_config = bigquery.QueryJobConfig(
-                query_parameters=[
-                    bigquery.ScalarQueryParameter("event_id", "STRING", event_id)
-                ]
-            )
-            
-            result = self.bq.client.query(check_query, job_config=job_config).result()
-            row = next(result, None)
-            
-            if row and row.count > 0:
-                logger.warning(f"Event {event_id} is already marked as paid. Skipping duplicate insert.")
-                return
-            
             # If trade info not provided, get it from the event
             if trade is None:
                 trade = self._get_trade_info(event_id)
@@ -379,7 +368,7 @@ class TradingDashboard:
                 logger.warning(f"Could not find trade info for event {event_id}")
                 return
 
-            # Insert into BigQuery
+            # Prepare row data for MERGE operation
             # Handle both user_name (from individual trades) and member_name (from grouped trades)
             member_name = trade.get("user_name") or trade.get("member_name") or ""
             
@@ -392,8 +381,51 @@ class TradingDashboard:
                 "paid_at": datetime.utcnow().isoformat(),
             }
             
-            self.bq.insert_row(PAID_TRADES_TABLE, row)
-            logger.info(f"Marked event {event_id} as paid in BigQuery")
+            # Use MERGE for atomic insert-if-not-exists operation
+            # This prevents race conditions by atomically checking and inserting
+            try:
+                self.bq.merge_row(PAID_TRADES_TABLE, row, match_key="event_id")
+                logger.info(f"Marked event {event_id} as paid in BigQuery (atomic operation)")
+            except Exception as merge_error:
+                # If MERGE fails, fall back to check-then-insert with better error handling
+                error_str = str(merge_error).lower()
+                if "duplicate" in error_str or "already exists" in error_str:
+                    logger.info(f"Event {event_id} is already marked as paid (detected during merge). Skipping.")
+                    return
+                # For other errors, try the old method as fallback
+                logger.warning(f"MERGE operation failed for {event_id}, falling back to check-then-insert: {merge_error}")
+                try:
+                    # Fallback: check if exists first
+                    check_query = f"""
+                    SELECT COUNT(*) as count
+                    FROM `{PAID_TRADES_TABLE}`
+                    WHERE event_id = @event_id
+                    """
+                    
+                    job_config = bigquery.QueryJobConfig(
+                        query_parameters=[
+                            bigquery.ScalarQueryParameter("event_id", "STRING", event_id)
+                        ]
+                    )
+                    
+                    result = self.bq.client.query(check_query, job_config=job_config).result()
+                    check_row = next(result, None)
+                    
+                    if check_row and check_row.count > 0:
+                        logger.info(f"Event {event_id} is already marked as paid. Skipping duplicate insert.")
+                        return
+                    
+                    # Insert if not exists
+                    self.bq.insert_row(PAID_TRADES_TABLE, row)
+                    logger.info(f"Marked event {event_id} as paid in BigQuery (fallback method)")
+                except Exception as insert_error:
+                    # Check if it's a duplicate error from the insert
+                    insert_error_str = str(insert_error).lower()
+                    if "duplicate" in insert_error_str or "already exists" in insert_error_str:
+                        logger.info(f"Event {event_id} is already marked as paid (detected during insert). Skipping.")
+                        return
+                    # Re-raise if it's a different error
+                    raise
             
         except Exception as e:
             logger.error(f"Error marking event {event_id} as paid: {e}", exc_info=True)
