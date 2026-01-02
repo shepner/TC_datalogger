@@ -1476,12 +1476,113 @@
                 hideProgress();
                 showSuccess('Trade marked as paid!');
                 
-                // Reload trades to update the view (trade will disappear if show_paid is false)
-                loadTrades();
+                // Update the view without full reload
+                updateTradeRowAsPaid(eventId, trade);
             } catch (error) {
                 hideProgress();
                 showError(error.message);
             }
+        }
+
+        function updateTradeRowAsPaid(eventId, trade) {
+            const showPaid = document.getElementById('show_paid').checked;
+            
+            // Update individual trades view
+            const individualRow = document.querySelector(`tr[data-event-id="${eventId}"]`);
+            if (individualRow) {
+                if (!showPaid) {
+                    // Remove the row and its associated raw events row
+                    const rawEventsRow = document.getElementById(`raw-events-${eventId}`);
+                    if (rawEventsRow) {
+                        rawEventsRow.remove();
+                    }
+                    individualRow.remove();
+                } else {
+                    // Update the row to show as paid
+                    individualRow.classList.add('paid');
+                    const actionsCell = individualRow.querySelector('.actions');
+                    if (actionsCell) {
+                        actionsCell.innerHTML = '<button class="small" onclick="undoPaidStatus(\'' + eventId + '\')">Undo Paid Status</button>';
+                    }
+                }
+            }
+            
+            // Update grouped view - find all rows with this event_id in member detail tables
+            const groupedRows = document.querySelectorAll(`tr.trade-detail`);
+            let rowToUpdate = null;
+            groupedRows.forEach(row => {
+                const markPaidBtn = row.querySelector(`button[data-event-id="${eventId}"]`);
+                if (markPaidBtn) {
+                    rowToUpdate = row;
+                    if (!showPaid) {
+                        // Find parent info before removing
+                        updateMemberTotalsBeforeRemoval(row, trade);
+                        // Remove the row
+                        row.remove();
+                    } else {
+                        // Update the row to show as paid
+                        const actionsCell = row.querySelector('.actions');
+                        if (actionsCell) {
+                            actionsCell.innerHTML = '<button class="small" onclick="undoPaidStatus(\'' + eventId + '\')">Undo Paid Status</button>';
+                        }
+                    }
+                }
+            });
+        }
+
+        function updateMemberTotalsBeforeRemoval(rowToRemove, removedTrade) {
+            // Find the parent table and detail row before removing
+            let table = rowToRemove.closest('table');
+            if (!table) return;
+            
+            let detailRow = table.closest('tr.member-details');
+            if (!detailRow) return;
+            
+            // Find the member row (the one before the detail row)
+            let memberRow = detailRow.previousElementSibling;
+            if (!memberRow) return;
+            
+            // Store references for after removal
+            const memberRowRef = memberRow;
+            const detailRowRef = detailRow;
+            const tableRef = table;
+            
+            // After removing the row, recalculate from remaining rows
+            setTimeout(() => {
+                const remainingTrades = tableRef.querySelectorAll('tbody tr.trade-detail');
+                
+                if (remainingTrades.length === 0) {
+                    // No more trades, remove the member row and detail row
+                    memberRowRef.remove();
+                    detailRowRef.remove();
+                } else {
+                    // Recalculate totals from remaining trades
+                    let totalQuantity = 0;
+                    let totalPayment = 0;
+                    remainingTrades.forEach(tradeRow => {
+                        const quantity = parseInt(tradeRow.cells[2].textContent) || 0;
+                        const paymentText = tradeRow.cells[7].textContent;
+                        const payment = parseFloat(paymentText.replace(/[^0-9.]/g, '')) || 0;
+                        totalQuantity += quantity;
+                        totalPayment += payment;
+                    });
+                    
+                    // Get member name from the member row to construct class names
+                    const memberNameCell = memberRowRef.querySelector('td:first-child');
+                    if (memberNameCell) {
+                        const rowMemberName = memberNameCell.textContent.trim().replace(/^▶\s*/, '').trim();
+                        const memberNameId = rowMemberName.replace(/\s+/g, '-');
+                        
+                        const tradeCountCell = memberRowRef.querySelector(`.trade-count-${memberNameId}`);
+                        const totalQuantityCell = memberRowRef.querySelector(`.total-quantity-${memberNameId}`);
+                        const totalPaymentCell = memberRowRef.querySelector(`.total-payment-${memberNameId}`);
+                        
+                        if (tradeCountCell) tradeCountCell.textContent = remainingTrades.length;
+                        if (totalQuantityCell) totalQuantityCell.textContent = totalQuantity;
+                        if (totalPaymentCell) totalPaymentCell.textContent = `$${totalPayment.toLocaleString()}`;
+                    }
+                }
+            }, 0);
         }
 
         function showError(message) {
