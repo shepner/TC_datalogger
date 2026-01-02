@@ -86,6 +86,7 @@ services:
       - ./TC_items/logs:/app/logs/items:ro
       - ./TC_user_events/logs:/app/logs/user_events:ro
       - ./TC_faction_chains/logs:/app/logs/faction_chains:ro
+      - ./TC_dashboard/logs:/app/logs
       - ./TC_dashboard:/app/data:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
       # Mount credentials for BigQuery access (use one of the microservice credentials)
