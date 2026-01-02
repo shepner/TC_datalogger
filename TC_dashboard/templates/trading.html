@@ -1473,15 +1473,11 @@
                     throw new Error(data.error || 'Failed to mark as paid');
                 }
 
-                // Remove from display
-                const row = document.querySelector(`tr[data-event-id="${eventId}"]`);
-                if (row) {
-                    row.classList.add('paid');
-                    row.querySelector('.actions').innerHTML = '<span style="color: green;">Paid</span>';
-                }
-
                 hideProgress();
                 showSuccess('Trade marked as paid!');
+                
+                // Reload trades to update the view (trade will disappear if show_paid is false)
+                loadTrades();
             } catch (error) {
                 hideProgress();
                 showError(error.message);
