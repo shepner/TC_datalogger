@@ -588,17 +588,24 @@
                 if (value >= 2) return 'cell-yellow';
                 return 'cell-red';
             } else if (type === 'trading_count') {
-                // Color scale: minpoint 0 (light green), midpoint 240 (medium green), maxpoint 480 (vibrant green)
-                // All values are green shades - discrete mapping: 0-239 = yellow (below midpoint), 240+ = green
-                if (value >= 240) return 'cell-green';
-                return 'cell-yellow';
-            } else if (type === 'days_inactive') {
-                // Color scale: minpoint 0 (light yellow), midpoint 50% = 3.5 (yellow), maxpoint 7 (red)
-                // Discrete mapping: 0 = no color (light yellow), 1-3 = yellow, 4-6 = yellow/red transition, 7+ = red
-                // Simplified: 0 = no color, 1-3 = yellow, 4+ = red
+                // Color scale: 0 = no color, 1-239 = progressively darker yellow, 240+ = progressively darker green
+                // Discrete mapping: 0 = no color, 1-79 = light yellow, 80-159 = yellow, 160-239 = dark yellow
+                //                  240-359 = light green, 360-479 = green, 480+ = dark green
                 if (value === 0) return '';
-                if (value <= 3) return 'cell-yellow';
-                return 'cell-red';
+                if (value >= 480) return 'cell-green-dark';
+                if (value >= 360) return 'cell-green';
+                if (value >= 240) return 'cell-green-light';
+                if (value >= 160) return 'cell-yellow-dark';
+                if (value >= 80) return 'cell-yellow';
+                return 'cell-yellow-light';
+            } else if (type === 'days_inactive') {
+                // Color scale: 0 = no background, 1-2 = light yellow, 3 = yellow, 4 = light red, 5+ = red
+                if (value === 0) return '';
+                if (value >= 5) return 'cell-red';
+                if (value === 4) return 'cell-red-light';
+                if (value === 3) return 'cell-yellow';
+                if (value >= 1) return 'cell-yellow-light';
+                return '';
             } else if (type === 'days_in_faction') {
                 return value <= 3 ? 'cell-yellow' : '';
             } else if (type === 'boolean') {
