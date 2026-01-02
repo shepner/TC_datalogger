@@ -576,11 +576,12 @@
 
         function getCellClass(value, type) {
             if (type === 'oc_count') {
-                // Color scale: minpoint 2.5 (red), midpoint 3 (yellow), maxpoint 7 (green)
-                // Discrete mapping: <= 2 = red (below minpoint 2.5), 3-6 = yellow (between midpoint and maxpoint), >= 7 = green (at maxpoint)
-                if (value >= 7) return 'cell-green';
-                if (value >= 3) return 'cell-yellow';
-                return 'cell-red'; // <= 2
+                // Color scale: 0 = red, 1-2 = light red, 3 = yellow, 4-5 = light green, 6+ = green
+                if (value >= 6) return 'cell-green';
+                if (value >= 4) return 'cell-green-light';
+                if (value === 3) return 'cell-yellow';
+                if (value >= 1) return 'cell-red-light';
+                return 'cell-red'; // 0
             } else if (type === 'oc_count_7d') {
                 // Color scale: minpoint 0 (red), midpoint 50% (yellow at ~1.5), maxpoint 3 (green)
                 // Discrete mapping: 0-1 = red, 2 = yellow, 3+ = green
