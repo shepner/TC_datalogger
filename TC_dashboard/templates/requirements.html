@@ -259,7 +259,7 @@
             } else if (type === 'days_inactive') {
                 return value === 0 ? 'cell-green' : (value <= 2 ? 'cell-yellow' : 'cell-red');
             } else if (type === 'days_in_faction') {
-                return value >= 30 ? 'cell-green' : 'cell-yellow';
+                return value <= 3 ? 'cell-yellow' : '';
             } else if (type === 'boolean') {
                 return value ? 'cell-green' : 'cell-red';
             } else if (type === 'na') {
