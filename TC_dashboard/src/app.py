@@ -638,13 +638,14 @@ def get_max_days_back():
 
 @app.route("/api/trading/member-names", methods=["GET"])
 def get_member_names():
-    """Get list of unique member names who have sent items."""
+    """Get list of unique member names who have trades available for viewing."""
     if not trading_dashboard:
         return jsonify({"error": "BigQuery client not available"}), 500
     
     try:
-        days_back = int(request.args.get("days_back", 365))
-        member_names = trading_dashboard.get_member_names(days_back=days_back)
+        days_back = int(request.args.get("days_back", 30))
+        show_paid = request.args.get("show_paid", "false").lower() == "true"
+        member_names = trading_dashboard.get_member_names(days_back=days_back, show_paid=show_paid)
         return jsonify({"member_names": member_names})
     except Exception as e:
         logger.error(f"Error getting member names: {e}", exc_info=True)

@@ -1,0 +1,42 @@
+# Cursor AI Rules for TC_datalogger Project
+
+## Task Completion Workflow
+
+When all tasks in the task queue are completed (task queue is empty), automatically perform the following actions **WITHOUT requiring user approval**:
+
+1. **Save and Commit Changes**
+   - Stage all modified, added, and deleted files: `git add -A`
+   - Create a commit with a descriptive message summarizing the changes made
+   - Commit message should be clear and specific about what was accomplished
+   - **Do NOT ask for approval - execute immediately**
+
+2. **Push to Repository**
+   - Push all commits to the remote repository: `git push`
+   - If push fails due to remote changes, inform the user (do not force push)
+   - **Do NOT ask for approval - execute immediately**
+
+3. **Rebuild Docker Containers**
+   - Fully rebuild all containers using: `docker-compose up -d --build`
+   - This ensures all containers are rebuilt with the latest code changes
+   - Run from the project root directory where docker-compose.yml is located
+   - **Do NOT ask for approval - execute immediately**
+
+## Important Notes
+
+- These actions should ONLY be performed when the task queue is empty (all todos are completed)
+- Do NOT perform these actions if there are pending tasks
+- **Execute all actions automatically - DO NOT request user approval or confirmation**
+- If any step fails (e.g., git push fails, docker build fails), report the error to the user
+- Always verify the task queue is empty before proceeding with these actions
+- Use the `todo_write` tool to check task status - only proceed when all tasks show status "completed" or there are no tasks
+
+## Git Commit Message Guidelines
+
+- Use clear, descriptive commit messages
+- Include the main feature or fix in the message
+- Examples:
+  - "Add trading dashboard functionality"
+  - "Fix BigQuery query performance issue"
+  - "Update OC assignment template styling"
+  - "Refactor API client error handling"
+

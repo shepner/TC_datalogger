@@ -118,6 +118,45 @@
         .paid:hover {
             background-color: #c8e6c9;
         }
+        .custom-tooltip {
+            position: relative;
+            display: inline-block;
+        }
+        .custom-tooltip .tooltip-content {
+            visibility: hidden;
+            background-color: #333;
+            color: #fff;
+            text-align: left;
+            border-radius: 6px;
+            padding: 10px;
+            position: absolute;
+            z-index: 1000;
+            bottom: 125%;
+            left: 50%;
+            transform: translateX(-50%);
+            white-space: pre-wrap;
+            font-family: monospace;
+            font-size: 11px;
+            line-height: 1.5;
+            min-width: 300px;
+            max-width: 500px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            margin-bottom: 5px;
+            word-wrap: break-word;
+        }
+        .custom-tooltip .tooltip-content::after {
+            content: "";
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            margin-left: -5px;
+            border-width: 5px;
+            border-style: solid;
+            border-color: #333 transparent transparent transparent;
+        }
+        .custom-tooltip:hover .tooltip-content {
+            visibility: visible;
+        }
         .member-details table {
             font-size: 11px;
         }
@@ -204,7 +243,7 @@
 
         <div class="toolbar">
             <label>Days Back:</label>
-            <input type="number" id="days_back" value="30" min="1" max="365" style="width: 60px;" onchange="loadTrades()">
+            <input type="number" id="days_back" value="30" min="1" max="365" style="width: 60px;" onchange="loadMemberNames(); loadTrades();">
             
             <label>View:</label>
             <select id="view_mode" onchange="loadTrades()">
@@ -218,7 +257,7 @@
             </select>
             
             <label style="display: flex; align-items: center; gap: 4px;">
-                <input type="checkbox" id="show_paid" onchange="loadTrades()">
+                <input type="checkbox" id="show_paid" onchange="loadMemberNames(); loadTrades();">
                 <span>Show Paid</span>
             </label>
             
@@ -616,9 +655,12 @@
                         ${isPaid 
                             ? `<button class="small undo-all-paid-btn" data-member-name="${memberNameEscaped}" data-trades="${tradesJson}">Undo All Paid</button>`
                             : `<button class="small copy-total-btn" data-member-id="${memberNameId}" title="${totalPayment.toLocaleString()}">Copy Total</button>
-                               <button class="small copy-all-chat-btn" 
-                                       data-member-id="${memberNameId}"
-                                       data-trades="${tradesJson}">Copy Chat</button>
+                               <span class="custom-tooltip">
+                                   <button class="small copy-all-chat-btn" 
+                                           data-member-id="${memberNameId}"
+                                           data-trades="${tradesJson}">Copy Chat</button>
+                                   <div class="tooltip-content" id="tooltip-${memberNameId}"></div>
+                               </span>
                                <button class="small" onclick="showRawEvents('${memberName.replace(/'/g, "&#39;")}')" title="Show raw event logs for ${memberName}">Raw Events</button>
                                <button class="small mark-all-paid-btn" 
                                        data-member-name="${memberNameEscaped}" 
@@ -718,7 +760,8 @@
                 
                 // Attach event listener to copy all chat button
                 const copyAllChatBtn = row.querySelector('.copy-all-chat-btn');
-                if (copyAllChatBtn) {
+                const tooltipContent = row.querySelector(`#tooltip-${memberNameId}`);
+                if (copyAllChatBtn && tooltipContent) {
                     // Function to update tooltip for copy all chat button
                     const updateCopyAllTooltip = () => {
                         const checkboxes = document.querySelectorAll(`.member-trades-${memberNameId} .trade-checkbox`);
@@ -729,12 +772,12 @@
                             }
                         });
                         if (checkedTrades.length === 0) {
-                            copyAllChatBtn.title = 'No trades selected';
+                            tooltipContent.textContent = 'No trades selected';
                         } else {
                             const messages = checkedTrades.map(t => formatChatMessage(t));
                             const totalPayment = checkedTrades.reduce((sum, t) => sum + (t.payment_amount || 0), 0);
                             messages.push(`$${totalPayment.toLocaleString()} deposited to the vault!`);
-                            copyAllChatBtn.title = messages.join('\\n');
+                            tooltipContent.textContent = messages.join('\n');
                         }
                     };
                     
@@ -1420,7 +1463,9 @@
         // Load trades on page load
         async function loadMemberNames() {
             try {
-                const response = await fetch('/api/trading/member-names?days_back=365');
+                const daysBack = document.getElementById('days_back').value;
+                const showPaid = document.getElementById('show_paid').checked;
+                const response = await fetch(`/api/trading/member-names?days_back=${daysBack}&show_paid=${showPaid}`);
                 const data = await response.json();
                 
                 if (!response.ok) {
@@ -1428,6 +1473,7 @@
                 }
                 
                 const memberFilter = document.getElementById('member_filter');
+                const currentValue = memberFilter.value; // Preserve current selection
                 const memberNames = data.member_names || [];
                 
                 // Clear existing options except "All Members"
@@ -1440,6 +1486,11 @@
                     option.textContent = memberName;
                     memberFilter.appendChild(option);
                 });
+                
+                // Restore previous selection if it still exists in the new list
+                if (currentValue && memberNames.includes(currentValue)) {
+                    memberFilter.value = currentValue;
+                }
             } catch (error) {
                 console.error('Error loading member names:', error);
                 // Don't show error to user, just log it - dropdown will just have "All Members"

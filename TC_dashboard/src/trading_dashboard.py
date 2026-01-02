@@ -441,32 +441,93 @@ class TradingDashboard:
         results = self.bq.execute_query(query)
         return results[0] if results else None
 
-    def get_member_names(self, days_back: int = 365) -> List[str]:
+    def get_member_names(self, days_back: int = 365, show_paid: bool = False) -> List[str]:
         """
-        Get list of unique member names who have sent items.
+        Get list of unique member names who have trades available for viewing.
 
         Args:
-            days_back: Number of days to look back (default 365 to get comprehensive list)
+            days_back: Number of days to look back
+            show_paid: If True, return members with paid trades; if False, return members with pending trades
 
         Returns:
-            List of member names sorted alphabetically
+            List of member names sorted alphabetically (case-insensitive)
         """
-        query = """
-        SELECT DISTINCT
-          TRIM(REGEXP_EXTRACT(event, r' from (.+?)(?: with the message|$)')) AS user_name
-        FROM
-          `torncity-402423.torn_data.v2_torn_user_events-raw`
-        WHERE
-          STARTS_WITH(event, 'You were sent')
-          AND NOT REGEXP_CONTAINS(event, r'You were sent \$')
-          AND NOT REGEXP_CONTAINS(event, r' from Duke(?: |$)')
-          AND REGEXP_EXTRACT(event, r'You were sent (\d+)x ') IS NOT NULL
-          AND TIMESTAMP_SECONDS(SAFE_CAST(timestamp AS INT64)) >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL @days_back DAY)
-          AND TRIM(REGEXP_EXTRACT(event, r' from (.+?)(?: with the message|$)')) IS NOT NULL
-          AND TRIM(REGEXP_EXTRACT(event, r' from (.+?)(?: with the message|$)')) != ''
-        ORDER BY
-          user_name ASC
-        """
+        if show_paid:
+            # Get members who have paid trades
+            query = """
+            WITH parsed_events AS (
+              SELECT
+                id AS event_id,
+                TRIM(REGEXP_EXTRACT(event, r' from (.+?)(?: with the message|$)')) AS user_name
+              FROM
+                `torncity-402423.torn_data.v2_torn_user_events-raw`
+              WHERE
+                STARTS_WITH(event, 'You were sent')
+                AND NOT REGEXP_CONTAINS(event, r'You were sent \$')
+                AND NOT REGEXP_CONTAINS(event, r' from Duke(?: |$)')
+                AND (
+                  REGEXP_EXTRACT(event, r'You were sent (\d+)x ') IS NOT NULL
+                  OR REGEXP_EXTRACT(event, r'You were sent (?:a|an|some) (.+?) from ') IS NOT NULL
+                )
+                AND TIMESTAMP_SECONDS(SAFE_CAST(timestamp AS INT64)) >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL @days_back DAY)
+                AND TRIM(REGEXP_EXTRACT(event, r' from (.+?)(?: with the message|$)')) IS NOT NULL
+                AND TRIM(REGEXP_EXTRACT(event, r' from (.+?)(?: with the message|$)')) != ''
+            ),
+            paid_events AS (
+              SELECT DISTINCT event_id
+              FROM
+                `torncity-402423.torn_data.trading_paid_events`
+            )
+            SELECT DISTINCT
+              pe.user_name
+            FROM
+              parsed_events AS pe
+            INNER JOIN
+              paid_events AS paid
+            ON
+              pe.event_id = paid.event_id
+            ORDER BY
+              LOWER(pe.user_name) ASC
+            """
+        else:
+            # Get members who have pending (unpaid) trades
+            query = """
+            WITH parsed_events AS (
+              SELECT
+                id AS event_id,
+                TRIM(REGEXP_EXTRACT(event, r' from (.+?)(?: with the message|$)')) AS user_name
+              FROM
+                `torncity-402423.torn_data.v2_torn_user_events-raw`
+              WHERE
+                STARTS_WITH(event, 'You were sent')
+                AND NOT REGEXP_CONTAINS(event, r'You were sent \$')
+                AND NOT REGEXP_CONTAINS(event, r' from Duke(?: |$)')
+                AND (
+                  REGEXP_EXTRACT(event, r'You were sent (\d+)x ') IS NOT NULL
+                  OR REGEXP_EXTRACT(event, r'You were sent (?:a|an|some) (.+?) from ') IS NOT NULL
+                )
+                AND TIMESTAMP_SECONDS(SAFE_CAST(timestamp AS INT64)) >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL @days_back DAY)
+                AND TRIM(REGEXP_EXTRACT(event, r' from (.+?)(?: with the message|$)')) IS NOT NULL
+                AND TRIM(REGEXP_EXTRACT(event, r' from (.+?)(?: with the message|$)')) != ''
+            ),
+            paid_events AS (
+              SELECT DISTINCT event_id
+              FROM
+                `torncity-402423.torn_data.trading_paid_events`
+            )
+            SELECT DISTINCT
+              pe.user_name
+            FROM
+              parsed_events AS pe
+            LEFT JOIN
+              paid_events AS paid
+            ON
+              pe.event_id = paid.event_id
+            WHERE
+              paid.event_id IS NULL
+            ORDER BY
+              LOWER(pe.user_name) ASC
+            """
         
         query = query.replace("@days_back", str(days_back))
         results = self.bq.execute_query(query)
