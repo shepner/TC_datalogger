@@ -92,7 +92,20 @@ class TradingDashboard:
           pe.quantity,
           SAFE_CAST(items.value.market_price AS INT64) AS market_price,
           pe.quantity * SAFE_CAST(items.value.market_price AS INT64) AS total_value,
-          -- Calculate payment amount: 5% for Xanax, 4% for others
+          -- Calculate sales fee: 5% for Xanax, 4% for others
+          CASE 
+            WHEN LOWER(TRIM(pe.item_name)) = 'xanax' THEN 0.05
+            ELSE 0.04
+          END AS sales_fee,
+          -- Calculate buy price: market_price * (1 - sales_fee)
+          CAST(
+            SAFE_CAST(items.value.market_price AS INT64) * 
+            (1 - CASE 
+              WHEN LOWER(TRIM(pe.item_name)) = 'xanax' THEN 0.05
+              ELSE 0.04
+            END)
+          AS INT64) AS buy_price,
+          -- Calculate payment amount: quantity * market_price * sales_fee
           CAST(
             pe.quantity * SAFE_CAST(items.value.market_price AS INT64) * 
             CASE 
@@ -173,6 +186,19 @@ class TradingDashboard:
             pe.item_name,
             pe.quantity,
             SAFE_CAST(items.value.market_price AS INT64) AS market_price,
+            -- Calculate sales fee: 5% for Xanax, 4% for others
+            CASE 
+              WHEN LOWER(TRIM(pe.item_name)) = 'xanax' THEN 0.05
+              ELSE 0.04
+            END AS sales_fee,
+            -- Calculate buy price: market_price * (1 - sales_fee)
+            CAST(
+              SAFE_CAST(items.value.market_price AS INT64) * 
+              (1 - CASE 
+                WHEN LOWER(TRIM(pe.item_name)) = 'xanax' THEN 0.05
+                ELSE 0.04
+              END)
+            AS INT64) AS buy_price,
             CAST(
               pe.quantity * SAFE_CAST(items.value.market_price AS INT64) * 
               CASE 
@@ -205,6 +231,8 @@ class TradingDashboard:
               item_name,
               quantity,
               market_price,
+              sales_fee,
+              buy_price,
               payment_amount
             )
             ORDER BY timestamp DESC

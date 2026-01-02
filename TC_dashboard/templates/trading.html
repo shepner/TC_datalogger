@@ -129,6 +129,8 @@
                         <th>Item</th>
                         <th>Quantity</th>
                         <th>Market Price</th>
+                        <th>Sales Fee</th>
+                        <th>Buy Price</th>
                         <th>Market Value</th>
                         <th>Payment Amount</th>
                         <th>Actions</th>
@@ -183,7 +185,7 @@
             tbody.innerHTML = '';
 
             if (trades.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="8">No pending trades found</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="10">No pending trades found</td></tr>';
                 document.getElementById('trades-table').style.display = 'table';
                 return;
             }
@@ -195,6 +197,8 @@
                 const date = new Date(trade.timestamp);
                 const totalValue = trade.total_value || 0;
                 const marketPrice = trade.market_price || 0;
+                const salesFee = (trade.sales_fee || 0) * 100; // Convert to percentage
+                const buyPrice = trade.buy_price || 0;
                 const paymentAmount = trade.payment_amount || 0;
 
                 row.innerHTML = `
@@ -203,6 +207,8 @@
                     <td>${trade.item_name || 'Unknown Item'}</td>
                     <td>${trade.quantity || 0}</td>
                     <td>$${marketPrice.toLocaleString()}</td>
+                    <td>${salesFee.toFixed(1)}%</td>
+                    <td>$${buyPrice.toLocaleString()}</td>
                     <td>$${totalValue.toLocaleString()}</td>
                     <td>$${paymentAmount.toLocaleString()}</td>
                     <td class="actions">
@@ -253,6 +259,8 @@
                             item_name: t.item_name || t.get && t.get('item_name'),
                             quantity: t.quantity || t.get && t.get('quantity'),
                             market_price: t.market_price || t.get && t.get('market_price'),
+                            sales_fee: t.sales_fee || t.get && t.get('sales_fee'),
+                            buy_price: t.buy_price || t.get && t.get('buy_price'),
                             payment_amount: t.payment_amount || t.get && t.get('payment_amount')
                         };
                     }
@@ -262,13 +270,18 @@
                 const tradesHtml = trades.map(trade => {
                     const date = new Date(trade.timestamp);
                     const individualPayment = trade.payment_amount || 0;
+                    const marketPrice = trade.market_price || 0;
+                    const salesFee = ((trade.sales_fee || 0) * 100).toFixed(1);
+                    const buyPrice = trade.buy_price || 0;
                     const tradeJson = JSON.stringify(trade).replace(/'/g, "\\'");
                     return `
                         <tr class="trade-detail">
                             <td>${date.toLocaleString()}</td>
                             <td>${trade.item_name || 'Unknown'}</td>
                             <td>${trade.quantity || 0}</td>
-                            <td>$${(trade.market_price || 0).toLocaleString()}</td>
+                            <td>$${marketPrice.toLocaleString()}</td>
+                            <td>${salesFee}%</td>
+                            <td>$${buyPrice.toLocaleString()}</td>
                             <td>$${individualPayment.toLocaleString()}</td>
                             <td class="actions">
                                 <button class="small" onclick="copyChatMessage(${JSON.stringify(trade)})">Copy Chat</button>
@@ -305,6 +318,8 @@
                                     <th>Item</th>
                                     <th>Quantity</th>
                                     <th>Market Price</th>
+                                    <th>Sales Fee</th>
+                                    <th>Buy Price</th>
                                     <th>Payment</th>
                                     <th>Actions</th>
                                 </tr>
