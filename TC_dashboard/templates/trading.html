@@ -291,6 +291,11 @@
                     `;
                 }).join('');
 
+                // Escape member name for HTML attributes
+                const memberNameEscaped = (member.member_name || 'Unknown').replace(/"/g, '&quot;');
+                // Store trades in data attribute - escape quotes for HTML attribute
+                const tradesJson = JSON.stringify(trades).replace(/"/g, '&quot;');
+                
                 row.innerHTML = `
                     <td>
                         <button class="small" onclick="toggleMemberTrades(this)" style="margin-right: 5px;">▶</button>
@@ -301,11 +306,28 @@
                     <td>$${totalPayment.toLocaleString()}</td>
                     <td class="actions">
                         <button class="small" onclick="copyValue('${totalPayment}')">Copy Total</button>
-                        <button class="small" onclick="markAllAsPaid('${member.member_name}', ${JSON.stringify(trades)})">Mark All Paid</button>
+                        <button class="small mark-all-paid-btn" 
+                                data-member-name="${memberNameEscaped}" 
+                                data-trades="${tradesJson}">Mark All Paid</button>
                     </td>
                 `;
 
                 tbody.appendChild(row);
+                
+                // Attach event listener to the button
+                const markAllBtn = row.querySelector('.mark-all-paid-btn');
+                if (markAllBtn) {
+                    markAllBtn.addEventListener('click', function() {
+                        const memberName = this.dataset.memberName;
+                        try {
+                            const tradesData = JSON.parse(this.dataset.trades);
+                            markAllAsPaid(memberName, tradesData);
+                        } catch (error) {
+                            console.error('Error parsing trades data:', error);
+                            showError('Failed to parse trades data');
+                        }
+                    });
+                }
                 
                 // Add detail rows
                 const detailRow = document.createElement('tr');
