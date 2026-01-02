@@ -2119,8 +2119,14 @@
                     // Fallback: use stored cells if columnGroups is not available
                     rowData.cells.forEach((checkpointRate, idx) => {
                         if (checkpointRate !== undefined && checkpointRate !== null) {
+                            // Color scale: minpoint 70 (red), midpoint 75 (yellow), maxpoint 85 (green)
+                            // Discrete mapping: < 70 = red, 70-84 = yellow, >= 85 = green
                             let cellClass = '';
-                            if (checkpointRate < 80 || checkpointRate > 90) {
+                            if (checkpointRate >= 85) {
+                                cellClass = 'cell-green';
+                            } else if (checkpointRate >= 70) {
+                                cellClass = 'cell-yellow';
+                            } else {
                                 cellClass = 'cell-red';
                             }
                             
@@ -2392,7 +2398,16 @@
             displayHistory.forEach((record) => {
                 const dateStr = record.executed_at ? new Date(record.executed_at).toLocaleDateString() : 'Unknown';
                 const rate = record.checkpoint_pass_rate || 0;
-                const rateClass = (rate < 80 || rate > 90) ? 'cell-red' : '';
+                // Color scale: minpoint 70 (red), midpoint 75 (yellow), maxpoint 85 (green)
+                // Discrete mapping: < 70 = red, 70-84 = yellow, >= 85 = green
+                let rateClass = '';
+                if (rate >= 85) {
+                    rateClass = 'cell-green';
+                } else if (rate >= 70) {
+                    rateClass = 'cell-yellow';
+                } else {
+                    rateClass = 'cell-red';
+                }
                 const status = record.status || 'Unknown';
                 
                 html += `<tr>`;
@@ -2806,7 +2821,16 @@
                 sortedHistory.forEach((record, index) => {
                     const dateStr = record.executed_at ? new Date(record.executed_at).toLocaleString() : 'Unknown';
                     const rate = record.checkpoint_pass_rate || 0;
-                    const rateClass = (rate < 80 || rate > 90) ? 'cell-red' : '';
+                    // Color scale: minpoint 70 (red), midpoint 75 (yellow), maxpoint 85 (green)
+                    // Discrete mapping: < 70 = red, 70-84 = yellow, >= 85 = green
+                    let rateClass = '';
+                    if (rate >= 85) {
+                        rateClass = 'cell-green';
+                    } else if (rate >= 70) {
+                        rateClass = 'cell-yellow';
+                    } else {
+                        rateClass = 'cell-red';
+                    }
                     // Get status - handle both 'status' and 'outcome' fields
                     let status = record.status;
                     if (!status && record.outcome) {
