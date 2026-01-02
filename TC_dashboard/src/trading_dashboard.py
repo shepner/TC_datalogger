@@ -733,7 +733,7 @@ class TradingDashboard:
           id AS event_id,
           DATETIME(TIMESTAMP_SECONDS(timestamp)) AS timestamp,
           event,
-          DATETIME(TIMESTAMP_SECONDS(SAFE_CAST(fetched_at AS INT64))) AS fetched_at
+          DATETIME(fetched_at) AS fetched_at
         FROM
           `torncity-402423.torn_data.v2_torn_user_events-raw`
         WHERE
