@@ -336,8 +336,8 @@
                 const isNA = daysInFaction < 30;
                 const allMetDisplay = isNA ? 'N/A' : (member.all_requirements_met ? '<span class="met">✓</span>' : '<span class="not-met">✗</span>');
                 const canPromoteDisplay = isNA ? 'N/A' : (member.can_promote ? '<span class="met">✓</span>' : '<span class="not-met">✗</span>');
-                const allMetClass = isNA ? getCellClass(null, 'na') : getCellClass(member.all_requirements_met, 'boolean');
-                const canPromoteClass = isNA ? getCellClass(null, 'na') : getCellClass(member.can_promote, 'boolean');
+                const allMetClass = isNA ? getCellClass(null, 'na') : (member.all_requirements_met ? '' : 'cell-red');
+                const canPromoteClass = isNA ? getCellClass(null, 'na') : (member.can_promote ? '' : 'cell-red');
 
                 row.innerHTML = `
                     <td>${member.member_name}</td>
@@ -350,8 +350,8 @@
                     <td class="${getCellClass(member.oc_count_7d || 0, 'oc_count_7d')}">${member.oc_count_7d || 0}</td>
                     <td class="${member.oc_requirement_met ? '' : 'cell-red'}">${ocMet}</td>
                     <td class="${getCellClass(tradingCount, 'trading_count')}">${tradingCount}</td>
-                    <td class="${getCellClass(member.trading_requirement_met, 'boolean')}">${tradingMet}</td>
-                    <td class="${getCellClass(member.chain_participation, 'boolean')}">${chainsMet}</td>
+                    <td class="${member.trading_requirement_met ? '' : 'cell-red'}">${tradingMet}</td>
+                    <td class="${member.chain_participation ? '' : 'cell-red'}">${chainsMet}</td>
                     <td class="${allMetClass}">${allMetDisplay}</td>
                     <td class="${canPromoteClass}">${canPromoteDisplay}</td>
                     <td>${actionDisplay}</td>
