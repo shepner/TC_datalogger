@@ -438,6 +438,208 @@ class TradingDashboard:
         query = query.replace("@days_back", str(days_back))
         return self.bq.execute_query(query)
 
+    def get_paid_trades(
+        self,
+        days_back: int = 30,
+        member_filter: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """
+        Get paid trades (items that have been marked as paid).
+
+        Args:
+            days_back: Number of days to look back
+            member_filter: Optional member name to filter by
+
+        Returns:
+            List of trade dictionaries
+        """
+        query = """
+        WITH parsed_events AS (
+          SELECT
+            id AS event_id,
+            DATETIME(TIMESTAMP_SECONDS(timestamp)) AS timestamp,
+            event,
+            CAST(REGEXP_EXTRACT(event, r'You were sent (\d+)x ') AS INT64) AS quantity,
+            REGEXP_EXTRACT(event, r'You were sent \d+x (.+?) from ') AS item_name,
+            TRIM(REGEXP_EXTRACT(event, r' from (.+?)(?: with the message|$)')) AS user_name
+          FROM
+            `torncity-402423.torn_data.v2_torn_user_events-raw`
+          WHERE
+            STARTS_WITH(event, 'You were sent')
+            AND NOT REGEXP_CONTAINS(event, r'You were sent \$')
+            AND NOT REGEXP_CONTAINS(event, r' from Duke(?: |$)')
+            AND REGEXP_EXTRACT(event, r'You were sent (\d+)x ') IS NOT NULL
+            AND TIMESTAMP_SECONDS(SAFE_CAST(timestamp AS INT64)) >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL @days_back DAY)
+        ),
+        paid_events AS (
+          SELECT DISTINCT event_id
+          FROM
+            `torncity-402423.torn_data.trading_paid_events`
+        )
+        SELECT
+          pe.timestamp,
+          pe.user_name,
+          pe.item_name,
+          pe.quantity,
+          SAFE_CAST(items.value.market_price AS INT64) AS market_price,
+          pe.quantity * SAFE_CAST(items.value.market_price AS INT64) AS total_value,
+          -- Calculate sales fee: 5% for Xanax, 4% for others
+          CASE 
+            WHEN LOWER(TRIM(pe.item_name)) = 'xanax' THEN 0.05
+            ELSE 0.04
+          END AS sales_fee,
+          -- Calculate buy price: market_price * (1 - sales_fee)
+          CAST(
+            SAFE_CAST(items.value.market_price AS INT64) * 
+            (1 - CASE 
+              WHEN LOWER(TRIM(pe.item_name)) = 'xanax' THEN 0.05
+              ELSE 0.04
+            END)
+          AS INT64) AS buy_price,
+          -- Calculate payment amount: buy_price * quantity
+          CAST(
+            pe.quantity * 
+            (SAFE_CAST(items.value.market_price AS INT64) * 
+            (1 - CASE 
+              WHEN LOWER(TRIM(pe.item_name)) = 'xanax' THEN 0.05
+              ELSE 0.04
+            END))
+          AS INT64) AS payment_amount,
+          pe.event_id
+        FROM
+          parsed_events AS pe
+        LEFT JOIN
+          `torncity-402423.torn_data.v2_torn_items-raw` AS items
+        ON
+          LOWER(TRIM(pe.item_name)) = LOWER(TRIM(items.name))
+        INNER JOIN
+          paid_events AS paid
+        ON
+          pe.event_id = paid.event_id
+        WHERE
+          paid.event_id IS NOT NULL
+        """
+        
+        # Replace parameter
+        query = query.replace("@days_back", str(days_back))
+        
+        if member_filter:
+            query = query.replace(
+                "WHERE paid.event_id IS NOT NULL",
+                f"WHERE paid.event_id IS NOT NULL AND LOWER(TRIM(pe.user_name)) = LOWER(TRIM('{member_filter}'))"
+            )
+
+        results = self.bq.execute_query(query)
+        return results
+
+    def get_paid_trades_by_member(
+        self,
+        days_back: int = 30,
+    ) -> List[Dict[str, Any]]:
+        """
+        Get paid trades grouped by member.
+
+        Args:
+            days_back: Number of days to look back
+
+        Returns:
+            List of member dictionaries with their paid trades
+        """
+        query = """
+        WITH parsed_events AS (
+          SELECT
+            id AS event_id,
+            DATETIME(TIMESTAMP_SECONDS(timestamp)) AS timestamp,
+            event,
+            CAST(REGEXP_EXTRACT(event, r'You were sent (\d+)x ') AS INT64) AS quantity,
+            REGEXP_EXTRACT(event, r'You were sent \d+x (.+?) from ') AS item_name,
+            TRIM(REGEXP_EXTRACT(event, r' from (.+?)(?: with the message|$)')) AS user_name
+          FROM
+            `torncity-402423.torn_data.v2_torn_user_events-raw`
+          WHERE
+            STARTS_WITH(event, 'You were sent')
+            AND NOT REGEXP_CONTAINS(event, r'You were sent \$')
+            AND NOT REGEXP_CONTAINS(event, r' from Duke(?: |$)')
+            AND REGEXP_EXTRACT(event, r'You were sent (\d+)x ') IS NOT NULL
+            AND TIMESTAMP_SECONDS(SAFE_CAST(timestamp AS INT64)) >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL @days_back DAY)
+        ),
+        paid_events AS (
+          SELECT DISTINCT event_id
+          FROM
+            `torncity-402423.torn_data.trading_paid_events`
+        ),
+        trades_with_payment AS (
+          SELECT
+            pe.user_name,
+            pe.event_id,
+            pe.timestamp,
+            pe.item_name,
+            pe.quantity,
+            SAFE_CAST(items.value.market_price AS INT64) AS market_price,
+            -- Calculate sales fee: 5% for Xanax, 4% for others
+            CASE
+              WHEN LOWER(TRIM(pe.item_name)) = 'xanax' THEN 0.05
+              ELSE 0.04
+            END AS sales_fee,
+            -- Calculate buy price: market_price * (1 - sales_fee)
+            CAST(
+              SAFE_CAST(items.value.market_price AS INT64) *
+              (1 - CASE
+                WHEN LOWER(TRIM(pe.item_name)) = 'xanax' THEN 0.05
+                ELSE 0.04
+              END)
+            AS INT64) AS buy_price,
+            -- Calculate payment amount: buy_price * quantity
+            CAST(
+              pe.quantity *
+              (SAFE_CAST(items.value.market_price AS INT64) *
+              (1 - CASE
+                WHEN LOWER(TRIM(pe.item_name)) = 'xanax' THEN 0.05
+                ELSE 0.04
+              END))
+            AS INT64) AS payment_amount
+          FROM
+            parsed_events AS pe
+          LEFT JOIN
+            `torncity-402423.torn_data.v2_torn_items-raw` AS items
+          ON
+            LOWER(TRIM(pe.item_name)) = LOWER(TRIM(items.name))
+          INNER JOIN
+            paid_events AS paid
+          ON
+            pe.event_id = paid.event_id
+          WHERE
+            paid.event_id IS NOT NULL
+        )
+        SELECT
+          user_name AS member_name,
+          COUNT(*) AS trade_count,
+          SUM(quantity) AS total_quantity,
+          SUM(payment_amount) AS total_payment_amount,
+          ARRAY_AGG(
+            STRUCT(
+              event_id,
+              timestamp,
+              user_name,
+              item_name,
+              quantity,
+              market_price,
+              sales_fee,
+              buy_price,
+              payment_amount
+            )
+            ORDER BY timestamp DESC
+          ) AS trades
+        FROM
+          trades_with_payment
+        GROUP BY
+          user_name
+        ORDER BY
+          total_payment_amount DESC
+        """
+        query = query.replace("@days_back", str(days_back))
+        return self.bq.execute_query(query)
+
     def validate_paid_trades(self, event_ids: List[str]) -> Dict[str, Any]:
         """
         Validate that trades were marked as paid in BigQuery.

@@ -483,20 +483,32 @@ def get_pending_trades():
         days_back = int(request.args.get("days_back", 30))
         member_filter = request.args.get("member")
         grouped = request.args.get("grouped", "true").lower() == "true"
+        show_paid = request.args.get("show_paid", "false").lower() == "true"
         
-        if grouped:
-            trades = trading_dashboard.get_pending_trades_by_member(
-                days_back=days_back
-            )
+        if show_paid:
+            if grouped:
+                trades = trading_dashboard.get_paid_trades_by_member(
+                    days_back=days_back
+                )
+            else:
+                trades = trading_dashboard.get_paid_trades(
+                    days_back=days_back,
+                    member_filter=member_filter
+                )
         else:
-            trades = trading_dashboard.get_pending_trades(
-                days_back=days_back,
-                member_filter=member_filter
-            )
+            if grouped:
+                trades = trading_dashboard.get_pending_trades_by_member(
+                    days_back=days_back
+                )
+            else:
+                trades = trading_dashboard.get_pending_trades(
+                    days_back=days_back,
+                    member_filter=member_filter
+                )
         
-        return jsonify({"trades": trades, "grouped": grouped})
+        return jsonify({"trades": trades, "grouped": grouped, "paid": show_paid})
     except Exception as e:
-        logger.error(f"Error getting pending trades: {e}", exc_info=True)
+        logger.error(f"Error getting trades: {e}", exc_info=True)
         return jsonify({"error": str(e)}), 500
 
 

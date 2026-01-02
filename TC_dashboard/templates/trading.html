@@ -12,26 +12,32 @@
             margin: 0 auto;
             padding: 10px;
         }
-        .filters {
-            margin-bottom: 10px;
-            padding: 8px;
+        .toolbar {
+            margin-bottom: 8px;
+            padding: 6px 10px;
             background-color: #f5f5f5;
             border-radius: 4px;
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 10px;
             flex-wrap: wrap;
-        }
-        .filters label {
-            margin: 0;
-            font-size: 13px;
-            font-weight: 500;
-        }
-        .filters input, .filters select {
-            padding: 6px 8px;
             border: 1px solid #ddd;
-            border-radius: 4px;
-            font-size: 13px;
+        }
+        .toolbar label {
+            margin: 0;
+            font-size: 12px;
+            font-weight: 500;
+            white-space: nowrap;
+        }
+        .toolbar input, .toolbar select {
+            padding: 4px 6px;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+            font-size: 12px;
+        }
+        .toolbar input[type="checkbox"] {
+            width: auto;
+            margin: 0;
         }
         button {
             padding: 6px 12px;
@@ -87,8 +93,10 @@
             font-size: 13px;
         }
         .paid {
-            text-decoration: line-through;
-            color: #999;
+            background-color: #e8f5e9;
+        }
+        .paid:hover {
+            background-color: #c8e6c9;
         }
         .member-details table {
             font-size: 11px;
@@ -110,9 +118,9 @@
             </div>
         </div>
 
-        <div class="filters">
+        <div class="toolbar">
             <label>Days Back:</label>
-            <input type="number" id="days_back" value="30" min="1" max="365">
+            <input type="number" id="days_back" value="30" min="1" max="365" style="width: 60px;">
             
             <label>View:</label>
             <select id="view_mode">
@@ -121,7 +129,12 @@
             </select>
             
             <label>Member Filter:</label>
-            <input type="text" id="member_filter" placeholder="Optional member name">
+            <input type="text" id="member_filter" placeholder="Optional member name" style="width: 150px;">
+            
+            <label style="display: flex; align-items: center; gap: 4px;">
+                <input type="checkbox" id="show_paid" onchange="loadTrades()">
+                <span>Show Paid</span>
+            </label>
             
             <button onclick="loadTrades()">Load Trades</button>
         </div>
@@ -171,17 +184,20 @@
         let currentTrades = [];
         let isGrouped = true;
 
+        let showPaid = false;
+
         async function loadTrades() {
             const daysBack = document.getElementById('days_back').value;
             const memberFilter = document.getElementById('member_filter').value;
             const viewMode = document.getElementById('view_mode').value;
+            showPaid = document.getElementById('show_paid').checked;
             isGrouped = viewMode === 'grouped';
 
             document.getElementById('error').style.display = 'none';
             document.getElementById('success').style.display = 'none';
 
             try {
-                let url = `/api/trading/pending?days_back=${daysBack}&grouped=${isGrouped}`;
+                let url = `/api/trading/pending?days_back=${daysBack}&grouped=${isGrouped}&show_paid=${showPaid}`;
                 if (memberFilter && !isGrouped) {
                     url += `&member=${encodeURIComponent(memberFilter)}`;
                 }
@@ -195,9 +211,9 @@
 
                 currentTrades = data.trades;
                 if (isGrouped) {
-                    displayGroupedTrades(currentTrades);
+                    displayGroupedTrades(currentTrades, showPaid);
                 } else {
-                    displayTrades(currentTrades);
+                    displayTrades(currentTrades, showPaid);
                 }
             } catch (error) {
                 document.getElementById('error').textContent = error.message;
@@ -205,12 +221,13 @@
             }
         }
 
-        function displayTrades(trades) {
+        function displayTrades(trades, isPaid = false) {
             const tbody = document.getElementById('trades-body');
             tbody.innerHTML = '';
 
             if (trades.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="10">No pending trades found</td></tr>';
+                const message = isPaid ? 'No paid trades found' : 'No pending trades found';
+                tbody.innerHTML = `<tr><td colspan="10">${message}</td></tr>`;
                 document.getElementById('trades-table').style.display = 'table';
                 return;
             }
@@ -218,6 +235,9 @@
             trades.forEach(trade => {
                 const row = document.createElement('tr');
                 row.dataset.eventId = trade.event_id;
+                if (isPaid) {
+                    row.classList.add('paid');
+                }
 
                 const date = new Date(trade.timestamp);
                 const totalValue = trade.total_value || 0;
@@ -225,6 +245,12 @@
                 const salesFee = (trade.sales_fee || 0) * 100; // Convert to percentage
                 const buyPrice = trade.buy_price || 0;
                 const paymentAmount = trade.payment_amount || 0;
+
+                const actionButtons = isPaid 
+                    ? `<button class="small" onclick="undoPaidStatus('${trade.event_id}')">Undo Paid Status</button>`
+                    : `<button class="small" onclick="copyValue('${paymentAmount}')">Copy Payment</button>
+                       <button class="small copy-chat-btn" data-trade="${JSON.stringify(trade).replace(/"/g, '&quot;')}" title="${formatChatMessage(trade).replace(/"/g, '&quot;')}">Copy Chat</button>
+                       <button class="small" data-event-id="${trade.event_id}" data-trade='${JSON.stringify(trade).replace(/'/g, "&#39;")}' onclick="markAsPaidFromButton(this)">Mark Paid</button>`;
 
                 row.innerHTML = `
                     <td>${date.toLocaleString()}</td>
@@ -237,10 +263,7 @@
                     <td>$${totalValue.toLocaleString()}</td>
                     <td>$${paymentAmount.toLocaleString()}</td>
                     <td class="actions">
-                        <button class="small" onclick="copyValue('${paymentAmount}')">Copy Payment</button>
-                        <button class="small copy-chat-btn" data-trade="${JSON.stringify(trade).replace(/"/g, '&quot;')}" title="${formatChatMessage(trade).replace(/"/g, '&quot;')}">Copy Chat</button>
-                        <button class="small" data-event-id="${trade.event_id}" data-trade='${JSON.stringify(trade).replace(/'/g, "&#39;")}' onclick="markAsPaidFromButton(this)">Mark Paid</button>
-                        <button class="small" onclick="unmarkAsPaid('${trade.event_id}')">Unmark Paid</button>
+                        ${actionButtons}
                     </td>
                 `;
 
@@ -265,12 +288,13 @@
             document.getElementById('grouped-table').style.display = 'none';
         }
 
-        function displayGroupedTrades(memberGroups) {
+        function displayGroupedTrades(memberGroups, isPaid = false) {
             const tbody = document.getElementById('grouped-body');
             tbody.innerHTML = '';
 
             if (memberGroups.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="5">No pending trades found</td></tr>';
+                const message = isPaid ? 'No paid trades found' : 'No pending trades found';
+                tbody.innerHTML = `<tr><td colspan="5">${message}</td></tr>`;
                 document.getElementById('grouped-table').style.display = 'table';
                 document.getElementById('trades-table').style.display = 'none';
                 return;
@@ -278,6 +302,9 @@
 
             memberGroups.forEach(member => {
                 const row = document.createElement('tr');
+                if (isPaid) {
+                    row.classList.add('paid');
+                }
                 const totalPayment = member.total_payment_amount || 0;
                 const tradeCount = member.trade_count || 0;
                 const totalQuantity = member.total_quantity || 0;
@@ -327,8 +354,11 @@
                             <td>$${buyPrice.toLocaleString()}</td>
                             <td>$${individualPayment.toLocaleString()}</td>
                             <td class="actions">
-                                <button class="small copy-chat-btn" data-trade="${JSON.stringify(trade).replace(/"/g, '&quot;')}" title="${formatChatMessage(trade).replace(/"/g, '&quot;')}">Copy Chat</button>
-                                <button class="small" data-event-id="${trade.event_id}" data-trade='${JSON.stringify(trade).replace(/'/g, "&#39;")}' onclick="markAsPaidFromButton(this)">Mark Paid</button>
+                                ${isPaid 
+                                    ? `<button class="small" onclick="undoPaidStatus('${trade.event_id}')">Undo Paid Status</button>`
+                                    : `<button class="small copy-chat-btn" data-trade="${JSON.stringify(trade).replace(/"/g, '&quot;')}" title="${formatChatMessage(trade).replace(/"/g, '&quot;')}">Copy Chat</button>
+                                       <button class="small" data-event-id="${trade.event_id}" data-trade='${JSON.stringify(trade).replace(/'/g, "&#39;")}' onclick="markAsPaidFromButton(this)">Mark Paid</button>`
+                                }
                             </td>
                         </tr>
                     `;
@@ -348,13 +378,16 @@
                     <td class="total-quantity-${memberId}">${totalQuantity}</td>
                     <td class="total-payment-${memberId}">$${totalPayment.toLocaleString()}</td>
                     <td class="actions">
-                        <button class="small copy-total-btn" data-member-id="${memberId}">Copy Total</button>
-                        <button class="small copy-all-chat-btn" 
-                                data-member-id="${memberId}"
-                                data-trades="${tradesJson}">Copy Chat</button>
-                        <button class="small mark-all-paid-btn" 
-                                data-member-name="${memberNameEscaped}" 
-                                data-trades="${tradesJson}">Mark All Paid</button>
+                        ${isPaid 
+                            ? `<button class="small undo-all-paid-btn" data-member-name="${memberNameEscaped}" data-trades="${tradesJson}">Undo All Paid</button>`
+                            : `<button class="small copy-total-btn" data-member-id="${memberId}">Copy Total</button>
+                               <button class="small copy-all-chat-btn" 
+                                       data-member-id="${memberId}"
+                                       data-trades="${tradesJson}">Copy Chat</button>
+                               <button class="small mark-all-paid-btn" 
+                                       data-member-name="${memberNameEscaped}" 
+                                       data-trades="${tradesJson}">Mark All Paid</button>`
+                        }
                     </td>
                 `;
 
@@ -403,19 +436,36 @@
                 detailRow.className = 'member-details';
                 tbody.appendChild(detailRow);
                 
-                // Attach event listeners to copy chat buttons in the detail row
-                const copyChatBtns = detailRow.querySelectorAll('.copy-chat-btn');
-                copyChatBtns.forEach(btn => {
-                    btn.addEventListener('click', function() {
+                // Attach event listeners to copy chat buttons in the detail row (only if not paid)
+                if (!isPaid) {
+                    const copyChatBtns = detailRow.querySelectorAll('.copy-chat-btn');
+                    copyChatBtns.forEach(btn => {
+                        btn.addEventListener('click', function() {
+                            try {
+                                const tradeData = JSON.parse(this.dataset.trade);
+                                copyChatMessage(tradeData);
+                            } catch (error) {
+                                console.error('Error parsing trade data:', error);
+                                showError('Failed to parse trade data');
+                            }
+                        });
+                    });
+                }
+                
+                // Attach event listener to undo all paid button (if showing paid items)
+                const undoAllPaidBtn = row.querySelector('.undo-all-paid-btn');
+                if (undoAllPaidBtn) {
+                    undoAllPaidBtn.addEventListener('click', function() {
+                        const memberName = this.dataset.memberName;
                         try {
-                            const tradeData = JSON.parse(this.dataset.trade);
-                            copyChatMessage(tradeData);
+                            const tradesData = JSON.parse(this.dataset.trades);
+                            undoAllPaidStatus(memberName, tradesData);
                         } catch (error) {
-                            console.error('Error parsing trade data:', error);
-                            showError('Failed to parse trade data');
+                            console.error('Error parsing trades data:', error);
+                            showError('Failed to parse trades data');
                         }
                     });
-                });
+                }
                 
                 // Attach event listener to copy total button
                 const copyTotalBtn = row.querySelector('.copy-total-btn');
@@ -758,6 +808,68 @@
                 loadTrades();
             } catch (error) {
                 showError(error.message);
+            }
+        }
+
+        async function undoPaidStatus(eventId) {
+            await unmarkAsPaid(eventId);
+        }
+
+        async function undoAllPaidStatus(memberName, trades) {
+            if (!trades || !Array.isArray(trades) || trades.length === 0) {
+                showError('No trades to undo for ' + memberName);
+                return;
+            }
+            
+            if (!confirm(`Undo paid status for all ${trades.length} trades for ${memberName}?`)) {
+                return;
+            }
+            
+            try {
+                let successCount = 0;
+                let errorCount = 0;
+                
+                for (const trade of trades) {
+                    if (!trade || !trade.event_id) {
+                        console.error('Invalid trade:', trade);
+                        errorCount++;
+                        continue;
+                    }
+                    
+                    try {
+                        const response = await fetch('/api/trading/unmark-paid', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({ event_id: trade.event_id })
+                        });
+                        
+                        const data = await response.json();
+                        
+                        if (!response.ok) {
+                            throw new Error(data.error || `Failed to undo paid status for trade ${trade.event_id}`);
+                        }
+                        
+                        successCount++;
+                    } catch (error) {
+                        console.error(`Error undoing paid status for trade ${trade.event_id}:`, error);
+                        errorCount++;
+                    }
+                }
+                
+                if (errorCount > 0) {
+                    showError(`Undid paid status for ${successCount} trades, but ${errorCount} failed`);
+                } else {
+                    showSuccess(`Undid paid status for all ${successCount} trades for ${memberName}`);
+                }
+                
+                if (successCount > 0) {
+                    loadTrades();
+                }
+            } catch (error) {
+                console.error('Error in undoAllPaidStatus:', error);
+                showError(error.message || 'Failed to undo paid status');
             }
         }
 
