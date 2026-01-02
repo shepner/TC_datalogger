@@ -728,8 +728,9 @@ class OCEmailGenerator:
         
         # Sort OCs by priority:
         # 1. Difficulty (descending) - higher levels first
-        # 2. Members needed to start (ascending) - OCs that need fewer members first
-        # This ensures we fill OCs that are close to starting before creating new ones
+        # 2. Partially filled OCs first (filled_slots > 0) - prioritize OCs that already have members
+        # 3. Members needed to start (ascending) - OCs that need fewer members first
+        # This ensures we fill partially filled OCs before creating new ones
         def sort_key(oc):
             difficulty = oc.get('difficulty')
             if difficulty is None:
@@ -745,9 +746,13 @@ class OCEmailGenerator:
             filled_slots = oc.get('filled_slots', 0)
             members_needed = max(0, total_slots - filled_slots)
             
-            # Return tuple: (negative difficulty for descending, members_needed for ascending)
-            # This sorts by difficulty descending, then by members_needed ascending
-            return (-difficulty, members_needed)
+            # Prioritize partially filled OCs (filled_slots > 0) over empty OCs
+            # Use negative of filled_slots so partially filled (positive) comes before empty (0)
+            is_partially_filled = 1 if filled_slots > 0 else 0
+            
+            # Return tuple: (negative difficulty for descending, negative is_partially_filled for descending, members_needed for ascending)
+            # This sorts by: difficulty descending, then partially filled first, then members_needed ascending
+            return (-difficulty, -is_partially_filled, members_needed)
         
         ocs_for_active.sort(key=sort_key)
         ocs_for_inactive.sort(key=sort_key)
@@ -1270,6 +1275,8 @@ class OCEmailGenerator:
                 for member_name in level_assignments[oc_id]:
                     email_lines.append(f"- {member_name}")
                 
+                # Add 2 blank lines between each OC assignment for proper email formatting
+                email_lines.append("")
                 email_lines.append("")
         
         # Build list of needed OCs (for UI display)
