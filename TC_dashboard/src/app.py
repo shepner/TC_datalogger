@@ -620,6 +620,21 @@ def get_raw_events():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/api/trading/member-names", methods=["GET"])
+def get_member_names():
+    """Get list of unique member names who have sent items."""
+    if not trading_dashboard:
+        return jsonify({"error": "BigQuery client not available"}), 500
+    
+    try:
+        days_back = int(request.args.get("days_back", 365))
+        member_names = trading_dashboard.get_member_names(days_back=days_back)
+        return jsonify({"member_names": member_names})
+    except Exception as e:
+        logger.error(f"Error getting member names: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/requirements")
 def requirements():
     """Faction requirements report page."""

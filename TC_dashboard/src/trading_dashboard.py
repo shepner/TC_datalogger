@@ -407,6 +407,37 @@ class TradingDashboard:
         results = self.bq.execute_query(query)
         return results[0] if results else None
 
+    def get_member_names(self, days_back: int = 365) -> List[str]:
+        """
+        Get list of unique member names who have sent items.
+
+        Args:
+            days_back: Number of days to look back (default 365 to get comprehensive list)
+
+        Returns:
+            List of member names sorted alphabetically
+        """
+        query = """
+        SELECT DISTINCT
+          TRIM(REGEXP_EXTRACT(event, r' from (.+?)(?: with the message|$)')) AS user_name
+        FROM
+          `torncity-402423.torn_data.v2_torn_user_events-raw`
+        WHERE
+          STARTS_WITH(event, 'You were sent')
+          AND NOT REGEXP_CONTAINS(event, r'You were sent \$')
+          AND NOT REGEXP_CONTAINS(event, r' from Duke(?: |$)')
+          AND REGEXP_EXTRACT(event, r'You were sent (\d+)x ') IS NOT NULL
+          AND TIMESTAMP_SECONDS(SAFE_CAST(timestamp AS INT64)) >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL @days_back DAY)
+          AND TRIM(REGEXP_EXTRACT(event, r' from (.+?)(?: with the message|$)')) IS NOT NULL
+          AND TRIM(REGEXP_EXTRACT(event, r' from (.+?)(?: with the message|$)')) != ''
+        ORDER BY
+          user_name ASC
+        """
+        
+        query = query.replace("@days_back", str(days_back))
+        results = self.bq.execute_query(query)
+        return [row.get('user_name', '') for row in results if row.get('user_name')]
+
     def get_member_summary(self, days_back: int = 7) -> List[Dict[str, Any]]:
         """
         Get summary of trades per member.

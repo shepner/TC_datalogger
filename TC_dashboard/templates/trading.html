@@ -131,7 +131,9 @@
             </select>
             
             <label>Member Filter:</label>
-            <input type="text" id="member_filter" placeholder="Optional member name" style="width: 150px;">
+            <select id="member_filter" style="width: 180px;">
+                <option value="">All Members</option>
+            </select>
             
             <label style="display: flex; align-items: center; gap: 4px;">
                 <input type="checkbox" id="show_paid" onchange="loadTrades()">
@@ -1155,7 +1157,38 @@
         }
 
         // Load trades on page load
-        window.addEventListener('DOMContentLoaded', loadTrades);
+        async function loadMemberNames() {
+            try {
+                const response = await fetch('/api/trading/member-names?days_back=365');
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(data.error || 'Failed to load member names');
+                }
+                
+                const memberFilter = document.getElementById('member_filter');
+                const memberNames = data.member_names || [];
+                
+                // Clear existing options except "All Members"
+                memberFilter.innerHTML = '<option value="">All Members</option>';
+                
+                // Add member names to dropdown
+                memberNames.forEach(memberName => {
+                    const option = document.createElement('option');
+                    option.value = memberName;
+                    option.textContent = memberName;
+                    memberFilter.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Error loading member names:', error);
+                // Don't show error to user, just log it - dropdown will just have "All Members"
+            }
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            loadMemberNames();
+            loadTrades();
+        });
     </script>
 </body>
 </html>
