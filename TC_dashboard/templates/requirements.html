@@ -7,21 +7,22 @@
     <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='dashboard.css') }}">
     <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+        }
         .container {
             max-width: 1600px;
             margin: 0 auto;
             padding: 20px;
         }
         button {
-            padding: 8px 16px;
+            padding: 6px 12px;
             background-color: #4CAF50;
             color: white;
             border: none;
-            border-radius: 4px;
+            border-radius: 3px;
             cursor: pointer;
-            margin-right: 10px;
-            margin-bottom: 10px;
-            font-size: 14px;
+            font-size: 12px;
         }
         button:hover {
             background-color: #45a049;
@@ -29,17 +30,20 @@
         button.secondary {
             background-color: #2196F3;
         }
+        button.secondary:hover {
+            background-color: #0b7dda;
+        }
         .table-container {
             max-height: 70vh;
             overflow-y: auto;
             overflow-x: auto;
             border: 1px solid #ddd;
-            margin-top: 20px;
+            margin-top: 10px;
         }
         table {
             width: 100%;
             border-collapse: collapse;
-            font-size: 13px;
+            font-size: 11px;
         }
         thead {
             position: sticky;
@@ -47,7 +51,7 @@
             z-index: 10;
         }
         th, td {
-            padding: 6px 8px;
+            padding: 3px 6px;
             text-align: left;
             border-bottom: 1px solid #ddd;
             border-right: 1px solid #eee;
@@ -77,7 +81,7 @@
             opacity: 1;
         }
         tbody tr:hover {
-            background-color: #f5f5f5;
+            background-color: #e8f5e9;
         }
         /* Stoplight color coding */
         .cell-green {
@@ -136,33 +140,65 @@
         .oc-level-9 { background-color: #1565c0; color: white; }
         .oc-level-10 { background-color: #0d47a1; color: white; }
         .summary {
-            margin: 20px 0;
-            padding: 12px;
-            background-color: #f5f5f5;
-            border-radius: 4px;
+            margin: 10px 0;
+            padding: 8px 12px;
+            background-color: #f9f9f9;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+            font-size: 12px;
+        }
+        .summary h3 {
+            margin: 0 0 6px 0;
             font-size: 14px;
+            font-weight: 600;
+            color: #333;
+        }
+        .summary-content {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+        .summary-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .summary-label {
+            font-weight: 500;
+            color: #666;
+        }
+        .summary-value {
+            font-weight: 600;
+            color: #333;
         }
         .error {
-            color: red;
+            color: #c33;
             margin-top: 10px;
+            padding: 8px;
+            background-color: #fee;
+            border: 1px solid #fcc;
+            border-radius: 3px;
+            font-size: 12px;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #ddd;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid #ddd;">
             <h1 style="margin: 0; font-size: 18px; font-weight: 600; color: #333;">Requirements Report</h1>
             <div style="display: flex; align-items: center; gap: 8px;">
+                <button id="pull-data-btn" onclick="triggerDataPull()" style="padding: 6px 12px; font-size: 12px; background-color: #2196F3; color: white; border: none; border-radius: 3px; cursor: pointer;">Pull Data from TC API</button>
                 <button onclick="loadReport()" style="padding: 6px 12px; font-size: 12px; background-color: #4CAF50; color: white; border: none; border-radius: 3px; cursor: pointer;">Refresh Report</button>
                 <a href="/" style="text-decoration: none; font-size: 12px; color: #666; padding: 4px 8px; border: 1px solid #ccc; border-radius: 3px; background-color: #f5f5f5;">← Back to Dashboard</a>
             </div>
         </div>
+        <div id="data-pull-status" style="display: none; margin-bottom: 10px; padding: 8px; border-radius: 4px; font-size: 12px;"></div>
 
         <div id="error" class="error" style="display: none;"></div>
 
         <div id="summary" class="summary" style="display: none;">
             <h3>Summary</h3>
-            <div id="summary-content"></div>
+            <div id="summary-content" class="summary-content"></div>
         </div>
 
         <div id="report-container">
@@ -250,10 +286,10 @@
             // Display summary
             const summaryContent = document.getElementById('summary-content');
             summaryContent.innerHTML = `
-                <p><strong>Promote:</strong> ${actions.promote.length} members</p>
-                <p><strong>Demote:</strong> ${actions.demote.length} members</p>
-                <p><strong>Remove:</strong> ${actions.remove.length} members</p>
-                <p><strong>No Action:</strong> ${actions.none.length} members</p>
+                <div class="summary-item"><span class="summary-label">Promote:</span><span class="summary-value">${actions.promote.length}</span></div>
+                <div class="summary-item"><span class="summary-label">Demote:</span><span class="summary-value">${actions.demote.length}</span></div>
+                <div class="summary-item"><span class="summary-label">Remove:</span><span class="summary-value">${actions.remove.length}</span></div>
+                <div class="summary-item"><span class="summary-label">No Action:</span><span class="summary-value">${actions.none.length}</span></div>
             `;
             document.getElementById('summary').style.display = 'block';
 
@@ -388,6 +424,129 @@
                     }
                 });
             });
+        }
+
+        async function triggerDataPull() {
+            const btn = document.getElementById('pull-data-btn');
+            const statusDiv = document.getElementById('data-pull-status');
+            
+            // Disable button and show status
+            btn.disabled = true;
+            btn.textContent = 'Pulling Data...';
+            statusDiv.style.display = 'block';
+            statusDiv.style.backgroundColor = '#fff3cd';
+            statusDiv.style.color = '#856404';
+            statusDiv.style.border = '1px solid #ffc107';
+            
+            // Only update services/tables used by the requirements report
+            // - v2_faction_40832_members-raw (from faction_members)
+            // - v2_faction_40832_crimes-raw (from faction_crimes)
+            // - v2_torn_user_events-raw (from user_events)
+            const services = ['faction_members', 'faction_crimes', 'user_events'];
+            let startTime = Date.now();
+            
+            // Show initial status with service list
+            const updateStatus = (message, showServices = false) => {
+                let statusMsg = message;
+                if (showServices) {
+                    statusMsg += '\n\nPulling data for:\n';
+                    services.forEach(s => {
+                        statusMsg += `  • ${s}\n`;
+                    });
+                }
+                statusDiv.innerHTML = statusMsg.replace(/\n/g, '<br>');
+            };
+            
+            updateStatus('🔄 Starting data pull...', true);
+            
+            // Update elapsed time every second
+            const timeInterval = setInterval(() => {
+                const elapsed = Math.floor((Date.now() - startTime) / 1000);
+                const minutes = Math.floor(elapsed / 60);
+                const seconds = elapsed % 60;
+                const currentStatus = statusDiv.textContent || statusDiv.innerText;
+                if (!currentStatus.includes('completed') && !currentStatus.includes('Error')) {
+                    updateStatus(`🔄 Pulling data... (${minutes}m ${seconds}s elapsed)`, true);
+                }
+            }, 1000);
+            
+            try {
+                const response = await fetch('/api/data-pull/trigger', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ services: services })
+                });
+                
+                clearInterval(timeInterval);
+                const data = await response.json();
+                const totalTime = Math.floor((Date.now() - startTime) / 1000);
+                const minutes = Math.floor(totalTime / 60);
+                const seconds = totalTime % 60;
+                
+                if (data.success) {
+                    statusDiv.style.backgroundColor = '#d4edda';
+                    statusDiv.style.color = '#155724';
+                    statusDiv.style.border = '1px solid #c3e6cb';
+                    
+                    const successCount = Object.values(data.results || {}).filter(r => r.success).length;
+                    let successMsg = `✅ Data pull completed successfully!\n\n`;
+                    successMsg += `Completed in ${minutes}m ${seconds}s\n`;
+                    successMsg += `All ${successCount} services completed successfully.\n\n`;
+                    successMsg += `Reloading page in 3 seconds...`;
+                    statusDiv.innerHTML = successMsg.replace(/\n/g, '<br>');
+                    
+                    // Wait a moment, then reload the page
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 3000);
+                } else {
+                    // Some services failed or were skipped - show detailed results
+                    const results = data.results || {};
+                    const successful = Object.entries(results).filter(([_, r]) => r.success);
+                    const failed = Object.entries(results).filter(([_, r]) => !r.success && !r.error?.includes('Rate limited'));
+                    const rateLimited = Object.entries(results).filter(([_, r]) => r.error?.includes('Rate limited'));
+                    
+                    statusDiv.style.backgroundColor = '#f8d7da';
+                    statusDiv.style.color = '#721c24';
+                    statusDiv.style.border = '1px solid #f5c6cb';
+                    
+                    let errorMsg = `⚠️ Data pull completed with issues\n\n`;
+                    errorMsg += `Completed in ${minutes}m ${seconds}s\n\n`;
+                    
+                    if (successful.length > 0) {
+                        errorMsg += `✅ Successful (${successful.length}): ${successful.map(([n]) => n.replace('_', ' ')).join(', ')}\n\n`;
+                    }
+                    
+                    if (rateLimited.length > 0) {
+                        errorMsg += `⏱️ Rate Limited (${rateLimited.length}): ${rateLimited.map(([n, r]) => {
+                            const match = r.error?.match(/wait (\d+) more minute/);
+                            const minutes = match ? match[1] : '?';
+                            return `${n.replace('_', ' ')} (wait ${minutes} min)`;
+                        }).join(', ')}\n\n`;
+                    }
+                    
+                    if (failed.length > 0) {
+                        errorMsg += `❌ Failed (${failed.length}): ${failed.map(([n]) => n.replace('_', ' ')).join(', ')}\n\n`;
+                        failed.forEach(([name, result]) => {
+                            errorMsg += `${name.replace('_', ' ')}: ${result.error || 'Unknown error'}\n`;
+                        });
+                    }
+                    
+                    statusDiv.innerHTML = errorMsg.replace(/\n/g, '<br>');
+                    btn.disabled = false;
+                    btn.textContent = 'Pull Data from TC API';
+                }
+            } catch (error) {
+                clearInterval(timeInterval);
+                statusDiv.style.backgroundColor = '#f8d7da';
+                statusDiv.style.color = '#721c24';
+                statusDiv.style.border = '1px solid #f5c6cb';
+                statusDiv.innerHTML = `❌ Error: ${error.message}`;
+                btn.disabled = false;
+                btn.textContent = 'Pull Data from TC API';
+            }
         }
 
         // Load report on page load
