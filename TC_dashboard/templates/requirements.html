@@ -562,7 +562,10 @@
                 if (value >= 2) return 'cell-yellow';
                 return 'cell-red';
             } else if (type === 'trading_count') {
-                return value > 480 ? 'cell-green' : (value >= 240 ? 'cell-yellow' : 'cell-red');
+                // Color scale: minpoint 0 (light green), midpoint 240 (medium green), maxpoint 480 (vibrant green)
+                // Discrete mapping: 0-239 = yellow, 240-479 = green, 480+ = green
+                if (value >= 240) return 'cell-green';
+                return 'cell-yellow';
             } else if (type === 'days_inactive') {
                 // Color scale: minpoint 0 (light yellow), midpoint 50% = 3.5 (yellow), maxpoint 7 (red)
                 // Discrete mapping: 0-3 = yellow, 4-6 = yellow/red transition, 7+ = red
