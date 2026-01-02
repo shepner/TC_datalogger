@@ -253,7 +253,10 @@
 
         function getCellClass(value, type) {
             if (type === 'oc_count') {
-                return value >= 3 ? 'cell-green' : (value >= 1 ? 'cell-yellow' : 'cell-red');
+                // Stoplight scale: 0 = red, 3 = yellow, 8+ = green
+                if (value >= 8) return 'cell-green';
+                if (value >= 3) return 'cell-yellow';
+                return 'cell-red';
             } else if (type === 'trading_count') {
                 return value > 480 ? 'cell-green' : (value >= 240 ? 'cell-yellow' : 'cell-red');
             } else if (type === 'days_inactive') {
