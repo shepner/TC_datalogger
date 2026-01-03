@@ -1068,19 +1068,14 @@ class OCEmailGenerator:
                             other_member_max_oc = other_member_perf.get('max_recommended_oc')
                             
                             # If other member has a max recommended OC, only group if:
-                            # 1. This OC is at their max level, OR
-                            # 2. This OC is within 1 level of their max (to allow some flexibility)
-                            # But NEVER group if OC is below (max - 1)
+                            # OC is at or within 1 level of their max (oc_difficulty >= max_oc - 1)
+                            # This means: if max is 3, only group into Level 2, 3, or higher
+                            # Never group into Level 1 if their max is 3
                             if other_member_max_oc is not None:
                                 min_allowed_level = other_member_max_oc - 1
                                 if oc_difficulty < min_allowed_level:
                                     # OC is more than 1 level below their max - don't group
                                     logger.debug(f"Not grouping {other_member_name} into Level {oc_difficulty} OC: their max is {other_member_max_oc}, minimum allowed is {min_allowed_level}")
-                                    continue
-                                # Also don't group if OC is significantly below their max (more than 1 level)
-                                # This ensures members get assigned to appropriate levels
-                                if oc_difficulty < other_member_max_oc - 1:
-                                    logger.debug(f"Not grouping {other_member_name} into Level {oc_difficulty} OC: their max is {other_member_max_oc}")
                                     continue
                             
                             # Check if there's still space
