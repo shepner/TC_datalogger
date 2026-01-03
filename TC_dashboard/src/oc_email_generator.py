@@ -1275,6 +1275,12 @@ class OCEmailGenerator:
                     except (ValueError, TypeError):
                         continue
                     
+                    # CRITICAL: Check max_recommended_oc FIRST, before doing any rate checks
+                    # This prevents wasting time checking OCs that are too high for the member
+                    if member_max_oc is not None and oc_difficulty > member_max_oc:
+                        # Don't add to considered_ocs for fallback loop - these shouldn't be considered at all
+                        continue
+                    
                     # Check if member has valid checkpoint_pass_rate for this SPECIFIC OC
                     oc_name = oc.get('oc_name', '').strip()
                     member_oc_specific_rates = member_oc_rates.get(member_name, {})
@@ -1324,10 +1330,6 @@ class OCEmailGenerator:
                         # STRICT CHECK: Rate must be in valid range (80-90)
                         if not (80 <= rate_num <= 90):
                             continue
-                    
-                    # Check if OC difficulty is <= max_recommended_oc
-                    if member_max_oc is not None and oc_difficulty > member_max_oc:
-                        continue
                     
                     oc_id = oc['oc_id']
                     
