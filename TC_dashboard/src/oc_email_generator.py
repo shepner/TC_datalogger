@@ -1070,9 +1070,16 @@ class OCEmailGenerator:
                             # If other member has a max recommended OC, only group if:
                             # 1. This OC is at their max level, OR
                             # 2. This OC is within 1 level of their max (to allow some flexibility)
+                            # But NEVER group if OC is below (max - 1)
                             if other_member_max_oc is not None:
-                                if oc_difficulty < (other_member_max_oc - 1):
+                                min_allowed_level = other_member_max_oc - 1
+                                if oc_difficulty < min_allowed_level:
                                     # OC is more than 1 level below their max - don't group
+                                    logger.debug(f"Not grouping {other_member_name} into Level {oc_difficulty} OC: their max is {other_member_max_oc}, minimum allowed is {min_allowed_level}")
+                                    continue
+                                # Also don't group if OC is significantly below their max (more than 1 level)
+                                # This ensures members get assigned to appropriate levels
+                                if oc_difficulty < other_member_max_oc - 1:
                                     logger.debug(f"Not grouping {other_member_name} into Level {oc_difficulty} OC: their max is {other_member_max_oc}")
                                     continue
                             
@@ -1234,6 +1241,7 @@ class OCEmailGenerator:
 
         # Handle members who couldn't be assigned to their recommended level
         # Try to assign them to lower levels where they can meet requirements
+        # BUT only if there are NO available OCs at their max recommended level
         unassigned_members = [m for m in members_sorted if m['member_name'] not in assigned_members]
         
         for member in unassigned_members:
@@ -1249,6 +1257,44 @@ class OCEmailGenerator:
             member_level_rates = member_perf.get('level_rates', {})
             
             if member_max_oc is None:
+                continue
+            
+            # First, check if there are any available OCs at the member's max recommended level
+            # Only assign to lower levels if NO OCs are available at max level
+            has_available_oc_at_max = False
+            for oc in ocs:
+                if is_excluded_oc(oc):
+                    continue
+                
+                oc_difficulty = oc.get('difficulty')
+                if oc_difficulty is None:
+                    continue
+                
+                try:
+                    oc_difficulty = int(oc_difficulty)
+                except (ValueError, TypeError):
+                    continue
+                
+                if oc_difficulty != member_max_oc:
+                    continue
+                
+                # Check if member can join this OC
+                if can_member_join_oc(member, oc):
+                    oc_id = oc['oc_id']
+                    total_slots = oc.get('total_slots', 0)
+                    filled_slots = oc.get('filled_slots', 0)
+                    assigned_count = len(assignments.get(oc_id, []))
+                    available_slots = total_slots - filled_slots - assigned_count
+                    
+                    if available_slots > 0:
+                        has_available_oc_at_max = True
+                        logger.warning(f"Member {member_name} (max OC {member_max_oc}) was not assigned but Level {member_max_oc} OC '{oc.get('oc_name')}' ({oc_id}) is available with {available_slots} slots. This indicates a bug in the assignment logic.")
+                        break
+            
+            # If there are available OCs at max level, skip lower level assignment
+            # This prevents assigning members below their max when suitable OCs exist
+            if has_available_oc_at_max:
+                logger.info(f"Skipping lower level assignment for {member_name}: Level {member_max_oc} OCs are available")
                 continue
             
             # Try to find a lower level where member can meet requirements
