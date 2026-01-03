@@ -1044,7 +1044,8 @@ class OCEmailGenerator:
                     
                     # Check if this is an empty OC (filled_slots == 0) - if so, try to group other members
                     if filled_slots == 0:
-                        # Find other unassigned members who can join this same OC
+                        # Find ALL other unassigned members who can join this same OC
+                        # Check all members, not just those after current member in sorted list
                         for other_member in members_sorted:
                             other_member_name = other_member['member_name']
                             if other_member_name in assigned_members:
@@ -1067,9 +1068,9 @@ class OCEmailGenerator:
                         logger.info(f"Assigned {m_name} to OC {oc_id} ({oc.get('oc_name')}, Level {oc_difficulty})")
                     
                     if len(members_to_assign) > 1:
-                        logger.info(f"Grouped {len(members_to_assign)} members together in OC {oc_id} ({oc.get('oc_name')})")
+                        logger.info(f"Grouped {len(members_to_assign)} members together in OC {oc_id} ({oc.get('oc_name')}): {', '.join(members_to_assign)}")
                     
-                    if member_name in ["Adilon_Scorpian", "Hiyori"]:
+                    if member_name in ["Adilon_Scorpian", "Hiyori", "Xython", "April-x", "Signa"]:
                         logger.info(f"DEBUG {member_name}: ASSIGNED to Level {oc_difficulty} OC '{oc.get('oc_name')}' - stopping search")
                     break
                 else:
