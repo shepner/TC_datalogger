@@ -1015,93 +1015,93 @@ class OCEmailGenerator:
                 # Check if member has valid checkpoint_pass_rate for this SPECIFIC OC
                 # Member must have a position with checkpoint_pass_rate in 80-90 range for this specific OC
                 oc_name = oc.get('oc_name', '').strip()
-                    member_oc_specific_rates = member_oc_rates.get(member_name, {})
-                    
-                    # Check if member has any position for this specific OC with rate in 80-90
-                    has_valid_oc_rate = False
-                    has_oc_specific_data = False
-                    best_oc_rate = None
-                    matching_keys = []
-                    
-                    oc_name_lower = oc_name.lower().strip()
-                    for key, rate in member_oc_specific_rates.items():
-                        # Key format is "oc_name_position_id", so check if it starts with oc_name
-                        key_lower = key.lower()
-                        if key_lower.startswith(oc_name_lower + '_'):
-                            matching_keys.append(key)
-                            has_oc_specific_data = True
-                            try:
-                                rate_num = float(rate)
-                                if 0 <= rate_num <= 1:
-                                    rate_num = rate_num * 100
-                                
-                                # Track best rate for this OC
-                                if best_oc_rate is None or rate_num > best_oc_rate:
-                                    best_oc_rate = rate_num
-                                
-                                if 80 <= rate_num <= 90:
-                                    has_valid_oc_rate = True
-                            except (ValueError, TypeError):
-                                continue
-                    
-                    # Debug logging for problematic assignments
-                    if (member_name == "DubZzZ" and oc_name_lower == "leave no trace") or \
-                       (member_name in ["Adilon_Scorpian", "Hiyori"] and oc_difficulty >= 3):
-                        logger.info(f"DEBUG {member_name}/{oc_name} (Level {oc_difficulty}): member_oc_specific_rates has {len(member_oc_specific_rates)} keys")
-                        logger.info(f"DEBUG {member_name}/{oc_name}: oc_name = '{oc_name}', oc_name_lower = '{oc_name_lower}'")
-                        logger.info(f"DEBUG {member_name}/{oc_name}: matching_keys = {matching_keys}")
-                        logger.info(f"DEBUG {member_name}/{oc_name}: has_oc_specific_data = {has_oc_specific_data}, best_oc_rate = {best_oc_rate}, has_valid_oc_rate = {has_valid_oc_rate}")
-                        logger.info(f"DEBUG {member_name}/{oc_name}: member_max_oc = {member_max_oc}, oc_difficulty = {oc_difficulty}, level_rate = {member_level_rates.get(oc_difficulty)}")
-                    
-                    # If we have OC-specific data and member can't meet requirements, skip this OC
-                    if has_oc_specific_data and not has_valid_oc_rate:
-                        logger.info(f"Skipping {member_name} for Level {oc_difficulty} OC '{oc_name}': has OC-specific data with best rate {best_oc_rate} (not in 80-90 range)")
+                member_oc_specific_rates = member_oc_rates.get(member_name, {})
+                
+                # Check if member has any position for this specific OC with rate in 80-90
+                has_valid_oc_rate = False
+                has_oc_specific_data = False
+                best_oc_rate = None
+                matching_keys = []
+                
+                oc_name_lower = oc_name.lower().strip()
+                for key, rate in member_oc_specific_rates.items():
+                    # Key format is "oc_name_position_id", so check if it starts with oc_name
+                    key_lower = key.lower()
+                    if key_lower.startswith(oc_name_lower + '_'):
+                        matching_keys.append(key)
+                        has_oc_specific_data = True
+                        try:
+                            rate_num = float(rate)
+                            if 0 <= rate_num <= 1:
+                                rate_num = rate_num * 100
+                            
+                            # Track best rate for this OC
+                            if best_oc_rate is None or rate_num > best_oc_rate:
+                                best_oc_rate = rate_num
+                            
+                            if 80 <= rate_num <= 90:
+                                has_valid_oc_rate = True
+                        except (ValueError, TypeError):
+                            continue
+                
+                # Debug logging for problematic assignments
+                if (member_name == "DubZzZ" and oc_name_lower == "leave no trace") or \
+                   (member_name in ["Adilon_Scorpian", "Hiyori"] and oc_difficulty >= 3):
+                    logger.info(f"DEBUG {member_name}/{oc_name} (Level {oc_difficulty}): member_oc_specific_rates has {len(member_oc_specific_rates)} keys")
+                    logger.info(f"DEBUG {member_name}/{oc_name}: oc_name = '{oc_name}', oc_name_lower = '{oc_name_lower}'")
+                    logger.info(f"DEBUG {member_name}/{oc_name}: matching_keys = {matching_keys}")
+                    logger.info(f"DEBUG {member_name}/{oc_name}: has_oc_specific_data = {has_oc_specific_data}, best_oc_rate = {best_oc_rate}, has_valid_oc_rate = {has_valid_oc_rate}")
+                    logger.info(f"DEBUG {member_name}/{oc_name}: member_max_oc = {member_max_oc}, oc_difficulty = {oc_difficulty}, level_rate = {member_level_rates.get(oc_difficulty)}")
+                
+                # If we have OC-specific data and member can't meet requirements, skip this OC
+                if has_oc_specific_data and not has_valid_oc_rate:
+                    logger.info(f"Skipping {member_name} for Level {oc_difficulty} OC '{oc_name}': has OC-specific data with best rate {best_oc_rate} (not in 80-90 range)")
+                    assignment_reasons[member_name]['considered_ocs'].append({
+                        'oc_id': oc_id,
+                        'oc_name': oc_name,
+                        'level': oc_difficulty,
+                        'reason_skipped': f'OC-specific rate {best_oc_rate:.1f}% not in 80-90% range'
+                    })
+                    continue
+                
+                # If no OC-specific data, fallback to level-based check
+                if not has_oc_specific_data:
+                    level_rate = member_level_rates.get(oc_difficulty)
+                    if level_rate is None:
+                        logger.debug(f"Skipping {member_name} for Level {oc_difficulty} OC {oc_name}: no valid rate in 80-90 range for this level")
                         assignment_reasons[member_name]['considered_ocs'].append({
                             'oc_id': oc_id,
                             'oc_name': oc_name,
                             'level': oc_difficulty,
-                            'reason_skipped': f'OC-specific rate {best_oc_rate:.1f}% not in 80-90% range'
+                            'reason_skipped': 'No level-based rate data for this level'
                         })
                         continue
                     
-                    # If no OC-specific data, fallback to level-based check
-                    if not has_oc_specific_data:
-                        level_rate = member_level_rates.get(oc_difficulty)
-                        if level_rate is None:
-                            logger.debug(f"Skipping {member_name} for Level {oc_difficulty} OC {oc_name}: no valid rate in 80-90 range for this level")
-                            assignment_reasons[member_name]['considered_ocs'].append({
-                                'oc_id': oc_id,
-                                'oc_name': oc_name,
-                                'level': oc_difficulty,
-                                'reason_skipped': 'No level-based rate data for this level'
-                            })
-                            continue
-                        
-                        # Ensure rate is in percentage format
-                        try:
-                            rate_num = float(level_rate)
-                            if 0 <= rate_num <= 1:
-                                rate_num = rate_num * 100
-                        except (ValueError, TypeError):
-                            logger.debug(f"Skipping {member_name} for Level {oc_difficulty} OC {oc_name}: invalid rate format")
-                            assignment_reasons[member_name]['considered_ocs'].append({
-                                'oc_id': oc_id,
-                                'oc_name': oc_name,
-                                'level': oc_difficulty,
-                                'reason_skipped': f'Invalid rate format: {level_rate}'
-                            })
-                            continue
-                        
-                        # STRICT CHECK: Rate must be in valid range (80-90)
-                        if not (80 <= rate_num <= 90):
-                            logger.debug(f"Skipping {member_name} for Level {oc_difficulty} OC {oc_name}: rate {rate_num} not in 80-90 range")
-                            assignment_reasons[member_name]['considered_ocs'].append({
-                                'oc_id': oc_id,
-                                'oc_name': oc_name,
-                                'level': oc_difficulty,
-                                'reason_skipped': f'Level rate {rate_num:.1f}% not in 80-90% range'
-                            })
-                            continue
+                    # Ensure rate is in percentage format
+                    try:
+                        rate_num = float(level_rate)
+                        if 0 <= rate_num <= 1:
+                            rate_num = rate_num * 100
+                    except (ValueError, TypeError):
+                        logger.debug(f"Skipping {member_name} for Level {oc_difficulty} OC {oc_name}: invalid rate format")
+                        assignment_reasons[member_name]['considered_ocs'].append({
+                            'oc_id': oc_id,
+                            'oc_name': oc_name,
+                            'level': oc_difficulty,
+                            'reason_skipped': f'Invalid rate format: {level_rate}'
+                        })
+                        continue
+                    
+                    # STRICT CHECK: Rate must be in valid range (80-90)
+                    if not (80 <= rate_num <= 90):
+                        logger.debug(f"Skipping {member_name} for Level {oc_difficulty} OC {oc_name}: rate {rate_num} not in 80-90 range")
+                        assignment_reasons[member_name]['considered_ocs'].append({
+                            'oc_id': oc_id,
+                            'oc_name': oc_name,
+                            'level': oc_difficulty,
+                            'reason_skipped': f'Level rate {rate_num:.1f}% not in 80-90% range'
+                        })
+                        continue
                 
                 # Check if OC has space
                 if oc_id not in assignments:
