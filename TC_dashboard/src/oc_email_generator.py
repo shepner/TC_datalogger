@@ -1011,10 +1011,10 @@ class OCEmailGenerator:
                 
                 # Note: max_recommended_oc and OC history checks are already done in the filter above
                 # No need to check again here - all OCs in filtered_oc_list are already valid
-                else:
-                    # Check if member has valid checkpoint_pass_rate for this SPECIFIC OC
-                    # Member must have a position with checkpoint_pass_rate in 80-90 range for this specific OC
-                    oc_name = oc.get('oc_name', '').strip()
+                
+                # Check if member has valid checkpoint_pass_rate for this SPECIFIC OC
+                # Member must have a position with checkpoint_pass_rate in 80-90 range for this specific OC
+                oc_name = oc.get('oc_name', '').strip()
                     member_oc_specific_rates = member_oc_rates.get(member_name, {})
                     
                     # Check if member has any position for this specific OC with rate in 80-90
