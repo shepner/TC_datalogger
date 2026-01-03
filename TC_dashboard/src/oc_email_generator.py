@@ -1163,6 +1163,42 @@ class OCEmailGenerator:
                                     # OC is more than 1 level below their max - don't group
                                     logger.debug(f"Not grouping {other_member_name} into Level {oc_difficulty} OC: their max is {other_member_max_oc}, minimum allowed is {min_allowed_level}")
                                     continue
+                                
+                                # CRITICAL: Also check if there are available OCs at their max level
+                                # Don't group them into a lower level OC if suitable OCs exist at their max level
+                                if oc_difficulty < other_member_max_oc:
+                                    # Check if there are any available OCs at their max level
+                                    has_available_oc_at_max = False
+                                    for check_oc in ocs:
+                                        if is_excluded_oc(check_oc):
+                                            continue
+                                        check_difficulty = check_oc.get('difficulty')
+                                        if check_difficulty is None:
+                                            continue
+                                        try:
+                                            check_difficulty = int(check_difficulty)
+                                        except (ValueError, TypeError):
+                                            continue
+                                        
+                                        if check_difficulty != other_member_max_oc:
+                                            continue
+                                        
+                                        # Check if member can join this OC
+                                        if can_member_join_oc(other_member, check_oc):
+                                            check_oc_id = check_oc['oc_id']
+                                            check_total_slots = check_oc.get('total_slots', 0)
+                                            check_filled_slots = check_oc.get('filled_slots', 0)
+                                            check_assigned_count = len(assignments.get(check_oc_id, []))
+                                            check_available_slots = check_total_slots - check_filled_slots - check_assigned_count
+                                            
+                                            if check_available_slots > 0:
+                                                has_available_oc_at_max = True
+                                                logger.debug(f"Not grouping {other_member_name} into Level {oc_difficulty} OC: Level {other_member_max_oc} OC '{check_oc.get('oc_name')}' ({check_oc_id}) is available with {check_available_slots} slots")
+                                                break
+                                    
+                                    if has_available_oc_at_max:
+                                        # Don't group - they should be assigned to their max level OC instead
+                                        continue
                             
                             # Check if there's still space
                             if len(members_to_assign) < available_slots:
@@ -1363,13 +1399,74 @@ class OCEmailGenerator:
         # BUT only if there are NO available OCs at their max recommended level
         unassigned_members = [m for m in members_sorted if m['member_name'] not in assigned_members]
         
+        # First, handle members with no OC history who weren't assigned to Level 1 OCs
+        # This is a fallback in case they were skipped in the main loop
         for member in unassigned_members:
             member_name = member['member_name']
             member_id = member['member_id']
             has_oc_history = member_id in members_with_oc_history
             
             if not has_oc_history:
-                continue  # Already handled in Level 1 logic
+                # Try to assign to Level 1 OCs
+                for oc in ocs:
+                    if is_excluded_oc(oc):
+                        continue
+                    
+                    difficulty = oc.get('difficulty')
+                    if difficulty is None:
+                        continue
+                    
+                    try:
+                        difficulty = int(difficulty)
+                    except (ValueError, TypeError):
+                        continue
+                    
+                    if difficulty != 1:
+                        continue
+                    
+                    oc_id = oc['oc_id']
+                    
+                    # Check if OC has space
+                    if oc_id not in assignments:
+                        assignments[oc_id] = []
+                    
+                    # Check available slots
+                    total_slots = oc.get('total_slots', 0)
+                    filled_slots = oc.get('filled_slots', 0)
+                    assigned_count = len(assignments[oc_id])
+                    available_slots = total_slots - filled_slots - assigned_count
+                    
+                    if available_slots > 0:
+                        assignments[oc_id].append(member_name)
+                        assigned_members.add(member_name)
+                        logger.info(f"Fallback: Assigned new member {member_name} to Level 1 OC {oc_id} ({oc.get('oc_name')})")
+                        if member_name not in assignment_reasons:
+                            assignment_reasons[member_name] = {
+                                'assigned_oc_id': None,
+                                'assigned_oc_name': None,
+                                'assigned_level': None,
+                                'max_recommended_oc': None,
+                                'reason': None,
+                                'grouped_with': [],
+                                'considered_ocs': [],
+                                'warnings': []
+                            }
+                        assignment_reasons[member_name]['assigned_oc_id'] = oc_id
+                        assignment_reasons[member_name]['assigned_oc_name'] = oc.get('oc_name', 'Unknown')
+                        assignment_reasons[member_name]['assigned_level'] = 1
+                        assignment_reasons[member_name]['reason'] = 'new_member'
+                        break
+        
+        # Now handle members with OC history who couldn't be assigned
+        unassigned_members = [m for m in members_sorted if m['member_name'] not in assigned_members]
+        
+        for member in unassigned_members:
+            member_name = member['member_name']
+            member_id = member['member_id']
+            has_oc_history = member_id in members_with_oc_history
+            
+            if not has_oc_history:
+                continue  # Already handled above
             
             member_perf = member_performance.get(member_name, {})
             member_max_oc = member_perf.get('max_recommended_oc')
