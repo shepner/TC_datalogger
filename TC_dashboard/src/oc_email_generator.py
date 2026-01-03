@@ -1043,9 +1043,14 @@ class OCEmailGenerator:
                     members_to_assign = [member_name]
                     
                     # Check if this is an empty OC (filled_slots == 0) - if so, try to group other members
+                    # Only group members who are at or near their max recommended level for this OC
                     if filled_slots == 0:
+                        # Get current member's max recommended OC to use as reference
+                        current_member_perf = member_performance.get(member_name, {})
+                        current_member_max_oc = current_member_perf.get('max_recommended_oc')
+                        
                         # Find ALL other unassigned members who can join this same OC
-                        # Check all members, not just those after current member in sorted list
+                        # Only group if they're at or near their max recommended level (within 1 level)
                         for other_member in members_sorted:
                             other_member_name = other_member['member_name']
                             if other_member_name in assigned_members:
@@ -1054,12 +1059,28 @@ class OCEmailGenerator:
                                 continue
                             
                             # Check if other member can join this OC
-                            if can_member_join_oc(other_member, oc):
-                                # Check if there's still space
-                                if len(members_to_assign) < available_slots:
-                                    members_to_assign.append(other_member_name)
-                                else:
-                                    break  # OC is full
+                            if not can_member_join_oc(other_member, oc):
+                                continue
+                            
+                            # Only group if the OC is at or near their max recommended level
+                            # This prevents grouping high-level members into low-level OCs
+                            other_member_perf = member_performance.get(other_member_name, {})
+                            other_member_max_oc = other_member_perf.get('max_recommended_oc')
+                            
+                            # If other member has a max recommended OC, only group if:
+                            # 1. This OC is at their max level, OR
+                            # 2. This OC is within 1 level of their max (to allow some flexibility)
+                            if other_member_max_oc is not None:
+                                if oc_difficulty < (other_member_max_oc - 1):
+                                    # OC is more than 1 level below their max - don't group
+                                    logger.debug(f"Not grouping {other_member_name} into Level {oc_difficulty} OC: their max is {other_member_max_oc}")
+                                    continue
+                            
+                            # Check if there's still space
+                            if len(members_to_assign) < available_slots:
+                                members_to_assign.append(other_member_name)
+                            else:
+                                break  # OC is full
                     
                     # Assign all members in the group to this OC
                     for m_name in members_to_assign:
