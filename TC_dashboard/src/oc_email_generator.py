@@ -1407,7 +1407,10 @@ class OCEmailGenerator:
             has_oc_history = member_id in members_with_oc_history
             
             if not has_oc_history:
-                # Try to assign to Level 1 OCs
+                logger.info(f"Fallback: Processing member {member_name} (no OC history) for Level 1 assignment")
+                # Try to assign to Level 1 OCs - check ALL OCs, not just filtered lists
+                level_1_ocs_found = 0
+                level_1_ocs_available = 0
                 for oc in ocs:
                     if is_excluded_oc(oc):
                         continue
@@ -1424,6 +1427,7 @@ class OCEmailGenerator:
                     if difficulty != 1:
                         continue
                     
+                    level_1_ocs_found += 1
                     oc_id = oc['oc_id']
                     
                     # Check if OC has space
@@ -1437,9 +1441,10 @@ class OCEmailGenerator:
                     available_slots = total_slots - filled_slots - assigned_count
                     
                     if available_slots > 0:
+                        level_1_ocs_available += 1
                         assignments[oc_id].append(member_name)
                         assigned_members.add(member_name)
-                        logger.info(f"Fallback: Assigned new member {member_name} to Level 1 OC {oc_id} ({oc.get('oc_name')})")
+                        logger.info(f"Fallback: Assigned new member {member_name} to Level 1 OC {oc_id} ({oc.get('oc_name')}) - {available_slots} slots available")
                         if member_name not in assignment_reasons:
                             assignment_reasons[member_name] = {
                                 'assigned_oc_id': None,
@@ -1456,6 +1461,22 @@ class OCEmailGenerator:
                         assignment_reasons[member_name]['assigned_level'] = 1
                         assignment_reasons[member_name]['reason'] = 'new_member'
                         break
+                    else:
+                        logger.debug(f"Fallback: Level 1 OC {oc_id} ({oc.get('oc_name')}) has no available slots (total: {total_slots}, filled: {filled_slots}, assigned: {assigned_count})")
+                
+                if member_name not in assigned_members:
+                    logger.warning(f"Fallback: Could not assign {member_name} to Level 1 OC - found {level_1_ocs_found} Level 1 OCs, {level_1_ocs_available} with available slots")
+                    if member_name not in assignment_reasons:
+                        assignment_reasons[member_name] = {
+                            'assigned_oc_id': None,
+                            'assigned_oc_name': None,
+                            'assigned_level': None,
+                            'max_recommended_oc': None,
+                            'reason': 'unassigned',
+                            'grouped_with': [],
+                            'considered_ocs': [],
+                            'warnings': [f'No Level 1 OCs available (found {level_1_ocs_found} Level 1 OCs, {level_1_ocs_available} with available slots)']
+                        }
         
         # Now handle members with OC history who couldn't be assigned
         unassigned_members = [m for m in members_sorted if m['member_name'] not in assigned_members]
