@@ -758,23 +758,51 @@
                 } else {
                     html += `<div style="font-size: 11px; color: #856404; margin-bottom: 4px;">`;
                     html += `Not assigned | Max Recommended: <strong>Level ${maxOC}</strong>`;
+                    html += ` | Reason: <strong>${reason.reason || 'unknown'}</strong>`;
                     html += `</div>`;
                     
+                    // Show detailed information about why they weren't assigned
+                    if (reason.reason === 'unassigned' || !reason.reason) {
+                        html += `<div style="font-size: 10px; color: #666; margin-top: 4px; padding: 4px; background-color: rgba(255,255,255,0.5); border-radius: 2px;">`;
+                        html += `<strong>Assignment Details:</strong><ul style="margin: 2px 0; padding-left: 20px;">`;
+                        if (maxOC === 'N/A' || maxOC === null || maxOC === undefined) {
+                            html += `<li>No OC history - should be assigned to Level 1 OC</li>`;
+                        } else {
+                            html += `<li>Has OC history with max recommended Level ${maxOC}</li>`;
+                        }
+                        if (reason.considered_ocs && reason.considered_ocs.length > 0) {
+                            html += `<li>Considered ${reason.considered_ocs.length} OC(s) but none were suitable</li>`;
+                        } else {
+                            html += `<li>No suitable OCs found at recommended level</li>`;
+                        }
+                        html += `</ul></div>`;
+                    }
+                    
                     if (reason.warnings && reason.warnings.length > 0) {
-                        html += `<div style="font-size: 11px; color: #856404; margin-top: 4px;">`;
+                        html += `<div style="font-size: 11px; color: #856404; margin-top: 4px; padding: 4px; background-color: #fff3cd; border-left: 3px solid #ffc107;">`;
+                        html += `<strong>⚠ Warnings:</strong><ul style="margin: 4px 0; padding-left: 20px;">`;
                         reason.warnings.forEach(warning => {
-                            html += `<div>⚠ ${warning}</div>`;
+                            html += `<li>${warning}</li>`;
                         });
-                        html += `</div>`;
+                        html += `</ul></div>`;
                     }
                 }
                 
-                // Show considered OCs if expanded
-                if (assignmentReasonsExpanded && reason.considered_ocs && reason.considered_ocs.length > 0) {
+                // Show considered OCs if expanded or if unassigned
+                if ((assignmentReasonsExpanded || !assigned) && reason.considered_ocs && reason.considered_ocs.length > 0) {
                     html += `<div style="margin-top: 8px; padding: 6px; background-color: rgba(255,255,255,0.7); border-radius: 3px; font-size: 11px;">`;
                     html += `<strong>Considered OCs (${reason.considered_ocs.length}):</strong><ul style="margin: 4px 0; padding-left: 20px; max-height: 200px; overflow-y: auto;">`;
                     reason.considered_ocs.forEach(oc => {
-                        html += `<li>Level ${oc.level} - ${oc.oc_name} (ID: ${oc.oc_id}): <span style="color: #d32f2f;">${oc.reason_skipped}</span></li>`;
+                        html += `<li style="margin-bottom: 2px;">`;
+                        html += `<strong>Level ${oc.level} - ${oc.oc_name}</strong> (ID: ${oc.oc_id})`;
+                        html += `<br><span style="color: #d32f2f; font-size: 10px; margin-left: 20px;">❌ ${oc.reason_skipped}</span>`;
+                        if (oc.total_slots !== undefined || oc.filled_slots !== undefined || oc.available_slots !== undefined) {
+                            html += `<br><span style="color: #666; font-size: 10px; margin-left: 20px;">`;
+                            if (oc.total_slots !== undefined) html += `Slots: ${oc.filled_slots || 0}/${oc.total_slots || 0}`;
+                            if (oc.available_slots !== undefined) html += ` (${oc.available_slots} available)`;
+                            html += `</span>`;
+                        }
+                        html += `</li>`;
                     });
                     html += `</ul></div>`;
                 }
