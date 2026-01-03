@@ -980,6 +980,18 @@ class OCEmailGenerator:
                 oc_id = oc.get('oc_id')
                 oc_name = oc.get('oc_name', 'Unknown')
                 
+                # CRITICAL: Check max_recommended_oc FIRST, before doing any rate checks
+                # This prevents wasting time checking OCs that are too high for the member
+                if member_max_oc is not None and oc_difficulty > member_max_oc:
+                    assignment_reasons[member_name]['considered_ocs'].append({
+                        'oc_id': oc_id,
+                        'oc_name': oc_name,
+                        'level': oc_difficulty,
+                        'reason_skipped': f'Exceeds max recommended OC {member_max_oc}'
+                    })
+                    logger.debug(f"Skipping {member_name} for Level {oc_difficulty} OC {oc_name}: exceeds max_recommended_oc {member_max_oc}")
+                    continue
+                
                 # Members with no OC history can only join Level 1 OCs
                 if not has_oc_history:
                     if oc_difficulty != 1:
@@ -1081,20 +1093,6 @@ class OCEmailGenerator:
                                 'reason_skipped': f'Level rate {rate_num:.1f}% not in 80-90% range'
                             })
                             continue
-                    
-                    # Check if OC difficulty is <= max_recommended_oc
-                    if member_max_oc is not None and oc_difficulty > member_max_oc:
-                        if member_name in ["Adilon_Scorpian", "Hiyori", "DubZzZ"]:
-                            logger.info(f"Skipping {member_name} for Level {oc_difficulty} OC {oc_name}: exceeds max_recommended_oc {member_max_oc}")
-                        else:
-                            logger.debug(f"Skipping {member_name} for Level {oc_difficulty} OC {oc_name}: exceeds max_recommended_oc {member_max_oc}")
-                        assignment_reasons[member_name]['considered_ocs'].append({
-                            'oc_id': oc_id,
-                            'oc_name': oc_name,
-                            'level': oc_difficulty,
-                            'reason_skipped': f'Exceeds max recommended OC {member_max_oc}'
-                        })
-                        continue
                 
                 # Check if OC has space
                 if oc_id not in assignments:
