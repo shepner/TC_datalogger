@@ -729,8 +729,9 @@ class OCEmailGenerator:
         # Sort OCs by priority:
         # 1. Difficulty (descending) - higher levels first
         # 2. Partially filled OCs first (filled_slots > 0) - prioritize OCs that already have members
-        # 3. Members needed to start (ascending) - OCs that need fewer members first
-        # This ensures we fill partially filled OCs before creating new ones
+        # 3. For empty OCs at same level: prefer those with more time until expiration (to group unused members)
+        # 4. Members needed to start (ascending) - OCs that need fewer members first
+        # This ensures we fill partially filled OCs before creating new ones, and group unused members together
         def sort_key(oc):
             difficulty = oc.get('difficulty')
             if difficulty is None:
@@ -750,9 +751,32 @@ class OCEmailGenerator:
             # Use negative of filled_slots so partially filled (positive) comes before empty (0)
             is_partially_filled = 1 if filled_slots > 0 else 0
             
-            # Return tuple: (negative difficulty for descending, negative is_partially_filled for descending, members_needed for ascending)
-            # This sorts by: difficulty descending, then partially filled first, then members_needed ascending
-            return (-difficulty, -is_partially_filled, members_needed)
+            # For empty OCs, calculate hours until expiration (prefer OCs with more time)
+            # This helps group unused members into the same OC with more time remaining
+            hours_until_expiry = 0
+            if filled_slots == 0:  # Only consider expiration for empty OCs
+                expired_at = oc.get('expired_at')
+                if expired_at:
+                    try:
+                        if isinstance(expired_at, str):
+                            if expired_at.endswith('Z'):
+                                expired_at = datetime.fromisoformat(expired_at.replace('Z', '+00:00'))
+                            else:
+                                expired_at = datetime.fromisoformat(expired_at)
+                        elif not isinstance(expired_at, datetime):
+                            expired_at = datetime.fromisoformat(str(expired_at))
+                        
+                        if expired_at.tzinfo is None:
+                            expired_at = expired_at.replace(tzinfo=timezone.utc)
+                        
+                        hours_until_expiry = (expired_at - now).total_seconds() / 3600
+                    except Exception:
+                        hours_until_expiry = 0
+            
+            # Return tuple: (negative difficulty for descending, negative is_partially_filled for descending, 
+            #                negative hours_until_expiry for descending (only matters for empty OCs), members_needed for ascending)
+            # This sorts by: difficulty descending, then partially filled first, then for empty OCs: more time first, then members_needed ascending
+            return (-difficulty, -is_partially_filled, -hours_until_expiry if filled_slots == 0 else 0, members_needed)
         
         ocs_for_active.sort(key=sort_key)
         ocs_for_inactive.sort(key=sort_key)
