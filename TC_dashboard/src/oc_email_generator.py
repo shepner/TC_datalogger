@@ -947,17 +947,46 @@ class OCEmailGenerator:
                     'warnings': []
                 }
             
-            # Try to assign member to highest level OC they can do (OCs are already sorted by difficulty descending)
+            # Filter OC list to only include OCs at or below member's max recommended level
+            # This prevents checking OCs that are too high for the member (more efficient)
+            # For members with no OC history, only check Level 1 OCs
+            filtered_oc_list = []
+            for oc in oc_list:
+                oc_difficulty = oc.get('difficulty')
+                if oc_difficulty is None:
+                    continue
+                try:
+                    oc_difficulty = int(oc_difficulty)
+                except (ValueError, TypeError):
+                    continue
+                
+                # Members with no OC history can only join Level 1 OCs
+                if not has_oc_history:
+                    if oc_difficulty == 1:
+                        filtered_oc_list.append(oc)
+                else:
+                    # Members with OC history: only check OCs at or below their max recommended level
+                    # Also allow Level 1 as a fallback (max - 1 level rule)
+                    if member_max_oc is not None:
+                        # Check OCs at max level and within 1 level below (for fallback)
+                        min_allowed_level = max(1, member_max_oc - 1)
+                        if oc_difficulty <= member_max_oc and oc_difficulty >= min_allowed_level:
+                            filtered_oc_list.append(oc)
+                    else:
+                        # If no max_recommended_oc, check all OCs (shouldn't happen, but be safe)
+                        filtered_oc_list.append(oc)
+            
+            # Try to assign member to highest level OC they can do (filtered list is already sorted by difficulty descending)
             # This ensures members get assigned to their max recommended level, not just the first available
             if member_name in ["Adilon_Scorpian", "Hiyori"]:
-                logger.info(f"DEBUG {member_name}: Starting OC loop, oc_list has {len(oc_list)} OCs")
+                logger.info(f"DEBUG {member_name}: Starting OC loop, filtered_oc_list has {len(filtered_oc_list)} OCs (from {len(oc_list)} total)")
                 level_counts = {}
-                for oc in oc_list:
+                for oc in filtered_oc_list:
                     diff = oc.get('difficulty')
                     if diff:
                         level_counts[diff] = level_counts.get(diff, 0) + 1
-                logger.info(f"DEBUG {member_name}: OC list breakdown by level: {level_counts}")
-            for oc in oc_list:
+                logger.info(f"DEBUG {member_name}: Filtered OC list breakdown by level: {level_counts}")
+            for oc in filtered_oc_list:
                 # Skip excluded OCs
                 if is_excluded_oc(oc):
                     assignment_reasons[member_name]['considered_ocs'].append({
@@ -980,28 +1009,8 @@ class OCEmailGenerator:
                 oc_id = oc.get('oc_id')
                 oc_name = oc.get('oc_name', 'Unknown')
                 
-                # CRITICAL: Check max_recommended_oc FIRST, before doing any rate checks
-                # This prevents wasting time checking OCs that are too high for the member
-                if member_max_oc is not None and oc_difficulty > member_max_oc:
-                    assignment_reasons[member_name]['considered_ocs'].append({
-                        'oc_id': oc_id,
-                        'oc_name': oc_name,
-                        'level': oc_difficulty,
-                        'reason_skipped': f'Exceeds max recommended OC {member_max_oc}'
-                    })
-                    logger.debug(f"Skipping {member_name} for Level {oc_difficulty} OC {oc_name}: exceeds max_recommended_oc {member_max_oc}")
-                    continue
-                
-                # Members with no OC history can only join Level 1 OCs
-                if not has_oc_history:
-                    if oc_difficulty != 1:
-                        assignment_reasons[member_name]['considered_ocs'].append({
-                            'oc_id': oc_id,
-                            'oc_name': oc_name,
-                            'level': oc_difficulty,
-                            'reason_skipped': f'No OC history - can only join Level 1 (this is Level {oc_difficulty})'
-                        })
-                        continue
+                # Note: max_recommended_oc and OC history checks are already done in the filter above
+                # No need to check again here - all OCs in filtered_oc_list are already valid
                 else:
                     # Check if member has valid checkpoint_pass_rate for this SPECIFIC OC
                     # Member must have a position with checkpoint_pass_rate in 80-90 range for this specific OC
