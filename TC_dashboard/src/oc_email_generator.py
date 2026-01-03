@@ -870,8 +870,13 @@ class OCEmailGenerator:
                                 rate_num = rate_num * 100
                             if best_oc_rate is None or rate_num > best_oc_rate:
                                 best_oc_rate = rate_num
-                            if 80 <= rate_num <= 90:
-                                has_valid_oc_rate = True
+                            # Level 1: 0-90%, Level 2+: 80-90%
+                            if oc_difficulty == 1:
+                                if 0 <= rate_num <= 90:
+                                    has_valid_oc_rate = True
+                            else:
+                                if 80 <= rate_num <= 90:
+                                    has_valid_oc_rate = True
                         except (ValueError, TypeError):
                             continue
                 
@@ -888,8 +893,13 @@ class OCEmailGenerator:
                         rate_num = float(level_rate)
                         if 0 <= rate_num <= 1:
                             rate_num = rate_num * 100
-                        if not (80 <= rate_num <= 90):
-                            return False
+                        # Level 1: 0-90%, Level 2+: 80-90%
+                        if oc_difficulty == 1:
+                            if not (0 <= rate_num <= 90):
+                                return False
+                        else:
+                            if not (80 <= rate_num <= 90):
+                                return False
                     except (ValueError, TypeError):
                         return False
                 
@@ -1013,11 +1023,11 @@ class OCEmailGenerator:
                 # No need to check again here - all OCs in filtered_oc_list are already valid
                 
                 # Check if member has valid checkpoint_pass_rate for this SPECIFIC OC
-                # Member must have a position with checkpoint_pass_rate in 80-90 range for this specific OC
+                # Level 1 OCs: 0-90%, Level 2+ OCs: 80-90%
                 oc_name = oc.get('oc_name', '').strip()
                 member_oc_specific_rates = member_oc_rates.get(member_name, {})
                 
-                # Check if member has any position for this specific OC with rate in 80-90
+                # Check if member has any position for this specific OC with rate in valid range
                 has_valid_oc_rate = False
                 has_oc_specific_data = False
                 best_oc_rate = None
@@ -1039,8 +1049,13 @@ class OCEmailGenerator:
                             if best_oc_rate is None or rate_num > best_oc_rate:
                                 best_oc_rate = rate_num
                             
-                            if 80 <= rate_num <= 90:
-                                has_valid_oc_rate = True
+                            # Level 1: 0-90%, Level 2+: 80-90%
+                            if oc_difficulty == 1:
+                                if 0 <= rate_num <= 90:
+                                    has_valid_oc_rate = True
+                            else:
+                                if 80 <= rate_num <= 90:
+                                    has_valid_oc_rate = True
                         except (ValueError, TypeError):
                             continue
                 
@@ -1054,21 +1069,36 @@ class OCEmailGenerator:
                     logger.info(f"DEBUG {member_name}/{oc_name}: member_max_oc = {member_max_oc}, oc_difficulty = {oc_difficulty}, level_rate = {member_level_rates.get(oc_difficulty)}")
                 
                 # If we have OC-specific data and member can't meet requirements, skip this OC
+                # Level 1 OCs: 0-90%, Level 2+ OCs: 80-90%
                 if has_oc_specific_data and not has_valid_oc_rate:
-                    logger.info(f"Skipping {member_name} for Level {oc_difficulty} OC '{oc_name}': has OC-specific data with best rate {best_oc_rate} (not in 80-90 range)")
-                    assignment_reasons[member_name]['considered_ocs'].append({
-                        'oc_id': oc_id,
-                        'oc_name': oc_name,
-                        'level': oc_difficulty,
-                        'reason_skipped': f'OC-specific rate {best_oc_rate:.1f}% not in 80-90% range'
-                    })
-                    continue
+                    if oc_difficulty == 1:
+                        # For Level 1, check if rate is in 0-90% range
+                        if best_oc_rate is not None and 0 <= best_oc_rate <= 90:
+                            has_valid_oc_rate = True
+                        else:
+                            logger.info(f"Skipping {member_name} for Level {oc_difficulty} OC '{oc_name}': has OC-specific data with best rate {best_oc_rate} (not in 0-90 range)")
+                            assignment_reasons[member_name]['considered_ocs'].append({
+                                'oc_id': oc_id,
+                                'oc_name': oc_name,
+                                'level': oc_difficulty,
+                                'reason_skipped': f'OC-specific rate {best_oc_rate:.1f}% not in 0-90% range'
+                            })
+                            continue
+                    else:
+                        logger.info(f"Skipping {member_name} for Level {oc_difficulty} OC '{oc_name}': has OC-specific data with best rate {best_oc_rate} (not in 80-90 range)")
+                        assignment_reasons[member_name]['considered_ocs'].append({
+                            'oc_id': oc_id,
+                            'oc_name': oc_name,
+                            'level': oc_difficulty,
+                            'reason_skipped': f'OC-specific rate {best_oc_rate:.1f}% not in 80-90% range'
+                        })
+                        continue
                 
                 # If no OC-specific data, fallback to level-based check
                 if not has_oc_specific_data:
                     level_rate = member_level_rates.get(oc_difficulty)
                     if level_rate is None:
-                        logger.debug(f"Skipping {member_name} for Level {oc_difficulty} OC {oc_name}: no valid rate in 80-90 range for this level")
+                        logger.debug(f"Skipping {member_name} for Level {oc_difficulty} OC {oc_name}: no level-based rate data for this level")
                         assignment_reasons[member_name]['considered_ocs'].append({
                             'oc_id': oc_id,
                             'oc_name': oc_name,
@@ -1092,16 +1122,29 @@ class OCEmailGenerator:
                         })
                         continue
                     
-                    # STRICT CHECK: Rate must be in valid range (80-90)
-                    if not (80 <= rate_num <= 90):
-                        logger.debug(f"Skipping {member_name} for Level {oc_difficulty} OC {oc_name}: rate {rate_num} not in 80-90 range")
-                        assignment_reasons[member_name]['considered_ocs'].append({
-                            'oc_id': oc_id,
-                            'oc_name': oc_name,
-                            'level': oc_difficulty,
-                            'reason_skipped': f'Level rate {rate_num:.1f}% not in 80-90% range'
-                        })
-                        continue
+                    # STRICT CHECK: Rate must be in valid range
+                    # Level 1 OCs: 0-90% (per guidelines: "Only with Level 1 OCs, participants may have a 0 to 90 success rate")
+                    # Level 2+ OCs: 80-90%
+                    if oc_difficulty == 1:
+                        if not (0 <= rate_num <= 90):
+                            logger.debug(f"Skipping {member_name} for Level {oc_difficulty} OC {oc_name}: rate {rate_num} not in 0-90 range")
+                            assignment_reasons[member_name]['considered_ocs'].append({
+                                'oc_id': oc_id,
+                                'oc_name': oc_name,
+                                'level': oc_difficulty,
+                                'reason_skipped': f'Level rate {rate_num:.1f}% not in 0-90% range'
+                            })
+                            continue
+                    else:
+                        if not (80 <= rate_num <= 90):
+                            logger.debug(f"Skipping {member_name} for Level {oc_difficulty} OC {oc_name}: rate {rate_num} not in 80-90 range")
+                            assignment_reasons[member_name]['considered_ocs'].append({
+                                'oc_id': oc_id,
+                                'oc_name': oc_name,
+                                'level': oc_difficulty,
+                                'reason_skipped': f'Level rate {rate_num:.1f}% not in 80-90% range'
+                            })
+                            continue
                 
                 # Check if OC has space
                 if oc_id not in assignments:
@@ -1312,15 +1355,29 @@ class OCEmailGenerator:
                                 if best_oc_rate is None or rate_num > best_oc_rate:
                                     best_oc_rate = rate_num
                                 
-                                if 80 <= rate_num <= 90:
-                                    has_valid_oc_rate = True
+                                # Level 1: 0-90%, Level 2+: 80-90%
+                                if oc_difficulty == 1:
+                                    if 0 <= rate_num <= 90:
+                                        has_valid_oc_rate = True
+                                else:
+                                    if 80 <= rate_num <= 90:
+                                        has_valid_oc_rate = True
                             except (ValueError, TypeError):
                                 continue
                     
                     # If we have OC-specific data and member can't meet requirements, skip this OC
+                    # Level 1 OCs: 0-90%, Level 2+ OCs: 80-90%
                     if has_oc_specific_data and not has_valid_oc_rate:
-                        logger.info(f"Fallback: Skipping {member_name} for Level {oc_difficulty} OC '{oc_name}': has OC-specific data with best rate {best_oc_rate} (not in 80-90 range)")
-                        continue
+                        if oc_difficulty == 1:
+                            # For Level 1, check if rate is in 0-90% range
+                            if best_oc_rate is not None and 0 <= best_oc_rate <= 90:
+                                has_valid_oc_rate = True
+                            else:
+                                logger.info(f"Fallback: Skipping {member_name} for Level {oc_difficulty} OC '{oc_name}': has OC-specific data with best rate {best_oc_rate} (not in 0-90 range)")
+                                continue
+                        else:
+                            logger.info(f"Fallback: Skipping {member_name} for Level {oc_difficulty} OC '{oc_name}': has OC-specific data with best rate {best_oc_rate} (not in 80-90 range)")
+                            continue
                     
                     # If no OC-specific data, fallback to level-based check
                     if not has_oc_specific_data:
@@ -1336,9 +1393,14 @@ class OCEmailGenerator:
                         except (ValueError, TypeError):
                             continue
                         
-                        # STRICT CHECK: Rate must be in valid range (80-90)
-                        if not (80 <= rate_num <= 90):
-                            continue
+                        # STRICT CHECK: Rate must be in valid range
+                        # Level 1 OCs: 0-90%, Level 2+ OCs: 80-90%
+                        if oc_difficulty == 1:
+                            if not (0 <= rate_num <= 90):
+                                continue
+                        else:
+                            if not (80 <= rate_num <= 90):
+                                continue
                     
                     oc_id = oc['oc_id']
                     
