@@ -806,6 +806,19 @@ class OCEmailGenerator:
         # Track which members have been assigned
         assigned_members = set()
         
+        # Track assignment reasoning for reporting
+        # Structure: member_name -> {
+        #   'assigned_oc_id': str,
+        #   'assigned_oc_name': str,
+        #   'assigned_level': int,
+        #   'max_recommended_oc': int,
+        #   'reason': str,  # 'primary', 'grouped', 'fallback', 'lower_level', 'new_member'
+        #   'grouped_with': [str],  # other members grouped together
+        #   'considered_ocs': [{'oc_id': str, 'oc_name': str, 'level': int, 'reason_skipped': str}],
+        #   'warnings': [str]
+        # }
+        assignment_reasons = {}  # member_name -> assignment details
+        
         # Filter out excluded OC names
         excluded_oc_names_lower = [name.lower() for name in excluded_oc_names]
         def is_excluded_oc(oc):
@@ -921,6 +934,19 @@ class OCEmailGenerator:
             if member_name in ["Adilon_Scorpian", "Hiyori"]:
                 logger.info(f"DEBUG {member_name}: Starting assignment, member_max_oc = {member_max_oc}, level_rates = {member_level_rates}")
             
+            # Initialize assignment tracking for this member
+            if member_name not in assignment_reasons:
+                assignment_reasons[member_name] = {
+                    'assigned_oc_id': None,
+                    'assigned_oc_name': None,
+                    'assigned_level': None,
+                    'max_recommended_oc': member_max_oc,
+                    'reason': None,
+                    'grouped_with': [],
+                    'considered_ocs': [],
+                    'warnings': []
+                }
+            
             # Try to assign member to highest level OC they can do (OCs are already sorted by difficulty descending)
             # This ensures members get assigned to their max recommended level, not just the first available
             if member_name in ["Adilon_Scorpian", "Hiyori"]:
@@ -934,6 +960,12 @@ class OCEmailGenerator:
             for oc in oc_list:
                 # Skip excluded OCs
                 if is_excluded_oc(oc):
+                    assignment_reasons[member_name]['considered_ocs'].append({
+                        'oc_id': oc.get('oc_id'),
+                        'oc_name': oc.get('oc_name', 'Unknown'),
+                        'level': oc.get('difficulty'),
+                        'reason_skipped': 'Excluded OC (No Reserve or similar)'
+                    })
                     continue
                 
                 oc_difficulty = oc.get('difficulty')
@@ -945,9 +977,18 @@ class OCEmailGenerator:
                 except (ValueError, TypeError):
                     continue
                 
+                oc_id = oc.get('oc_id')
+                oc_name = oc.get('oc_name', 'Unknown')
+                
                 # Members with no OC history can only join Level 1 OCs
                 if not has_oc_history:
                     if oc_difficulty != 1:
+                        assignment_reasons[member_name]['considered_ocs'].append({
+                            'oc_id': oc_id,
+                            'oc_name': oc_name,
+                            'level': oc_difficulty,
+                            'reason_skipped': f'No OC history - can only join Level 1 (this is Level {oc_difficulty})'
+                        })
                         continue
                 else:
                     # Check if member has valid checkpoint_pass_rate for this SPECIFIC OC
@@ -994,6 +1035,12 @@ class OCEmailGenerator:
                     # If we have OC-specific data and member can't meet requirements, skip this OC
                     if has_oc_specific_data and not has_valid_oc_rate:
                         logger.info(f"Skipping {member_name} for Level {oc_difficulty} OC '{oc_name}': has OC-specific data with best rate {best_oc_rate} (not in 80-90 range)")
+                        assignment_reasons[member_name]['considered_ocs'].append({
+                            'oc_id': oc_id,
+                            'oc_name': oc_name,
+                            'level': oc_difficulty,
+                            'reason_skipped': f'OC-specific rate {best_oc_rate:.1f}% not in 80-90% range'
+                        })
                         continue
                     
                     # If no OC-specific data, fallback to level-based check
@@ -1001,6 +1048,12 @@ class OCEmailGenerator:
                         level_rate = member_level_rates.get(oc_difficulty)
                         if level_rate is None:
                             logger.debug(f"Skipping {member_name} for Level {oc_difficulty} OC {oc_name}: no valid rate in 80-90 range for this level")
+                            assignment_reasons[member_name]['considered_ocs'].append({
+                                'oc_id': oc_id,
+                                'oc_name': oc_name,
+                                'level': oc_difficulty,
+                                'reason_skipped': 'No level-based rate data for this level'
+                            })
                             continue
                         
                         # Ensure rate is in percentage format
@@ -1010,11 +1063,23 @@ class OCEmailGenerator:
                                 rate_num = rate_num * 100
                         except (ValueError, TypeError):
                             logger.debug(f"Skipping {member_name} for Level {oc_difficulty} OC {oc_name}: invalid rate format")
+                            assignment_reasons[member_name]['considered_ocs'].append({
+                                'oc_id': oc_id,
+                                'oc_name': oc_name,
+                                'level': oc_difficulty,
+                                'reason_skipped': f'Invalid rate format: {level_rate}'
+                            })
                             continue
                         
                         # STRICT CHECK: Rate must be in valid range (80-90)
                         if not (80 <= rate_num <= 90):
                             logger.debug(f"Skipping {member_name} for Level {oc_difficulty} OC {oc_name}: rate {rate_num} not in 80-90 range")
+                            assignment_reasons[member_name]['considered_ocs'].append({
+                                'oc_id': oc_id,
+                                'oc_name': oc_name,
+                                'level': oc_difficulty,
+                                'reason_skipped': f'Level rate {rate_num:.1f}% not in 80-90% range'
+                            })
                             continue
                     
                     # Check if OC difficulty is <= max_recommended_oc
@@ -1023,9 +1088,13 @@ class OCEmailGenerator:
                             logger.info(f"Skipping {member_name} for Level {oc_difficulty} OC {oc_name}: exceeds max_recommended_oc {member_max_oc}")
                         else:
                             logger.debug(f"Skipping {member_name} for Level {oc_difficulty} OC {oc_name}: exceeds max_recommended_oc {member_max_oc}")
+                        assignment_reasons[member_name]['considered_ocs'].append({
+                            'oc_id': oc_id,
+                            'oc_name': oc_name,
+                            'level': oc_difficulty,
+                            'reason_skipped': f'Exceeds max recommended OC {member_max_oc}'
+                        })
                         continue
-                
-                oc_id = oc['oc_id']
                 
                 # Check if OC has space
                 if oc_id not in assignments:
@@ -1041,6 +1110,7 @@ class OCEmailGenerator:
                     # Found a suitable OC! Now try to group other unassigned members who can join this same OC
                     # This ensures unused members are grouped together
                     members_to_assign = [member_name]
+                    assignment_reason = 'primary'
                     
                     # Check if this is an empty OC (filled_slots == 0) - if so, try to group other members
                     # Only group members who are at or near their max recommended level for this OC
@@ -1084,11 +1154,35 @@ class OCEmailGenerator:
                             else:
                                 break  # OC is full
                     
+                    # Update assignment reason if grouped
+                    if len(members_to_assign) > 1:
+                        assignment_reason = 'grouped'
+                    
                     # Assign all members in the group to this OC
-                    for m_name in members_to_assign:
+                    for idx, m_name in enumerate(members_to_assign):
                         assignments[oc_id].append(m_name)
                         assigned_members.add(m_name)
                         logger.info(f"Assigned {m_name} to OC {oc_id} ({oc.get('oc_name')}, Level {oc_difficulty})")
+                        
+                        # Record assignment reasoning
+                        if m_name not in assignment_reasons:
+                            assignment_reasons[m_name] = {
+                                'assigned_oc_id': None,
+                                'assigned_oc_name': None,
+                                'assigned_level': None,
+                                'max_recommended_oc': member_performance.get(m_name, {}).get('max_recommended_oc'),
+                                'reason': None,
+                                'grouped_with': [],
+                                'considered_ocs': [],
+                                'warnings': []
+                            }
+                        
+                        assignment_reasons[m_name]['assigned_oc_id'] = oc_id
+                        assignment_reasons[m_name]['assigned_oc_name'] = oc_name
+                        assignment_reasons[m_name]['assigned_level'] = oc_difficulty
+                        assignment_reasons[m_name]['reason'] = assignment_reason if idx == 0 else 'grouped'
+                        if len(members_to_assign) > 1:
+                            assignment_reasons[m_name]['grouped_with'] = [m for m in members_to_assign if m != m_name]
                     
                     if len(members_to_assign) > 1:
                         logger.info(f"Grouped {len(members_to_assign)} members together in OC {oc_id} ({oc.get('oc_name')}): {', '.join(members_to_assign)}")
@@ -1099,6 +1193,12 @@ class OCEmailGenerator:
                 else:
                     if member_name in ["Adilon_Scorpian", "Hiyori", "DubZzZ"]:
                         logger.info(f"DEBUG {member_name}: OC {oc_id} ({oc_name}, Level {oc_difficulty}) has no available slots (total: {total_slots}, filled: {filled_slots}, assigned: {assigned_count})")
+                    assignment_reasons[member_name]['considered_ocs'].append({
+                        'oc_id': oc_id,
+                        'oc_name': oc_name,
+                        'level': oc_difficulty,
+                        'reason_skipped': f'No available slots (total: {total_slots}, filled: {filled_slots}, assigned: {assigned_count})'
+                    })
             
             # If member wasn't assigned and has OC history, try all OCs (not just activity-based list)
             if member_name not in assigned_members and has_oc_history:
@@ -1195,6 +1295,10 @@ class OCEmailGenerator:
                         assignments[oc_id].append(member_name)
                         assigned_members.add(member_name)
                         logger.debug(f"Fallback: Assigned {member_name} to OC {oc_id} (Level {oc_difficulty})")
+                        assignment_reasons[member_name]['assigned_oc_id'] = oc_id
+                        assignment_reasons[member_name]['assigned_oc_name'] = oc.get('oc_name', 'Unknown')
+                        assignment_reasons[member_name]['assigned_level'] = oc_difficulty
+                        assignment_reasons[member_name]['reason'] = 'fallback'
                         break
             
             # If still not assigned and no OC history, try all Level 1 OCs
@@ -1232,6 +1336,10 @@ class OCEmailGenerator:
                         assignments[oc_id].append(member_name)
                         assigned_members.add(member_name)
                         logger.debug(f"Assigned new member {member_name} to Level 1 OC {oc_id}")
+                        assignment_reasons[member_name]['assigned_oc_id'] = oc_id
+                        assignment_reasons[member_name]['assigned_oc_name'] = oc.get('oc_name', 'Unknown')
+                        assignment_reasons[member_name]['assigned_level'] = 1
+                        assignment_reasons[member_name]['reason'] = 'new_member'
                         break
 
         # Handle members who couldn't be assigned to their recommended level
@@ -1283,7 +1391,20 @@ class OCEmailGenerator:
                     
                     if available_slots > 0:
                         has_available_oc_at_max = True
-                        logger.warning(f"Member {member_name} (max OC {member_max_oc}) was not assigned but Level {member_max_oc} OC '{oc.get('oc_name')}' ({oc_id}) is available with {available_slots} slots. This indicates a bug in the assignment logic.")
+                        warning_msg = f"Member {member_name} (max OC {member_max_oc}) was not assigned but Level {member_max_oc} OC '{oc.get('oc_name')}' ({oc_id}) is available with {available_slots} slots. This indicates a bug in the assignment logic."
+                        logger.warning(warning_msg)
+                        if member_name not in assignment_reasons:
+                            assignment_reasons[member_name] = {
+                                'assigned_oc_id': None,
+                                'assigned_oc_name': None,
+                                'assigned_level': None,
+                                'max_recommended_oc': member_max_oc,
+                                'reason': None,
+                                'grouped_with': [],
+                                'considered_ocs': [],
+                                'warnings': []
+                            }
+                        assignment_reasons[member_name]['warnings'].append(warning_msg)
                         break
             
             # If there are available OCs at max level, skip lower level assignment
@@ -1340,6 +1461,11 @@ class OCEmailGenerator:
                         assignments[oc_id].append(member_name)
                         assigned_members.add(member_name)
                         logger.info(f"Assigned {member_name} to lower level {level} OC {oc_id} (couldn't meet requirements for level {member_max_oc})")
+                        assignment_reasons[member_name]['assigned_oc_id'] = oc_id
+                        assignment_reasons[member_name]['assigned_oc_name'] = oc.get('oc_name', 'Unknown')
+                        assignment_reasons[member_name]['assigned_level'] = level
+                        assignment_reasons[member_name]['reason'] = 'lower_level'
+                        assignment_reasons[member_name]['warnings'].append(f'Assigned to Level {level} instead of max recommended Level {member_max_oc} (no suitable OCs available at max level)')
                         break
                 
                 if member_name in assigned_members:
@@ -1415,10 +1541,23 @@ class OCEmailGenerator:
                     spawn_suggestions[member_max_oc] = []
                 spawn_suggestions[member_max_oc].append(member_name)
         
-        # Log unassigned members for debugging
+        # Log unassigned members for debugging and add to assignment reasons
         unassigned = [m['member_name'] for m in members_sorted if m['member_name'] not in assigned_members]
         if unassigned:
             logger.info(f"Unassigned members ({len(unassigned)}): {', '.join(unassigned)}")
+            for member_name in unassigned:
+                if member_name not in assignment_reasons:
+                    member_perf = member_performance.get(member_name, {})
+                    assignment_reasons[member_name] = {
+                        'assigned_oc_id': None,
+                        'assigned_oc_name': None,
+                        'assigned_level': None,
+                        'max_recommended_oc': member_perf.get('max_recommended_oc'),
+                        'reason': 'unassigned',
+                        'grouped_with': [],
+                        'considered_ocs': [],
+                        'warnings': ['Member was not assigned to any OC']
+                    }
         
         if spawn_suggestions:
             logger.info(f"OC spawn suggestions: {spawn_suggestions}")
@@ -1648,10 +1787,11 @@ class OCEmailGenerator:
         # Log what we're returning
         logger.info(f"Returning needed_ocs: {needed_ocs}")
         
-        # Return both email text and needed OCs
+        # Return both email text, needed OCs, and assignment reasons
         return {
             'email_text': email_text,
-            'needed_ocs': needed_ocs
+            'needed_ocs': needed_ocs,
+            'assignment_reasons': assignment_reasons
         }
 
     def get_oc_performance_by_role(self, days_back: int = 90) -> List[Dict[str, Any]]:

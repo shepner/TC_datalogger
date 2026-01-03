@@ -136,13 +136,15 @@ def generate_oc_email():
         if isinstance(result, dict):
             return jsonify({
                 "email_text": result.get('email_text', ''),
-                "needed_ocs": result.get('needed_ocs', [])
+                "needed_ocs": result.get('needed_ocs', []),
+                "assignment_reasons": result.get('assignment_reasons', {})
             })
         else:
             # Backward compatibility: if it returns a string, wrap it
             return jsonify({
                 "email_text": result,
-                "needed_ocs": []
+                "needed_ocs": [],
+                "assignment_reasons": {}
             })
     except Exception as e:
         logger.error(f"Error generating OC email: {e}", exc_info=True)
