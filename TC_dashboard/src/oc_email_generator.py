@@ -812,9 +812,84 @@ class OCEmailGenerator:
             oc_name = oc.get('oc_name', '').lower()
             return any(excluded_name in oc_name for excluded_name in excluded_oc_names_lower)
         
+        # Helper function to check if a member can join an OC
+        def can_member_join_oc(member, oc, oc_list_context=None):
+            """Check if a member can join a specific OC based on their qualifications."""
+            member_name = member['member_name']
+            member_id = member['member_id']
+            has_oc_history = member_id in members_with_oc_history
+            member_perf = member_performance.get(member_name, {})
+            member_max_oc = member_perf.get('max_recommended_oc')
+            member_level_rates = member_perf.get('level_rates', {})
+            
+            if is_excluded_oc(oc):
+                return False
+            
+            oc_difficulty = oc.get('difficulty')
+            if oc_difficulty is None:
+                return False
+            
+            try:
+                oc_difficulty = int(oc_difficulty)
+            except (ValueError, TypeError):
+                return False
+            
+            # Members with no OC history can only join Level 1 OCs
+            if not has_oc_history:
+                return oc_difficulty == 1
+            else:
+                # Check if member has valid checkpoint_pass_rate for this SPECIFIC OC
+                oc_name = oc.get('oc_name', '').strip()
+                member_oc_specific_rates = member_oc_rates.get(member_name, {})
+                
+                has_valid_oc_rate = False
+                has_oc_specific_data = False
+                best_oc_rate = None
+                
+                oc_name_lower = oc_name.lower().strip()
+                for key, rate in member_oc_specific_rates.items():
+                    key_lower = key.lower()
+                    if key_lower.startswith(oc_name_lower + '_'):
+                        has_oc_specific_data = True
+                        try:
+                            rate_num = float(rate)
+                            if 0 <= rate_num <= 1:
+                                rate_num = rate_num * 100
+                            if best_oc_rate is None or rate_num > best_oc_rate:
+                                best_oc_rate = rate_num
+                            if 80 <= rate_num <= 90:
+                                has_valid_oc_rate = True
+                        except (ValueError, TypeError):
+                            continue
+                
+                # If we have OC-specific data and member can't meet requirements, skip
+                if has_oc_specific_data and not has_valid_oc_rate:
+                    return False
+                
+                # If no OC-specific data, fallback to level-based check
+                if not has_oc_specific_data:
+                    level_rate = member_level_rates.get(oc_difficulty)
+                    if level_rate is None:
+                        return False
+                    try:
+                        rate_num = float(level_rate)
+                        if 0 <= rate_num <= 1:
+                            rate_num = rate_num * 100
+                        if not (80 <= rate_num <= 90):
+                            return False
+                    except (ValueError, TypeError):
+                        return False
+                
+                # Check if OC difficulty is <= max_recommended_oc
+                if member_max_oc is not None and oc_difficulty > member_max_oc:
+                    return False
+            
+            return True
+        
         # Assign members to OCs based on priority:
         # 1. Active members → OCs starting soonest (if already has members) or OCs that won't expire for >1 day
         # 2. Inactive members → OCs with longer delay
+        # 3. Group unused members together into the same OC when possible
         for member in members_sorted:
             member_name = member['member_name']
             
@@ -963,9 +1038,37 @@ class OCEmailGenerator:
                 available_slots = total_slots - filled_slots - assigned_count
                 
                 if available_slots > 0:
-                    assignments[oc_id].append(member_name)
-                    assigned_members.add(member_name)
-                    logger.info(f"Assigned {member_name} to OC {oc_id} ({oc.get('oc_name')}, Level {oc_difficulty})")
+                    # Found a suitable OC! Now try to group other unassigned members who can join this same OC
+                    # This ensures unused members are grouped together
+                    members_to_assign = [member_name]
+                    
+                    # Check if this is an empty OC (filled_slots == 0) - if so, try to group other members
+                    if filled_slots == 0:
+                        # Find other unassigned members who can join this same OC
+                        for other_member in members_sorted:
+                            other_member_name = other_member['member_name']
+                            if other_member_name in assigned_members:
+                                continue
+                            if other_member_name == member_name:
+                                continue
+                            
+                            # Check if other member can join this OC
+                            if can_member_join_oc(other_member, oc):
+                                # Check if there's still space
+                                if len(members_to_assign) < available_slots:
+                                    members_to_assign.append(other_member_name)
+                                else:
+                                    break  # OC is full
+                    
+                    # Assign all members in the group to this OC
+                    for m_name in members_to_assign:
+                        assignments[oc_id].append(m_name)
+                        assigned_members.add(m_name)
+                        logger.info(f"Assigned {m_name} to OC {oc_id} ({oc.get('oc_name')}, Level {oc_difficulty})")
+                    
+                    if len(members_to_assign) > 1:
+                        logger.info(f"Grouped {len(members_to_assign)} members together in OC {oc_id} ({oc.get('oc_name')})")
+                    
                     if member_name in ["Adilon_Scorpian", "Hiyori"]:
                         logger.info(f"DEBUG {member_name}: ASSIGNED to Level {oc_difficulty} OC '{oc.get('oc_name')}' - stopping search")
                     break
