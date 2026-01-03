@@ -331,6 +331,15 @@
                     <!-- Needed OCs will be populated here -->
                 </div>
             </div>
+            <div id="assignment-reasons-section" style="margin-top: 15px; padding: 12px; background-color: #f0f8ff; border: 1px solid #b0d4f1; border-radius: 4px; display: none;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                    <h3 style="margin: 0; font-size: 14px; font-weight: 600; color: #333;">Assignment Reasoning Report:</h3>
+                    <button onclick="toggleAssignmentReasons()" style="font-size: 12px; padding: 4px 8px; background-color: #4CAF50; color: white; border: none; border-radius: 3px; cursor: pointer;">Toggle Details</button>
+                </div>
+                <div id="assignment-reasons-list" style="font-family: monospace; font-size: 12px; color: #555; line-height: 1.6;">
+                    <!-- Assignment reasons will be populated here -->
+                </div>
+            </div>
     </div>
 </div>
 
@@ -647,6 +656,9 @@
                 
                 // Display needed OCs below the email text
                 displayNeededOCs(data.needed_ocs || []);
+                
+                // Display assignment reasoning report
+                displayAssignmentReasons(data.assignment_reasons || {});
             } catch (error) {
                 if (errorEl) {
                     errorEl.textContent = error.message;
@@ -677,6 +689,97 @@
                 const memberNamesStr = item.member_names ? item.member_names.join(', ') : '';
                 const memberNamesDisplay = memberNamesStr ? ` (${memberNamesStr})` : '';
                 html += `<div style="margin-bottom: 4px; padding: 4px 0;">Level ${item.level} - ${ocNamesStr}${memberNamesDisplay}</div>`;
+            });
+            
+            list.innerHTML = html;
+            section.style.display = 'block';
+        }
+
+        let assignmentReasonsExpanded = false;
+        
+        function toggleAssignmentReasons() {
+            assignmentReasonsExpanded = !assignmentReasonsExpanded;
+            const list = document.getElementById('assignment-reasons-list');
+            if (list) {
+                // Re-render with new expanded state
+                const reasons = window.lastAssignmentReasons || {};
+                displayAssignmentReasons(reasons);
+            }
+        }
+
+        function displayAssignmentReasons(reasons) {
+            const section = document.getElementById('assignment-reasons-section');
+            const list = document.getElementById('assignment-reasons-list');
+            
+            if (!section || !list) {
+                return;
+            }
+            
+            // Store for toggle
+            window.lastAssignmentReasons = reasons;
+            
+            if (!reasons || Object.keys(reasons).length === 0) {
+                section.style.display = 'none';
+                return;
+            }
+            
+            // Sort members by name
+            const memberNames = Object.keys(reasons).sort();
+            
+            let html = '';
+            memberNames.forEach(memberName => {
+                const reason = reasons[memberName];
+                const assigned = reason.assigned_oc_id !== null && reason.assigned_oc_id !== undefined;
+                const maxOC = reason.max_recommended_oc !== null && reason.max_recommended_oc !== undefined ? reason.max_recommended_oc : 'N/A';
+                
+                // Header
+                html += `<div style="margin-bottom: 12px; padding: 8px; background-color: ${assigned ? '#e8f5e9' : '#fff3cd'}; border: 1px solid ${assigned ? '#c8e6c9' : '#ffc107'}; border-radius: 3px;">`;
+                html += `<div style="font-weight: 600; margin-bottom: 4px; color: #333;">${memberName}</div>`;
+                
+                if (assigned) {
+                    html += `<div style="font-size: 11px; color: #555; margin-bottom: 4px;">`;
+                    html += `Assigned to: <strong>Level ${reason.assigned_level} - ${reason.assigned_oc_name}</strong> (ID: ${reason.assigned_oc_id})`;
+                    html += ` | Reason: <strong>${reason.reason || 'unknown'}</strong>`;
+                    html += ` | Max Recommended: <strong>Level ${maxOC}</strong>`;
+                    if (reason.grouped_with && reason.grouped_with.length > 0) {
+                        html += ` | Grouped with: ${reason.grouped_with.join(', ')}`;
+                    }
+                    html += `</div>`;
+                    
+                    // Show warnings if any
+                    if (reason.warnings && reason.warnings.length > 0) {
+                        html += `<div style="font-size: 11px; color: #d32f2f; margin-top: 4px; padding: 4px; background-color: #ffebee; border-left: 3px solid #d32f2f;">`;
+                        html += `<strong>⚠ Warnings:</strong><ul style="margin: 4px 0; padding-left: 20px;">`;
+                        reason.warnings.forEach(warning => {
+                            html += `<li>${warning}</li>`;
+                        });
+                        html += `</ul></div>`;
+                    }
+                } else {
+                    html += `<div style="font-size: 11px; color: #856404; margin-bottom: 4px;">`;
+                    html += `Not assigned | Max Recommended: <strong>Level ${maxOC}</strong>`;
+                    html += `</div>`;
+                    
+                    if (reason.warnings && reason.warnings.length > 0) {
+                        html += `<div style="font-size: 11px; color: #856404; margin-top: 4px;">`;
+                        reason.warnings.forEach(warning => {
+                            html += `<div>⚠ ${warning}</div>`;
+                        });
+                        html += `</div>`;
+                    }
+                }
+                
+                // Show considered OCs if expanded
+                if (assignmentReasonsExpanded && reason.considered_ocs && reason.considered_ocs.length > 0) {
+                    html += `<div style="margin-top: 8px; padding: 6px; background-color: rgba(255,255,255,0.7); border-radius: 3px; font-size: 11px;">`;
+                    html += `<strong>Considered OCs (${reason.considered_ocs.length}):</strong><ul style="margin: 4px 0; padding-left: 20px; max-height: 200px; overflow-y: auto;">`;
+                    reason.considered_ocs.forEach(oc => {
+                        html += `<li>Level ${oc.level} - ${oc.oc_name} (ID: ${oc.oc_id}): <span style="color: #d32f2f;">${oc.reason_skipped}</span></li>`;
+                    });
+                    html += `</ul></div>`;
+                }
+                
+                html += `</div>`;
             });
             
             list.innerHTML = html;

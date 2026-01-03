@@ -1107,6 +1107,22 @@ class OCEmailGenerator:
                 available_slots = total_slots - filled_slots - assigned_count
                 
                 if available_slots > 0:
+                    # CRITICAL: Before assigning, check if this OC is appropriate for the PRIMARY member
+                    # Don't assign primary member to an OC that's more than 1 level below their max
+                    # This prevents high-level members from being grouped into low-level OCs
+                    if member_max_oc is not None:
+                        min_allowed_level = member_max_oc - 1
+                        if oc_difficulty < min_allowed_level:
+                            # OC is more than 1 level below their max - skip it and continue searching
+                            assignment_reasons[member_name]['considered_ocs'].append({
+                                'oc_id': oc_id,
+                                'oc_name': oc_name,
+                                'level': oc_difficulty,
+                                'reason_skipped': f'OC level {oc_difficulty} is more than 1 level below max recommended {member_max_oc}'
+                            })
+                            logger.debug(f"Skipping {member_name} for Level {oc_difficulty} OC '{oc_name}': more than 1 level below max {member_max_oc}")
+                            continue
+                    
                     # Found a suitable OC! Now try to group other unassigned members who can join this same OC
                     # This ensures unused members are grouped together
                     members_to_assign = [member_name]
