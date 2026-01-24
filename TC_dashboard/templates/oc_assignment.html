@@ -12,6 +12,17 @@
             margin: 0 auto;
             padding: 20px;
         }
+        /* Use more horizontal space on large screens */
+        @media (min-width: 1400px) {
+            .container {
+                max-width: 1600px;
+            }
+        }
+        @media (min-width: 1800px) {
+            .container {
+                max-width: 1900px;
+            }
+        }
         .form-group {
             margin-bottom: 15px;
         }
@@ -319,12 +330,19 @@
                     </div>
                 </div>
             </div>
-            <div id="oc-exclude-toolbar" style="margin-bottom: 10px; padding: 8px 10px; background-color: #f9f9f9; border: 1px solid #eee; border-radius: 3px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center;">
-                <label style="font-weight: 600; margin-right: 4px; font-size: 12px; color: #333;">Exclude OCs:</label>
-                <button onclick="saveOcAssignmentConfig({ source: 'exclusions' })" style="padding: 4px 10px; font-size: 12px; background-color: #4CAF50; color: white; border: none; border-radius: 3px; cursor: pointer;">Save exclusions</button>
-                <span id="oc-exclusions-status" style="font-size: 12px; color: #666;"></span>
-                <div id="oc-checkboxes" style="display: flex; flex-wrap: wrap; gap: 8px;">
-                    <!-- OC checkboxes will be populated here -->
+            <div id="oc-exclude-toolbar" style="margin-bottom: 10px; padding: 8px 10px; background-color: #f9f9f9; border: 1px solid #eee; border-radius: 3px;">
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 6px;">
+                    <label style="font-weight: 600; margin: 0; font-size: 12px; color: #333;">Exclude OCs:</label>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <span id="oc-exclusions-status" style="font-size: 12px; color: #666;"></span>
+                        <button id="toggle-exclusions-btn" onclick="toggleOcExclusions()" style="padding: 4px 10px; font-size: 12px; background-color: #f5f5f5; color: #333; border: 1px solid #ccc; border-radius: 3px; cursor: pointer;">Show exclusions</button>
+                        <button id="save-exclusions-btn" onclick="saveOcAssignmentConfig({ source: 'exclusions' })" style="display: none; padding: 4px 10px; font-size: 12px; background-color: #4CAF50; color: white; border: none; border-radius: 3px; cursor: pointer;">Save exclusions</button>
+                    </div>
+                </div>
+                <div id="oc-exclude-body" style="display: none;">
+                    <div id="oc-checkboxes" style="display: flex; flex-direction: column; gap: 2px;">
+                        <!-- OC checkboxes will be populated here -->
+                    </div>
                 </div>
             </div>
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
@@ -642,6 +660,18 @@
             if (saveBtn) saveBtn.style.display = isHidden ? 'inline-block' : 'none';
         }
 
+        function toggleOcExclusions() {
+            const body = document.getElementById('oc-exclude-body');
+            const toggleBtn = document.getElementById('toggle-exclusions-btn');
+            const saveBtn = document.getElementById('save-exclusions-btn');
+            if (!body) return;
+
+            const isHidden = body.style.display === 'none' || body.style.display === '';
+            body.style.display = isHidden ? 'block' : 'none';
+            if (toggleBtn) toggleBtn.textContent = isHidden ? 'Hide exclusions' : 'Show exclusions';
+            if (saveBtn) saveBtn.style.display = isHidden ? 'inline-block' : 'none';
+        }
+
         function collectExcludedOcNames() {
             let excludedOcNames = [];
             const checkboxContainer = document.getElementById('oc-checkboxes');
@@ -734,17 +764,21 @@
             levels.forEach(level => {
                 const names = Array.from(new Set(groups[level])).sort((a, b) => a.localeCompare(b));
 
-                const groupWrap = document.createElement('div');
-                groupWrap.style.cssText = 'width: 100%; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 2px 0;';
+                // Compact row: fixed level label + wrapping checkboxes.
+                const groupRow = document.createElement('div');
+                groupRow.style.cssText = 'display: grid; grid-template-columns: 55px 1fr; gap: 6px; align-items: start; padding: 2px 0;';
 
                 const title = document.createElement('div');
-                title.style.cssText = 'font-weight: 700; font-size: 12px; color: #333; margin-right: 6px; white-space: nowrap;';
+                title.style.cssText = 'font-weight: 700; font-size: 12px; color: #333; white-space: nowrap; padding-top: 2px;';
                 title.textContent = level > 0 ? `Lv ${level}` : 'Other';
-                groupWrap.appendChild(title);
+                groupRow.appendChild(title);
+
+                const itemsWrap = document.createElement('div');
+                itemsWrap.style.cssText = 'display: flex; flex-wrap: wrap; gap: 10px; align-items: center;';
 
                 names.forEach(ocName => {
                     const label = document.createElement('label');
-                    label.style.cssText = 'display: flex; align-items: center; cursor: pointer; white-space: nowrap; font-size: 12px; color: #333;';
+                    label.style.cssText = 'display: flex; align-items: center; cursor: pointer; white-space: nowrap; font-size: 12px; color: #333; margin: 0;';
                     
                     const checkbox = document.createElement('input');
                     checkbox.type = 'checkbox';
@@ -761,10 +795,11 @@
                     
                     label.appendChild(checkbox);
                     label.appendChild(document.createTextNode(ocName));
-                    groupWrap.appendChild(label);
+                    itemsWrap.appendChild(label);
                 });
 
-                container.appendChild(groupWrap);
+                groupRow.appendChild(itemsWrap);
+                container.appendChild(groupRow);
             });
         }
 
