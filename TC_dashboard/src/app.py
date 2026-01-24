@@ -177,26 +177,38 @@ def set_oc_assignment_config():
 
 @app.route("/api/oc-assignment/oc-names", methods=["GET"])
 def get_oc_names():
-    """Get list of all unique OC names from historical data."""
+    """Get list of OC names with their (max) difficulty level from historical data."""
     if not oc_email_generator:
         return jsonify({"error": "BigQuery client not available"}), 500
     
     try:
-        # Query for all unique OC names from historical crimes data
+        # Query for all unique OC names with a representative level.
+        # We use MAX(difficulty) per name so each name appears once, grouped by highest level seen.
         query = """
-        SELECT DISTINCT
-          name AS oc_name
+        SELECT
+          name AS oc_name,
+          MAX(SAFE_CAST(difficulty AS INT64)) AS difficulty
         FROM
           `torncity-402423.torn_data.v2_faction_40832_crimes-raw`
         WHERE
           name IS NOT NULL
           AND name != ''
+          AND SAFE_CAST(difficulty AS INT64) IS NOT NULL
+        GROUP BY
+          name
         ORDER BY
-          name ASC
+          difficulty DESC,
+          oc_name ASC
         """
         results = oc_email_generator.bq.execute_query(query)
-        oc_names = [row.get('oc_name', '') for row in results if row.get('oc_name')]
-        return jsonify({"oc_names": oc_names})
+        ocs = [
+            {"oc_name": row.get("oc_name", ""), "difficulty": row.get("difficulty")}
+            for row in results
+            if row.get("oc_name")
+        ]
+        oc_names = [o["oc_name"] for o in ocs]
+        # Keep backward compatibility for callers expecting `oc_names`.
+        return jsonify({"oc_names": oc_names, "ocs": ocs})
     except Exception as e:
         logger.error(f"Error getting OC names: {e}", exc_info=True)
         return jsonify({"error": str(e)}), 500

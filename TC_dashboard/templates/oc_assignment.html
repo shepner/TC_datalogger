@@ -308,16 +308,21 @@
                     <label style="font-weight: 600; font-size: 12px; color: #333;">Assignment Email Preface (saved):</label>
                     <div style="display: flex; align-items: center; gap: 8px;">
                         <span id="oc-config-status" style="font-size: 12px; color: #666;"></span>
-                        <button onclick="saveOcAssignmentConfig()" style="padding: 4px 10px; font-size: 12px; background-color: #4CAF50; color: white; border: none; border-radius: 3px; cursor: pointer;">Save</button>
+                        <button id="toggle-preface-btn" onclick="togglePrefaceEditor()" style="padding: 4px 10px; font-size: 12px; background-color: #f5f5f5; color: #333; border: 1px solid #ccc; border-radius: 3px; cursor: pointer;">Edit preface</button>
+                        <button id="save-preface-btn" onclick="saveOcAssignmentConfig({ source: 'preface' })" style="display: none; padding: 4px 10px; font-size: 12px; background-color: #4CAF50; color: white; border: none; border-radius: 3px; cursor: pointer;">Save</button>
                     </div>
                 </div>
-                <textarea id="email-preface" style="width: 100%; height: 140px; font-family: monospace; font-size: 11px; border: 1px solid #ccc; border-radius: 3px; padding: 6px; box-sizing: border-box; resize: vertical;" placeholder="Loading saved email preface..."></textarea>
-                <div style="margin-top: 6px; font-size: 11px; color: #777;">
-                    Tip: edits here affect the generated email after you click Save (or immediately if you click any checkbox, which regenerates the email using the current preface text).
+                <div id="email-preface-body" style="display: none;">
+                    <textarea id="email-preface" style="width: 100%; height: 140px; font-family: monospace; font-size: 11px; border: 1px solid #ccc; border-radius: 3px; padding: 6px; box-sizing: border-box; resize: vertical;" placeholder="Loading saved email preface..."></textarea>
+                    <div style="margin-top: 6px; font-size: 11px; color: #777;">
+                        Tip: edits here affect the generated email immediately when you regenerate (e.g., toggle a checkbox), and persist after you click Save.
+                    </div>
                 </div>
             </div>
             <div id="oc-exclude-toolbar" style="margin-bottom: 10px; padding: 8px 10px; background-color: #f9f9f9; border: 1px solid #eee; border-radius: 3px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center;">
                 <label style="font-weight: 600; margin-right: 4px; font-size: 12px; color: #333;">Exclude OCs:</label>
+                <button onclick="saveOcAssignmentConfig({ source: 'exclusions' })" style="padding: 4px 10px; font-size: 12px; background-color: #4CAF50; color: white; border: none; border-radius: 3px; cursor: pointer;">Save exclusions</button>
+                <span id="oc-exclusions-status" style="font-size: 12px; color: #666;"></span>
                 <div id="oc-checkboxes" style="display: flex; flex-wrap: wrap; gap: 8px;">
                     <!-- OC checkboxes will be populated here -->
                 </div>
@@ -370,7 +375,7 @@
 </div>
 
 <script>
-        let allOcNames = [];
+        let allOcEntries = []; // [{ oc_name, difficulty }]
         let savedExcludedOcNames = [];
         let savedEmailPreface = '';
         
@@ -576,7 +581,14 @@
                     throw new Error(data.error || 'Failed to load OC names');
                 }
                 
-                allOcNames = data.oc_names || [];
+                if (Array.isArray(data.ocs) && data.ocs.length > 0) {
+                    allOcEntries = data.ocs
+                        .map(o => ({ oc_name: o.oc_name, difficulty: o.difficulty }))
+                        .filter(o => o.oc_name);
+                } else {
+                    // Backward compatibility
+                    allOcEntries = (data.oc_names || []).map(name => ({ oc_name: name, difficulty: null }));
+                }
                 populateOcCheckboxes();
             } catch (error) {
                 console.error('Error loading OC names:', error);
@@ -618,11 +630,19 @@
             }
         }
 
-        async function saveOcAssignmentConfig() {
-            const statusEl = document.getElementById('oc-config-status');
-            const prefaceEl = document.getElementById('email-preface');
+        function togglePrefaceEditor() {
+            const body = document.getElementById('email-preface-body');
+            const toggleBtn = document.getElementById('toggle-preface-btn');
+            const saveBtn = document.getElementById('save-preface-btn');
+            if (!body) return;
 
-            // Collect excluded OC names from checked boxes
+            const isHidden = body.style.display === 'none' || body.style.display === '';
+            body.style.display = isHidden ? 'block' : 'none';
+            if (toggleBtn) toggleBtn.textContent = isHidden ? 'Hide preface' : 'Edit preface';
+            if (saveBtn) saveBtn.style.display = isHidden ? 'inline-block' : 'none';
+        }
+
+        function collectExcludedOcNames() {
             let excludedOcNames = [];
             const checkboxContainer = document.getElementById('oc-checkboxes');
             if (checkboxContainer) {
@@ -631,11 +651,24 @@
                     .map(cb => cb ? cb.value : null)
                     .filter(val => val !== null);
             }
+            return excludedOcNames;
+        }
+
+        async function saveOcAssignmentConfig(options = {}) {
+            const statusEl = document.getElementById('oc-config-status');
+            const exclusionsStatusEl = document.getElementById('oc-exclusions-status');
+            const prefaceEl = document.getElementById('email-preface');
+
+            const excludedOcNames = collectExcludedOcNames();
 
             const emailPreface = prefaceEl ? prefaceEl.value : '';
 
             try {
-                if (statusEl) statusEl.textContent = 'Saving...';
+                if (options.source === 'exclusions') {
+                    if (exclusionsStatusEl) exclusionsStatusEl.textContent = 'Saving...';
+                } else {
+                    if (statusEl) statusEl.textContent = 'Saving...';
+                }
                 const response = await fetch('/api/oc-assignment/config', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -651,13 +684,21 @@
 
                 savedExcludedOcNames = Array.isArray(data.excluded_oc_names) ? data.excluded_oc_names : excludedOcNames;
                 savedEmailPreface = typeof data.email_preface === 'string' ? data.email_preface : emailPreface;
-                if (statusEl) statusEl.textContent = 'Saved';
+                if (options.source === 'exclusions') {
+                    if (exclusionsStatusEl) exclusionsStatusEl.textContent = 'Saved';
+                } else {
+                    if (statusEl) statusEl.textContent = 'Saved';
+                }
 
                 // Regenerate immediately so the saved preface is reflected
                 generateEmail();
             } catch (error) {
                 console.error('Error saving OC assignment config:', error);
-                if (statusEl) statusEl.textContent = `Save failed: ${error.message}`;
+                if (options.source === 'exclusions') {
+                    if (exclusionsStatusEl) exclusionsStatusEl.textContent = `Save failed: ${error.message}`;
+                } else {
+                    if (statusEl) statusEl.textContent = `Save failed: ${error.message}`;
+                }
             }
         }
 
@@ -669,7 +710,7 @@
             }
             container.innerHTML = '';
             
-            if (allOcNames.length === 0) {
+            if (allOcEntries.length === 0) {
                 const noDataLabel = document.createElement('span');
                 noDataLabel.style.cssText = 'font-size: 11px; color: #999; font-style: italic;';
                 noDataLabel.textContent = 'Loading OC names...';
@@ -678,23 +719,52 @@
             }
             
             const excludedLower = (savedExcludedOcNames || []).map(x => String(x).toLowerCase());
-            allOcNames.forEach(ocName => {
-                const label = document.createElement('label');
-                label.style.cssText = 'display: flex; align-items: center; cursor: pointer; white-space: nowrap; font-size: 12px; color: #333;';
-                
-                const checkbox = document.createElement('input');
-                checkbox.type = 'checkbox';
-                checkbox.value = ocName;
-                checkbox.id = `oc-${ocName.replace(/\s+/g, '-')}`;
-                // Default: do not exclude anything unless configured/saved
-                const ocLower = ocName.toLowerCase();
-                checkbox.checked = excludedLower.some(ex => ex && ocLower.includes(ex));
-                checkbox.style.cssText = 'margin-right: 3px;';
-                checkbox.addEventListener('change', generateEmail);
-                
-                label.appendChild(checkbox);
-                label.appendChild(document.createTextNode(ocName));
-                container.appendChild(label);
+
+            // Group by difficulty (level), sort levels desc and names asc
+            const groups = {};
+            allOcEntries.forEach(entry => {
+                const level = Number.isFinite(Number(entry.difficulty)) ? Number(entry.difficulty) : 0;
+                const name = entry.oc_name;
+                if (!name) return;
+                if (!groups[level]) groups[level] = [];
+                groups[level].push(name);
+            });
+
+            const levels = Object.keys(groups).map(n => parseInt(n, 10)).sort((a, b) => b - a);
+            levels.forEach(level => {
+                const names = Array.from(new Set(groups[level])).sort((a, b) => a.localeCompare(b));
+
+                const groupWrap = document.createElement('div');
+                groupWrap.style.cssText = 'width: 100%; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 2px 0;';
+
+                const title = document.createElement('div');
+                title.style.cssText = 'font-weight: 700; font-size: 12px; color: #333; margin-right: 6px; white-space: nowrap;';
+                title.textContent = level > 0 ? `Lv ${level}` : 'Other';
+                groupWrap.appendChild(title);
+
+                names.forEach(ocName => {
+                    const label = document.createElement('label');
+                    label.style.cssText = 'display: flex; align-items: center; cursor: pointer; white-space: nowrap; font-size: 12px; color: #333;';
+                    
+                    const checkbox = document.createElement('input');
+                    checkbox.type = 'checkbox';
+                    checkbox.value = ocName;
+                    checkbox.id = `oc-${level}-${ocName.replace(/\s+/g, '-')}`;
+                    const ocLower = ocName.toLowerCase();
+                    checkbox.checked = excludedLower.some(ex => ex && ocLower.includes(ex));
+                    checkbox.style.cssText = 'margin-right: 3px;';
+                    checkbox.addEventListener('change', () => {
+                        const exclusionsStatusEl = document.getElementById('oc-exclusions-status');
+                        if (exclusionsStatusEl) exclusionsStatusEl.textContent = 'Unsaved changes';
+                        generateEmail();
+                    });
+                    
+                    label.appendChild(checkbox);
+                    label.appendChild(document.createTextNode(ocName));
+                    groupWrap.appendChild(label);
+                });
+
+                container.appendChild(groupWrap);
             });
         }
 
