@@ -457,7 +457,10 @@ class OCEmailGenerator:
             Dictionary mapping member_name -> {
                 'max_recommended_oc': int or None,
                 'level_rates': {difficulty: best_checkpoint_rate},
-                'has_80_plus': bool
+                'has_80_plus': bool,
+                'highest_level': int or None,
+                'highest_level_rate': float or None,
+                'is_jump_recommendation': bool
             }
         """
         performance = self.get_oc_performance_by_role(days_back=days_back)
@@ -487,7 +490,10 @@ class OCEmailGenerator:
                 member_data[member_name] = {
                     'level_rates': {},
                     'has_80_plus': False,
-                    'max_recommended_oc': None
+                    'max_recommended_oc': None,
+                    'highest_level': None,
+                    'highest_level_rate': None,
+                    'is_jump_recommendation': False,
                 }
             
             # Track best rate per level (but only if it's in the valid 80-90 range)
@@ -560,6 +566,20 @@ class OCEmailGenerator:
                     data['max_recommended_oc'] = highest_level
             else:
                 data['max_recommended_oc'] = highest_level
+
+            # Populate metadata used by assignment logic (e.g. jump recommendations)
+            highest_lvl = member_highest_level.get(member_name)
+            highest_rate = member_highest_level_rate.get(member_name)
+            data['highest_level'] = highest_lvl
+            data['highest_level_rate'] = highest_rate
+            try:
+                data['is_jump_recommendation'] = (
+                    data.get('max_recommended_oc') is not None
+                    and highest_lvl is not None
+                    and int(data['max_recommended_oc']) > int(highest_lvl)
+                )
+            except Exception:
+                data['is_jump_recommendation'] = False
         
         return member_data
 
@@ -865,6 +885,9 @@ class OCEmailGenerator:
             member_perf = member_performance.get(member_name, {})
             member_max_oc = member_perf.get('max_recommended_oc')
             member_level_rates = member_perf.get('level_rates', {})
+            member_highest_level = member_perf.get('highest_level')
+            member_highest_level_rate = member_perf.get('highest_level_rate')
+            is_jump_recommendation = bool(member_perf.get('is_jump_recommendation'))
             
             if is_excluded_oc(oc):
                 return False
@@ -919,7 +942,19 @@ class OCEmailGenerator:
                 if not has_oc_specific_data:
                     level_rate = member_level_rates.get(oc_difficulty)
                     if level_rate is None:
-                        return False
+                        # Allow a "jump" to the recommended level when recommendation came from 90%+ at highest
+                        # and there is no level-rate history for the next level yet.
+                        if (
+                            is_jump_recommendation
+                            and member_max_oc is not None
+                            and oc_difficulty == int(member_max_oc)
+                            and member_highest_level is not None
+                            and member_highest_level_rate is not None
+                            and float(member_highest_level_rate) >= 90
+                        ):
+                            pass
+                        else:
+                            return False
                     try:
                         rate_num = float(level_rate)
                         if 0 <= rate_num <= 1:
@@ -992,6 +1027,31 @@ class OCEmailGenerator:
             # This prevents checking OCs that are too high for the member (more efficient)
             # For members with no OC history, only check Level 1 OCs
             filtered_oc_list = []
+            seen_oc_ids = set()
+
+            # IMPORTANT: Always consider OCs at the member's max level across *all* OCs first,
+            # regardless of the active/inactive split. Otherwise active members can miss an
+            # empty-but-soon-expiring max-level OC and get placed into max-1 instead.
+            for oc in ocs_sorted:
+                oc_id = oc.get("oc_id")
+                oc_difficulty = oc.get('difficulty')
+                if oc_difficulty is None:
+                    continue
+                try:
+                    oc_difficulty = int(oc_difficulty)
+                except (ValueError, TypeError):
+                    continue
+
+                if oc_id is None or oc_id in seen_oc_ids:
+                    continue
+
+                if not has_oc_history:
+                    continue
+
+                if member_max_oc is not None and oc_difficulty == int(member_max_oc):
+                    filtered_oc_list.append(oc)
+                    seen_oc_ids.add(oc_id)
+
             for oc in oc_list:
                 oc_difficulty = oc.get('difficulty')
                 if oc_difficulty is None:
@@ -1001,6 +1061,10 @@ class OCEmailGenerator:
                 except (ValueError, TypeError):
                     continue
                 
+                oc_id = oc.get("oc_id")
+                if oc_id is not None and oc_id in seen_oc_ids:
+                    continue
+
                 # Members with no OC history can only join Level 1 OCs
                 if not has_oc_history:
                     if oc_difficulty == 1:
@@ -1013,9 +1077,13 @@ class OCEmailGenerator:
                         min_allowed_level = max(1, member_max_oc - 1)
                         if oc_difficulty <= member_max_oc and oc_difficulty >= min_allowed_level:
                             filtered_oc_list.append(oc)
+                            if oc_id is not None:
+                                seen_oc_ids.add(oc_id)
                     else:
                         # If no max_recommended_oc, check all OCs (shouldn't happen, but be safe)
                         filtered_oc_list.append(oc)
+                        if oc_id is not None:
+                            seen_oc_ids.add(oc_id)
             
             # Try to assign member to highest level OC they can do (filtered list is already sorted by difficulty descending)
             # This ensures members get assigned to their max recommended level, not just the first available
@@ -1129,14 +1197,30 @@ class OCEmailGenerator:
                 if not has_oc_specific_data:
                     level_rate = member_level_rates.get(oc_difficulty)
                     if level_rate is None:
-                        logger.debug(f"Skipping {member_name} for Level {oc_difficulty} OC {oc_name}: no level-based rate data for this level")
-                        assignment_reasons[member_name]['considered_ocs'].append({
-                            'oc_id': oc_id,
-                            'oc_name': oc_name,
-                            'level': oc_difficulty,
-                            'reason_skipped': 'No level-based rate data for this level'
-                        })
-                        continue
+                        # Allow "jump" recommendation to the member's max level even without level history.
+                        is_jump = bool(member_perf.get('is_jump_recommendation'))
+                        highest_rate = member_perf.get('highest_level_rate')
+                        highest_level = member_perf.get('highest_level')
+                        if (
+                            is_jump
+                            and member_max_oc is not None
+                            and oc_difficulty == int(member_max_oc)
+                            and highest_rate is not None
+                            and float(highest_rate) >= 90
+                        ):
+                            # Permit this OC. Add a note so it's visible in the reasoning report.
+                            assignment_reasons[member_name]['warnings'].append(
+                                f"Jump recommendation: assigning to Level {oc_difficulty} based on {float(highest_rate):.1f}% at Level {highest_level}"
+                            )
+                        else:
+                            logger.debug(f"Skipping {member_name} for Level {oc_difficulty} OC {oc_name}: no level-based rate data for this level")
+                            assignment_reasons[member_name]['considered_ocs'].append({
+                                'oc_id': oc_id,
+                                'oc_name': oc_name,
+                                'level': oc_difficulty,
+                                'reason_skipped': 'No level-based rate data for this level'
+                            })
+                            continue
                     
                     # Ensure rate is in percentage format
                     try:
