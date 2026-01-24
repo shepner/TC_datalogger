@@ -1722,6 +1722,30 @@ class OCEmailGenerator:
         # Track members who need higher level OCs spawned
         # Members who have max_recommended_oc but no available OCs at that level
         spawn_suggestions = {}  # level -> [member_names]
+
+        # Pre-compute how many open slots exist per level across all available OCs.
+        # This is used for spawn suggestions so we don't recommend spawning when an OC already exists.
+        available_slots_by_level: Dict[int, int] = {}
+        for oc in ocs:
+            if is_excluded_oc(oc):
+                continue
+            oc_difficulty = oc.get("difficulty")
+            if oc_difficulty is None:
+                continue
+            try:
+                level = int(oc_difficulty)
+            except (ValueError, TypeError):
+                continue
+
+            total_slots = oc.get("total_slots", 0) or 0
+            filled_slots = oc.get("filled_slots", 0) or 0
+            assigned_count = len(assignments.get(oc["oc_id"], []))
+            try:
+                open_slots = int(total_slots) - int(filled_slots) - int(assigned_count)
+            except (ValueError, TypeError):
+                open_slots = 0
+            if open_slots > 0:
+                available_slots_by_level[level] = available_slots_by_level.get(level, 0) + open_slots
         
         for member in members_sorted:
             member_name = member['member_name']
@@ -1740,48 +1764,10 @@ class OCEmailGenerator:
             if member_max_oc is None:
                 continue
             
-            # Check if there are any available OCs at this level
-            has_available_oc = False
-            for oc in ocs:
-                if is_excluded_oc(oc):
-                    continue
-                
-                oc_difficulty = oc.get('difficulty')
-                if oc_difficulty is None:
-                    continue
-                
-                try:
-                    oc_difficulty = int(oc_difficulty)
-                except (ValueError, TypeError):
-                    continue
-                
-                if oc_difficulty != member_max_oc:
-                    continue
-                
-                # Check if member can meet requirements
-                level_rate = member_level_rates.get(oc_difficulty)
-                if level_rate is None:
-                    continue
-                
-                try:
-                    rate_num = float(level_rate)
-                    if 0 <= rate_num <= 1:
-                        rate_num = rate_num * 100
-                    if not (80 <= rate_num <= 90):
-                        continue
-                except (ValueError, TypeError):
-                    continue
-                
-                # Check if OC has space
-                oc_id = oc['oc_id']
-                total_slots = oc.get('total_slots', 0)
-                filled_slots = oc.get('filled_slots', 0)
-                assigned_count = len(assignments.get(oc_id, []))
-                available_slots = total_slots - filled_slots - assigned_count
-                
-                if available_slots > 0:
-                    has_available_oc = True
-                    break
+            # Only suggest spawning when there are *no* open slots at that level.
+            # Do NOT gate this on member performance rates; otherwise we can suggest spawning
+            # even when an OC already exists (e.g. members "recommended" to a higher level).
+            has_available_oc = available_slots_by_level.get(int(member_max_oc), 0) > 0
             
             # If no available OC at recommended level, suggest spawning
             if not has_available_oc:
@@ -1910,7 +1896,11 @@ class OCEmailGenerator:
                 member_max_oc = member_perf.get('max_recommended_oc')
                 
                 # If member is assigned to a level below their max, suggest spawning at max level
-                if member_max_oc is not None and oc_difficulty < member_max_oc:
+                if (
+                    member_max_oc is not None
+                    and oc_difficulty < member_max_oc
+                    and available_slots_by_level.get(int(member_max_oc), 0) <= 0
+                ):
                     if member_max_oc not in members_assigned_below_max:
                         members_assigned_below_max[member_max_oc] = []
                     if member_name not in members_assigned_below_max[member_max_oc]:
