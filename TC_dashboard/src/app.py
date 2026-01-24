@@ -4,13 +4,14 @@ import json
 import logging
 import os
 from pathlib import Path
+from typing import List
 
 from flask import Flask, jsonify, render_template, request, send_from_directory
 
 from src.bigquery_client import BigQueryClient
 from src.docker_client import DockerClient
 from src.health_checker import HealthChecker
-from src.oc_email_generator import OCEmailGenerator
+from src.oc_email_generator import DEFAULT_EMAIL_PREFACE, OCEmailGenerator
 from src.requirements_report import RequirementsReport
 from src.trading_dashboard import TradingDashboard
 
@@ -21,6 +22,64 @@ logging.basicConfig(
     datefmt="%Y-%m-%d %H:%M:%S",
 )
 logger = logging.getLogger(__name__)
+
+# Server-shared OC assignment configuration
+OC_ASSIGNMENT_CONFIG_FILE = Path("/app/logs/oc_assignment_config.json")
+
+
+def _default_oc_assignment_config() -> dict:
+    return {
+        "excluded_oc_names": [],
+        "email_preface": DEFAULT_EMAIL_PREFACE,
+    }
+
+
+def load_oc_assignment_config() -> dict:
+    """Load saved OC assignment config; fall back to defaults."""
+    default_cfg = _default_oc_assignment_config()
+    try:
+        if OC_ASSIGNMENT_CONFIG_FILE.exists():
+            with open(OC_ASSIGNMENT_CONFIG_FILE, "r") as f:
+                cfg = json.load(f)
+            if isinstance(cfg, dict):
+                excluded = cfg.get("excluded_oc_names", default_cfg["excluded_oc_names"])
+                preface = cfg.get("email_preface", default_cfg["email_preface"])
+                if not isinstance(excluded, list):
+                    excluded = default_cfg["excluded_oc_names"]
+                excluded = [str(x) for x in excluded if str(x).strip()]
+                if not isinstance(preface, str):
+                    preface = default_cfg["email_preface"]
+                return {
+                    "excluded_oc_names": excluded,
+                    "email_preface": preface,
+                    "is_default": False,
+                }
+    except Exception as e:
+        logger.warning(f"Error reading OC assignment config: {e}", exc_info=True)
+
+    return {
+        **default_cfg,
+        "is_default": True,
+    }
+
+
+def save_oc_assignment_config(excluded_oc_names: List[str], email_preface: str) -> dict:
+    """Validate and persist OC assignment config to disk."""
+    if not isinstance(excluded_oc_names, list):
+        raise ValueError("excluded_oc_names must be a list")
+    excluded = [str(x).strip() for x in excluded_oc_names if str(x).strip()]
+
+    if not isinstance(email_preface, str):
+        raise ValueError("email_preface must be a string")
+
+    cfg = {
+        "excluded_oc_names": excluded,
+        "email_preface": email_preface,
+    }
+    OC_ASSIGNMENT_CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
+    with open(OC_ASSIGNMENT_CONFIG_FILE, "w") as f:
+        json.dump(cfg, f, indent=2)
+    return cfg
 
 # Set template and static folders relative to /app (where we run from)
 # Set template and static folders - Flask looks relative to where app is defined
@@ -93,6 +152,29 @@ def oc_assignment():
     return render_template("oc_assignment.html")
 
 
+@app.route("/api/oc-assignment/config", methods=["GET"])
+def get_oc_assignment_config():
+    """Get saved OC assignment configuration (server-shared)."""
+    cfg = load_oc_assignment_config()
+    return jsonify(cfg)
+
+
+@app.route("/api/oc-assignment/config", methods=["POST"])
+def set_oc_assignment_config():
+    """Save OC assignment configuration (server-shared)."""
+    try:
+        data = request.get_json() or {}
+        excluded_oc_names = data.get("excluded_oc_names", [])
+        email_preface = data.get("email_preface", DEFAULT_EMAIL_PREFACE)
+        cfg = save_oc_assignment_config(excluded_oc_names, email_preface)
+        return jsonify({"success": True, **cfg})
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        logger.error(f"Error saving OC assignment config: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/api/oc-assignment/oc-names", methods=["GET"])
 def get_oc_names():
     """Get list of all unique OC names from historical data."""
@@ -127,10 +209,17 @@ def generate_oc_email():
     
     try:
         data = request.get_json() or {}
-        excluded_oc_names = data.get('excluded_oc_names', [])
+        saved_cfg = load_oc_assignment_config()
+
+        # Allow request overrides (preview without saving)
+        excluded_oc_names = data.get("excluded_oc_names", saved_cfg.get("excluded_oc_names", []))
+        email_preface = data.get("email_preface", saved_cfg.get("email_preface", DEFAULT_EMAIL_PREFACE))
         
         # Generate email using default form letter template
-        result = oc_email_generator.generate_email(excluded_oc_names=excluded_oc_names)
+        result = oc_email_generator.generate_email(
+            excluded_oc_names=excluded_oc_names,
+            email_preface=email_preface,
+        )
         
         # Handle both old format (string) and new format (dict)
         if isinstance(result, dict):

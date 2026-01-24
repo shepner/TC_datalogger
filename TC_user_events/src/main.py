@@ -28,6 +28,26 @@ class Pipeline:
     """Main pipeline class that orchestrates the ETL process."""
 
     @staticmethod
+    def _is_schema_mismatch_error(err: ValueError) -> bool:
+        """
+        Determine whether a ValueError is a BigQuery schema/pre-existing-table skip condition.
+
+        We intentionally allow *schema mismatch / pre-existing table* errors to be skipped,
+        but API errors (e.g. incorrect key, rate limits) must fail the run so callers (like
+        the dashboard) don't get a false "success".
+        """
+        msg = str(err) or ""
+        # BigQueryLoader raises ValueError for these conditions.
+        if msg.startswith("Table ") and (
+            "pre-existing table" in msg
+            or "incompatible schema" in msg
+            or "missing required fields" in msg
+            or "old schema format" in msg
+        ):
+            return True
+        return False
+
+    @staticmethod
     def _extract_schema_field_names(field: Any, prefix: str = "") -> set:
         """
         Recursively extract all field names from a BigQuery schema field.
@@ -332,11 +352,13 @@ class Pipeline:
             logger.info(f"Successfully processed endpoint: {endpoint_name}")
 
         except ValueError as e:
-            # Schema mismatch - skip this endpoint, don't modify pre-existing tables
-            logger.warning(
-                f"Skipping endpoint {endpoint_name}: {e}"
-            )
-            return
+            # Only skip schema mismatch / pre-existing table errors.
+            # API errors (e.g. incorrect key, rate limiting) must be treated as failures.
+            if self._is_schema_mismatch_error(e):
+                logger.warning(f"Skipping endpoint {endpoint_name}: {e}")
+                return
+            logger.error(f"Endpoint {endpoint_name} failed with ValueError: {e}", exc_info=True)
+            raise
         except Exception as e:
             logger.error(
                 f"Error processing endpoint {endpoint_name}: {e}", exc_info=True
@@ -357,6 +379,7 @@ class Pipeline:
         else:
             # Process all endpoints
             logger.info(f"Processing {len(endpoints)} endpoints")
+            failures: list[str] = []
             for endpoint in endpoints:
                 try:
                     self.process_endpoint(endpoint)
@@ -366,7 +389,12 @@ class Pipeline:
                         exc_info=True,
                     )
                     # Continue with other endpoints
+                    failures.append(endpoint.get("name", "unknown"))
                     continue
+            if failures:
+                raise RuntimeError(
+                    f"{len(failures)} endpoint(s) failed: {', '.join(failures)}"
+                )
 
 
 def main() -> None:

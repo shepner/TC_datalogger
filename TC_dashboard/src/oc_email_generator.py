@@ -9,6 +9,30 @@ from src.bigquery_client import BigQueryClient
 
 logger = logging.getLogger(__name__)
 
+# Default email preface (guidelines + header), preserved from prior hard-coded output.
+# This is used unless an explicit `email_preface` is provided.
+DEFAULT_EMAIL_PREFACE = (
+    "OC quick guidelines:\n"
+    "\n"
+    "\n"
+    "If you get bumped from your OC, it is probably because of these 2 reasons:\n"
+    "\n"
+    "- It is expected that all members in Level 2+ OCs will have an 80 to 90 success rate.  Only with Level 1 OCs, participants may have a 0 to 90 success rate.\n"
+    "\n"
+    "- Do not join the Level 5 No Reserve OC.  We cant (yet) complete the 2nd part so its all just a waste of time.\n"
+    "\n"
+    "\n"
+    "If you can do a higher level OC than what was assigned, then go ahead and take it!  (just make sure you are within the 80 to 90 range).  If there arent any OCs of the level you need available, just wait a few hours, Ill spawn more.\n"
+    "\n"
+    "\n"
+    "Finally, dont forget to login daily, quickly join your OC, and be available when your OC is ready!\n"
+    "\n"
+    "\n"
+    "Here are today's OC assignments:\n"
+    "\n"
+    "\n"
+)
+
 
 class OCEmailGenerator:
     """Generates OC assignment emails with member prioritization."""
@@ -539,18 +563,25 @@ class OCEmailGenerator:
         
         return member_data
 
-    def generate_email(self, excluded_oc_names: Optional[List[str]] = None) -> str:
+    def generate_email(
+        self,
+        excluded_oc_names: Optional[List[str]] = None,
+        email_preface: Optional[str] = None,
+    ) -> Dict[str, Any]:
         """
         Generate OC assignment email text using the form letter template.
 
         Args:
-            excluded_oc_names: List of OC names to exclude from assignments (default: ["No Reserve OC"])
+            excluded_oc_names: List of OC names to exclude from assignments (default: [])
+            email_preface: Preface text prepended before the generated assignments block.
 
         Returns:
             Email text ready for copy/paste
         """
         if excluded_oc_names is None:
-            excluded_oc_names = ["No Reserve OC"]
+            excluded_oc_names = []
+        if email_preface is None:
+            email_preface = DEFAULT_EMAIL_PREFACE
         
         # Run independent queries in parallel for better performance
         logger.info("Starting parallel query execution...")
@@ -1781,28 +1812,14 @@ class OCEmailGenerator:
             logger.info(f"Will build needed_ocs list for levels: {list(spawn_suggestions.keys())}")
 
         # Generate email text using form letter format
-        email_lines = []
-        
-        # Form letter guidelines - match exact spacing from user's template
-        email_lines.append("OC quick guidelines:")
-        email_lines.append("")
-        email_lines.append("")
-        email_lines.append("If you get bumped from your OC, it is probably because of these 2 reasons:")
-        email_lines.append("")
-        email_lines.append("- It is expected that all members in Level 2+ OCs will have an 80 to 90 success rate.  Only with Level 1 OCs, participants may have a 0 to 90 success rate.")
-        email_lines.append("")
-        email_lines.append("- Do not join the Level 5 No Reserve OC.  We cant (yet) complete the 2nd part so its all just a waste of time.")
-        email_lines.append("")
-        email_lines.append("")
-        email_lines.append("If you can do a higher level OC than what was assigned, then go ahead and take it!  (just make sure you are within the 80 to 90 range).  If there arent any OCs of the level you need available, just wait a few hours, Ill spawn more.")
-        email_lines.append("")
-        email_lines.append("")
-        email_lines.append("Finally, dont forget to login daily, quickly join your OC, and be available when your OC is ready!")
-        email_lines.append("")
-        email_lines.append("")
-        email_lines.append("Here are today's OC assignments:")
-        email_lines.append("")
-        email_lines.append("")
+        email_lines: List[str] = []
+
+        # Preface text (configurable/saved). Preserve line breaks exactly, including trailing
+        # blank lines. `splitlines()` drops trailing empty lines when the string ends with \n,
+        # so we normalize and split on '\n' instead.
+        if email_preface is not None:
+            normalized_preface = email_preface.replace("\r\n", "\n")
+            email_lines.extend(normalized_preface.split("\n"))
 
         # Group assignments by level (6, 5, 4, 3, 2, 1), then by OC
         # Structure: level -> [oc_id] -> [assignments]
@@ -1949,13 +1966,22 @@ class OCEmailGenerator:
                       difficulty = {level}
                       AND name IS NOT NULL
                       AND name != ''
-                      AND name NOT IN ('No Reserve OC', 'No Reserve')
                     ORDER BY
                       name ASC
                     LIMIT 10
                     """
                     historical_ocs = self.bq.execute_query(query)
-                    suggested_oc_names = [row['oc_name'] for row in historical_ocs if row.get('oc_name')]
+                    suggested_oc_names = [
+                        row["oc_name"] for row in historical_ocs if row.get("oc_name")
+                    ]
+                    # Apply the same exclusion rules as the rest of the generator.
+                    if excluded_oc_names:
+                        excluded_lower = [n.lower() for n in excluded_oc_names]
+                        suggested_oc_names = [
+                            name
+                            for name in suggested_oc_names
+                            if not any(ex in name.lower() for ex in excluded_lower)
+                        ]
                     
                     # If we have historical OCs, use them; otherwise use from current OCs
                     if not suggested_oc_names:
