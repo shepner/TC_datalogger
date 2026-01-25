@@ -79,6 +79,10 @@
         .oc-section-chevron {
             display: inline-block; width: 14px; font-size: 12px;
         }
+        .oc-subsection-header {
+            margin: 0 0 8px 0; font-size: 14px; font-weight: 600; color: #333;
+            cursor: pointer; user-select: none;
+        }
         /* Max Recommended OC level colors */
         /* Max OC level colors: full spectrum from red (Level 1) to purple (Level 10) */
         /* All colors are dark enough to be visible but light enough for dark text readability */
@@ -252,6 +256,7 @@
                     <label for="oc-insights-days" style="margin: 0; font-size: 12px; color: #333;">Days:</label>
                     <input type="text" id="oc-insights-days" placeholder="All" style="width: 60px; padding: 3px 5px; font-size: 12px; border: 1px solid #ccc; border-radius: 3px;" title="Blank = All data">
                     <button onclick="loadOcInsights()" style="padding: 3px 8px; font-size: 12px; background-color: #2196F3; color: white; border: none; border-radius: 3px; cursor: pointer;">Load</button>
+                    <button onclick="refreshOcInsights()" style="padding: 3px 8px; font-size: 12px; background-color: #666; color: white; border: none; border-radius: 3px; cursor: pointer;" title="Force rebuild of snapshot and rankings from raw data">Refresh</button>
                     <span id="oc-insights-status" style="font-size: 11px; color: #666;"></span>
                 </div>
                 <div id="oc-insights-container" style="display: none; max-height: 50vh; overflow: auto; border: 1px solid #ddd; margin-top: 6px;">
@@ -360,6 +365,10 @@
                 <span id="assignment-email-chevron" class="oc-section-chevron">▶</span> Assignment Email
             </h2>
             <div id="assignment-email-panel">
+            <h3 class="oc-subsection-header" onclick="toggleSection('assignment_email_preface')" title="Click to expand/collapse">
+                <span id="assignment-email-preface-chevron" class="oc-section-chevron">▶</span> Assignment Email Preface
+            </h3>
+            <div id="assignment-email-preface-panel">
             <div id="email-preface-toolbar" style="margin-bottom: 10px; padding: 8px 10px; background-color: #f9f9f9; border: 1px solid #eee; border-radius: 3px;">
                 <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 6px;">
                     <label style="font-weight: 600; font-size: 12px; color: #333;">Assignment Email Preface (saved):</label>
@@ -376,6 +385,11 @@
                     </div>
                 </div>
             </div>
+            </div>
+            <h3 class="oc-subsection-header" onclick="toggleSection('assignment_email_exclude_ocs')" title="Click to expand/collapse">
+                <span id="assignment-email-exclude-ocs-chevron" class="oc-section-chevron">▶</span> Exclude OCs
+            </h3>
+            <div id="assignment-email-exclude-ocs-panel">
             <div id="oc-exclude-toolbar" style="margin-bottom: 10px; padding: 8px 10px; background-color: #f9f9f9; border: 1px solid #eee; border-radius: 3px;">
                 <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 6px;">
                     <label style="font-weight: 600; margin: 0; font-size: 12px; color: #333;">Exclude OCs:</label>
@@ -391,11 +405,14 @@
                     </div>
                 </div>
             </div>
+            </div>
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                <h3 style="margin: 0; font-size: 14px; font-weight: 600; color: #333;">Generated Email:</h3>
+                <h3 class="oc-subsection-header" style="margin: 0;" onclick="toggleSection('assignment_email_generated')" title="Click to expand/collapse">
+                    <span id="assignment-email-generated-chevron" class="oc-section-chevron">▶</span> Generated Email
+                </h3>
                 <a href="https://www.torn.com/factions.php?step=your#/tab=controls&option=newsletter&target=notInOC" target="_blank" style="font-size: 12px; color: #4CAF50; text-decoration: none; font-weight: 500;">Send Email →</a>
             </div>
-            <div style="position: relative; display: inline-block; width: 100%;">
+            <div id="assignment-email-generated-panel" style="position: relative; display: inline-block; width: 100%;">
                 <textarea id="email-text" readonly style="padding-right: 35px;">Generating email...</textarea>
                 <button onclick="copyEmail()" style="position: absolute; top: 8px; right: 8px; background: none; border: none; cursor: pointer; padding: 4px; display: flex; align-items: center; justify-content: center; color: #4CAF50; opacity: 0.7; transition: opacity 0.2s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'" title="Copy to clipboard">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -406,20 +423,28 @@
             </div>
             <div id="needed-ocs-section" style="margin-top: 15px; padding: 12px; background-color: #f9f9f9; border: 1px solid #ddd; border-radius: 4px; display: none;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                    <h3 style="margin: 0; font-size: 14px; font-weight: 600; color: #333;">OCs Needed:</h3>
+                    <h3 class="oc-subsection-header" style="margin: 0;" onclick="toggleSection('assignment_email_needed_ocs')" title="Click to expand/collapse">
+                        <span id="assignment-email-needed-ocs-chevron" class="oc-section-chevron">▶</span> OCs Needed
+                    </h3>
                     <a href="https://www.torn.com/factions.php?step=your#/tab=crimes" target="_blank" style="font-size: 12px; color: #4CAF50; text-decoration: none; font-weight: 500;">View Faction OCs →</a>
                 </div>
+                <div id="assignment-email-needed-ocs-panel">
                 <div id="needed-ocs-list" style="font-family: monospace; font-size: 13px; color: #555; line-height: 1.6;">
                     <!-- Needed OCs will be populated here -->
+                </div>
                 </div>
             </div>
             <div id="assignment-reasons-section" style="margin-top: 15px; padding: 12px; background-color: #f0f8ff; border: 1px solid #b0d4f1; border-radius: 4px; display: none;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                    <h3 style="margin: 0; font-size: 14px; font-weight: 600; color: #333;">Assignment Reasoning Report:</h3>
+                    <h3 class="oc-subsection-header" style="margin: 0;" onclick="toggleSection('assignment_email_reasons')" title="Click to expand/collapse">
+                        <span id="assignment-email-reasons-chevron" class="oc-section-chevron">▶</span> Assignment Reasoning Report
+                    </h3>
                     <button onclick="toggleAssignmentReasons()" style="font-size: 12px; padding: 4px 8px; background-color: #4CAF50; color: white; border: none; border-radius: 3px; cursor: pointer;">Toggle Details</button>
                 </div>
+                <div id="assignment-email-reasons-panel">
                 <div id="assignment-reasons-list" style="font-family: monospace; font-size: 12px; color: #555; line-height: 1.6;">
                     <!-- Assignment reasons will be populated here -->
+                </div>
                 </div>
             </div>
             </div>
@@ -725,18 +750,27 @@
         const SECTION_IDS = {
             oc_insights:      { panel: 'oc-insights-panel',      chevron: 'oc-insights-chevron' },
             oc_performance:   { panel: 'oc-performance-panel',   chevron: 'oc-performance-chevron' },
-            assignment_email: { panel: 'assignment-email-panel', chevron: 'assignment-email-chevron' }
+            assignment_email: { panel: 'assignment-email-panel', chevron: 'assignment-email-chevron' },
+            assignment_email_preface:      { panel: 'assignment-email-preface-panel',      chevron: 'assignment-email-preface-chevron' },
+            assignment_email_exclude_ocs:  { panel: 'assignment-email-exclude-ocs-panel',  chevron: 'assignment-email-exclude-ocs-chevron' },
+            assignment_email_generated:    { panel: 'assignment-email-generated-panel',    chevron: 'assignment-email-generated-chevron' },
+            assignment_email_needed_ocs:   { panel: 'assignment-email-needed-ocs-panel',   chevron: 'assignment-email-needed-ocs-chevron' },
+            assignment_email_reasons:      { panel: 'assignment-email-reasons-panel',      chevron: 'assignment-email-reasons-chevron' }
         };
-        let sectionExpanded = { oc_insights: false, oc_performance: true, assignment_email: true };
+        let sectionExpanded = {
+            oc_insights: false, oc_performance: true, assignment_email: true,
+            assignment_email_preface: true, assignment_email_exclude_ocs: true,
+            assignment_email_generated: true, assignment_email_needed_ocs: true, assignment_email_reasons: true
+        };
 
         async function loadSectionStates() {
             try {
                 const r = await fetch('/api/oc-assignment/section-states');
                 const data = await r.json();
                 if (data && typeof data === 'object') {
-                    if (typeof data.oc_insights === 'boolean') sectionExpanded.oc_insights = data.oc_insights;
-                    if (typeof data.oc_performance === 'boolean') sectionExpanded.oc_performance = data.oc_performance;
-                    if (typeof data.assignment_email === 'boolean') sectionExpanded.assignment_email = data.assignment_email;
+                    for (const k of Object.keys(SECTION_IDS)) {
+                        if (typeof data[k] === 'boolean') sectionExpanded[k] = data[k];
+                    }
                 }
             } catch (e) { console.warn('loadSectionStates', e); }
             applySectionStates();
@@ -767,6 +801,25 @@
             sectionExpanded[id] = !sectionExpanded[id];
             applySectionStates();
             saveSectionStates();
+        }
+
+        async function refreshOcInsights() {
+            const statusEl = document.getElementById('oc-insights-status');
+            if (!statusEl) return;
+            statusEl.textContent = 'Refreshing…';
+            try {
+                const r = await fetch('/api/oc-insights/refresh', { method: 'POST' });
+                const data = await r.json().catch(() => ({}));
+                if (!r.ok) {
+                    statusEl.textContent = data.error || 'Refresh failed';
+                    return;
+                }
+                statusEl.textContent = 'Snapshot refreshed.';
+                await loadOcInsights();
+            } catch (e) {
+                statusEl.textContent = 'Error: ' + (e && e.message ? e.message : String(e));
+                console.error('refreshOcInsights', e);
+            }
         }
 
         function fmtNum(v) {

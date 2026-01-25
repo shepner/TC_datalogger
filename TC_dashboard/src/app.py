@@ -90,6 +90,11 @@ DEFAULT_SECTION_STATES = {
     "oc_insights": False,
     "oc_performance": True,
     "assignment_email": True,
+    "assignment_email_preface": True,
+    "assignment_email_exclude_ocs": True,
+    "assignment_email_generated": True,
+    "assignment_email_needed_ocs": True,
+    "assignment_email_reasons": True,
 }
 
 
@@ -674,6 +679,46 @@ def get_oc_insights():
         return jsonify({"rows": rows, "window_days": days_back})
     except Exception as e:
         logger.error(f"OC insights compute failed: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
+
+def _find_sql_path(filename: str) -> Path | None:
+    for base in [Path("/app/sql_queries"), Path(__file__).resolve().parent.parent.parent / "sql_queries"]:
+        p = base / filename
+        if p.exists():
+            return p
+    return None
+
+
+@app.route("/api/oc-insights/refresh", methods=["POST"])
+def refresh_oc_insights():
+    """Force rebuild of oc_historical_insights_snapshot and oc_difficulty_rankings in BigQuery."""
+    if not bigquery_client:
+        return jsonify({"error": "BigQuery client not available"}), 500
+    snap_path = _find_sql_path("oc_historical_insights_snapshot.sql")
+    if not snap_path:
+        return jsonify({"error": "oc_historical_insights_snapshot.sql not found"}), 500
+    rank_path = _find_sql_path("oc_difficulty_rankings.sql")
+    if not rank_path:
+        return jsonify({"error": "oc_difficulty_rankings.sql not found"}), 500
+    proj = bigquery_client.project_id
+    ds = bigquery_client.dataset_id
+    try:
+        snap_sql = snap_path.read_text().strip().rstrip(";")
+        create_snap = f"CREATE OR REPLACE TABLE `{proj}.{ds}.oc_historical_insights_snapshot` AS (\n{snap_sql}\n)"
+        bigquery_client.execute_query(
+            create_snap,
+            query_parameters=[ScalarQueryParameter("window_days_back", "INT64", None)],
+        )
+        rank_sql = rank_path.read_text().replace(
+            "torncity-402423.torn_data.oc_historical_insights_snapshot",
+            f"{proj}.{ds}.oc_historical_insights_snapshot",
+        )
+        create_rank = f"CREATE OR REPLACE TABLE `{proj}.{ds}.oc_difficulty_rankings` AS\n{rank_sql}"
+        bigquery_client.execute_query(create_rank)
+        return jsonify({"success": True})
+    except Exception as e:
+        logger.error(f"OC insights refresh failed: {e}", exc_info=True)
         return jsonify({"error": str(e)}), 500
 
 
