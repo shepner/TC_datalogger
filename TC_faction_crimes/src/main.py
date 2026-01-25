@@ -9,6 +9,8 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Optional
 
+from google.cloud.bigquery import ScalarQueryParameter
+
 from src.api_client import TornCityAPIClient
 from src.bigquery_loader import BigQueryLoader
 from src.config import Config
@@ -77,6 +79,57 @@ class Pipeline:
         project_root = Path(__file__).parent.parent
         schema_path = project_root / "config" / "oc_records_schema.json"
         self.schema = self.bigquery_loader.load_schema(str(schema_path))
+
+    def _maybe_recompute_oc_insights(self, table_id: str) -> None:
+        """
+        If new OC completions exist (max executed_at > snapshot's source_max_executed_at),
+        rebuild oc_historical_insights_snapshot and oc_difficulty_rankings.
+        """
+        if "crimes" not in (table_id or "").lower():
+            return
+        project_id = self.bigquery_loader.project_id
+        dataset_id = self.bigquery_loader.dataset_id
+        repo_root = Path(__file__).resolve().parent.parent.parent
+        snapshot_table = f"`{project_id}.{dataset_id}.oc_historical_insights_snapshot`"
+        try:
+            rows = self.bigquery_loader.run_query(
+                f"SELECT MAX(TIMESTAMP_SECONDS(executed_at)) AS mx FROM `{table_id}` WHERE executed_at IS NOT NULL"
+            )
+            mx = rows[0]["mx"] if rows and rows[0] else None
+        except Exception as e:
+            logger.warning(f"OC insights: could not get max executed_at from {table_id}: {e}")
+            return
+        if mx is None:
+            return
+        try:
+            rows2 = self.bigquery_loader.run_query(
+                f"SELECT MAX(source_max_executed_at) AS prev FROM {snapshot_table}"
+            )
+            prev = rows2[0]["prev"] if rows2 and rows2[0] else None
+        except Exception:
+            prev = None
+        if prev is not None and mx <= prev:
+            return
+        logger.info("OC insights: new completion(s) detected; rebuilding snapshot and rankings")
+        snapshot_path = repo_root / "sql_queries" / "oc_historical_insights_snapshot.sql"
+        if not snapshot_path.exists():
+            logger.warning(f"OC insights: SQL not found {snapshot_path}")
+            return
+        snapshot_sql = snapshot_path.read_text().strip().rstrip(";")
+        create_snapshot = f"CREATE OR REPLACE TABLE {snapshot_table} AS (\n{snapshot_sql}\n)"
+        self.bigquery_loader.run_query(
+            create_snapshot,
+            query_parameters=[ScalarQueryParameter("window_days_back", "INT64", None)],
+        )
+        rankings_path = repo_root / "sql_queries" / "oc_difficulty_rankings.sql"
+        rankings_sql = rankings_path.read_text()
+        rankings_sql = rankings_sql.replace(
+            "torncity-402423.torn_data.oc_historical_insights_snapshot",
+            f"{project_id}.{dataset_id}.oc_historical_insights_snapshot",
+        )
+        create_rank = f"CREATE OR REPLACE TABLE `{project_id}.{dataset_id}.oc_difficulty_rankings` AS\n{rankings_sql}"
+        self.bigquery_loader.run_query(create_rank)
+        logger.info("OC insights: snapshot and rankings rebuilt")
 
     def process_endpoint(self, endpoint: dict) -> None:
         """
@@ -277,6 +330,8 @@ class Pipeline:
             else:
                 logger.warning(f"Could not retrieve statistics for table {table_id}")
             logger.info("-" * 80)
+
+            self._maybe_recompute_oc_insights(table_id)
 
             logger.info(f"Successfully processed endpoint: {endpoint_name}")
 

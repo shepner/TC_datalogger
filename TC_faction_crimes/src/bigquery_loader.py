@@ -583,6 +583,30 @@ class BigQueryLoader:
 
         return merge_sql
 
+    def run_query(
+        self,
+        sql: str,
+        query_parameters: Optional[List] = None,
+    ) -> List[Dict[str, Any]]:
+        """
+        Run a SQL query and return rows as list of dicts.
+
+        Args:
+            sql: SQL query string
+            query_parameters: Optional list of BigQuery ScalarQueryParameter (e.g. for @param)
+
+        Returns:
+            List of rows as dictionaries. Empty for DDL or when no rows.
+        """
+        job_config = (
+            bigquery.QueryJobConfig(query_parameters=query_parameters)
+            if query_parameters
+            else None
+        )
+        job = self.client.query(sql, job_config=job_config)
+        rows = job.result()
+        return [dict(zip(row.keys(), row)) for row in rows]
+
     def get_table_record_count(
         self,
         table_id: str,

@@ -6,6 +6,8 @@ import os
 from pathlib import Path
 from typing import List
 
+from google.cloud.bigquery import ScalarQueryParameter
+
 from flask import Flask, jsonify, render_template, request, send_from_directory
 
 from src.bigquery_client import BigQueryClient
@@ -568,6 +570,50 @@ def get_oc_performance():
         })
     except Exception as e:
         logger.error(f"Error getting OC performance: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/oc-insights", methods=["GET"])
+def get_oc_insights():
+    """
+    GET /api/oc-insights?days_back=<int|empty>
+    - days_back missing/empty: read from oc_historical_insights_snapshot.
+    - days_back provided: run the same aggregation with ready_at filter for last N days (on-the-fly).
+    """
+    if not bigquery_client:
+        return jsonify({"error": "BigQuery client not available"}), 500
+    raw = request.args.get("days_back", "").strip()
+    if raw == "":
+        try:
+            table = f"`{bigquery_client.project_id}.{bigquery_client.dataset_id}.oc_historical_insights_snapshot`"
+            rows = bigquery_client.execute_query(f"SELECT * FROM {table} ORDER BY oc_rank, oc_name")
+            return jsonify({"rows": rows, "window_days": None})
+        except Exception as e:
+            logger.warning(f"OC insights snapshot read failed: {e}")
+            return jsonify({"error": str(e), "rows": []}), 200
+    try:
+        days_back = int(raw)
+        if days_back < 1:
+            days_back = 1
+        elif days_back > 365:
+            days_back = 365
+    except ValueError:
+        return jsonify({"error": "days_back must be an integer"}), 400
+    for base in [Path("/app/sql_queries"), Path(__file__).resolve().parent.parent.parent / "sql_queries"]:
+        p = base / "oc_historical_insights_snapshot.sql"
+        if p.exists():
+            sql = p.read_text().strip().rstrip(";")
+            break
+    else:
+        return jsonify({"error": "oc_historical_insights_snapshot.sql not found"}), 500
+    try:
+        rows = bigquery_client.execute_query(
+            sql,
+            query_parameters=[ScalarQueryParameter("window_days_back", "INT64", days_back)],
+        )
+        return jsonify({"rows": rows, "window_days": days_back})
+    except Exception as e:
+        logger.error(f"OC insights compute failed: {e}", exc_info=True)
         return jsonify({"error": str(e)}), 500
 
 

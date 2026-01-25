@@ -235,6 +235,38 @@
         </div>
         <div id="data-pull-status" style="display: none; margin-bottom: 10px; padding: 8px; border-radius: 4px; font-size: 12px;"></div>
 
+        <!-- Historical OC Insights (collapsed by default) -->
+        <div style="margin-top: 15px; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #ddd;">
+            <h2 style="margin: 0 0 10px 0; font-size: 16px; font-weight: 600; color: #333; cursor: pointer; user-select: none;" id="oc-insights-header" onclick="toggleOcInsights()" title="Click to expand/collapse">
+                <span id="oc-insights-chevron" style="display: inline-block; width: 14px; font-size: 12px;">▶</span> Historical OC Insights
+            </h2>
+            <div id="oc-insights-panel" style="display: none;">
+                <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px;">
+                    <label for="oc-insights-days" style="margin: 0; font-size: 12px; color: #333;">Days:</label>
+                    <input type="text" id="oc-insights-days" placeholder="All" style="width: 60px; padding: 3px 5px; font-size: 12px; border: 1px solid #ccc; border-radius: 3px;" title="Blank = All data">
+                    <button onclick="loadOcInsights()" style="padding: 3px 8px; font-size: 12px; background-color: #2196F3; color: white; border: none; border-radius: 3px; cursor: pointer;">Load</button>
+                    <span id="oc-insights-status" style="font-size: 11px; color: #666;"></span>
+                </div>
+                <div id="oc-insights-container" style="display: none; max-height: 50vh; overflow: auto; border: 1px solid #ddd; margin-top: 6px;">
+                    <table id="oc-insights-table" style="width: 100%; border-collapse: collapse; font-size: 11px;">
+                        <thead style="background-color: #2196F3; color: white; position: sticky; top: 0;">
+                            <tr>
+                                <th style="padding: 3px 6px; border: 1px solid #ddd; width: 22px;"></th>
+                                <th style="padding: 3px 6px; border: 1px solid #ddd;">Rank</th>
+                                <th style="padding: 3px 6px; border: 1px solid #ddd;">OC Name</th>
+                                <th style="padding: 3px 6px; border: 1px solid #ddd;">Diff</th>
+                                <th style="padding: 3px 6px; border: 1px solid #ddd;">Members</th>
+                                <th style="padding: 3px 6px; border: 1px solid #ddd;">Plan→Ready (d)</th>
+                                <th style="padding: 3px 6px; border: 1px solid #ddd;">Respect (med)</th>
+                                <th style="padding: 3px 6px; border: 1px solid #ddd;">Money (med)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="oc-insights-body"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
             <div style="margin-top: 15px; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #ddd;">
             <h2 id="dashboard-title" style="margin: 0 0 10px 0; font-size: 16px; font-weight: 600; color: #333;">OC Performance Dashboard</h2>
             
@@ -670,6 +702,102 @@
             body.style.display = isHidden ? 'block' : 'none';
             if (toggleBtn) toggleBtn.textContent = isHidden ? 'Hide exclusions' : 'Show exclusions';
             if (saveBtn) saveBtn.style.display = isHidden ? 'inline-block' : 'none';
+        }
+
+        let ocInsightsExpanded = false;
+        let ocInsightsRows = [];
+
+        function toggleOcInsights() {
+            ocInsightsExpanded = !ocInsightsExpanded;
+            const panel = document.getElementById('oc-insights-panel');
+            const chev = document.getElementById('oc-insights-chevron');
+            if (panel) panel.style.display = ocInsightsExpanded ? 'block' : 'none';
+            if (chev) chev.textContent = ocInsightsExpanded ? '▼' : '▶';
+        }
+
+        function fmtNum(v) {
+            if (v == null || v === undefined || (typeof v === 'number' && isNaN(v))) return '—';
+            if (typeof v === 'number') return v % 1 === 0 ? v.toLocaleString() : v.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+            return String(v);
+        }
+
+        async function loadOcInsights(skipFetch) {
+            const statusEl = document.getElementById('oc-insights-status');
+            const container = document.getElementById('oc-insights-container');
+            const tbody = document.getElementById('oc-insights-body');
+            const daysEl = document.getElementById('oc-insights-days');
+            if (!statusEl || !container || !tbody) return;
+            if (!skipFetch) {
+                const raw = (daysEl && daysEl.value) ? String(daysEl.value).trim() : '';
+                const q = raw === '' ? '' : '?days_back=' + encodeURIComponent(raw);
+                statusEl.textContent = 'Loading…';
+                try {
+                    const r = await fetch('/api/oc-insights' + q);
+                    const data = await r.json();
+                    if (!r.ok) {
+                        statusEl.textContent = data.error || 'Request failed';
+                        return;
+                    }
+                    ocInsightsRows = data.rows || [];
+                    statusEl.textContent = (data.window_days == null ? 'All data' : 'Last ' + data.window_days + ' days') + ' · ' + ocInsightsRows.length + ' OCs';
+                } catch (e) {
+                    statusEl.textContent = 'Error: ' + (e && e.message ? e.message : String(e));
+                    console.error('loadOcInsights', e);
+                    return;
+                }
+            }
+            container.style.display = 'block';
+            // Render: each OC one main row; expandable position block below
+            let html = '';
+                const expanded = window.ocInsightsDetailExpanded || {};
+                for (let i = 0; i < ocInsightsRows.length; i++) {
+                    const row = ocInsightsRows[i];
+                    const positions = row.positions || [];
+                    const hasPos = positions.length > 0;
+                    const key = (row.oc_name || '') + '_' + i;
+                    const isOpen = !!expanded[key];
+                    const medPlan = row.planning_to_ready_days_median;
+                    const medRes = row.respect_total_median;
+                    const medMon = row.money_total_median;
+                    const members = row.members_needed_median != null ? row.members_needed_median : (row.members_needed_min != null ? row.members_needed_min : row.members_needed_max);
+                    html += '<tr class="oc-insights-oc-row" data-oc-idx="' + i + '" style="background:#fff; cursor:' + (hasPos ? 'pointer' : 'default') + ';">';
+                    html += '<td style="padding:2px 4px;border:1px solid #ddd;">' + (hasPos ? (isOpen ? '▼' : '▶') : '') + '</td>';
+                    html += '<td style="padding:2px 4px;border:1px solid #ddd;">' + fmtNum(row.oc_rank) + '</td>';
+                    html += '<td style="padding:2px 4px;border:1px solid #ddd;">' + (row.oc_name || '') + '</td>';
+                    html += '<td style="padding:2px 4px;border:1px solid #ddd;">' + fmtNum(row.difficulty) + '</td>';
+                    html += '<td style="padding:2px 4px;border:1px solid #ddd;">' + fmtNum(members) + '</td>';
+                    html += '<td style="padding:2px 4px;border:1px solid #ddd;" title="min/med/max">' + fmtNum(medPlan) + '</td>';
+                    html += '<td style="padding:2px 4px;border:1px solid #ddd;">' + fmtNum(medRes) + '</td>';
+                    html += '<td style="padding:2px 4px;border:1px solid #ddd;">' + fmtNum(medMon) + '</td>';
+                    html += '</tr>';
+                    if (hasPos && isOpen) {
+                        html += '<tr class="oc-insights-pos-row" data-oc-idx="' + i + '"><td colspan="8" style="padding:6px 8px;border:1px solid #ddd;background:#f9f9f9;font-size:11px;">';
+                        html += '<table style="width:100%;border-collapse:collapse;margin:0;"><thead><tr style="background:#e3f2fd;"><th style="padding:2px 6px;border:1px solid #ddd;">Pos</th><th style="padding:2px 6px;border:1px solid #ddd;">Rank</th><th style="padding:2px 6px;border:1px solid #ddd;">Score</th><th style="padding:2px 6px;border:1px solid #ddd;">Attempts</th><th style="padding:2px 6px;border:1px solid #ddd;">Outcomes</th></tr></thead><tbody>';
+                        for (let j = 0; j < positions.length; j++) {
+                            const p = positions[j];
+                            const out = (p.outcomes || []).map(function(o) { return (o.outcome || '') + ':' + (o.count != null ? o.count : o['count'] != null ? o['count'] : 0); }).join(', ');
+                            html += '<tr><td style="padding:2px 6px;border:1px solid #ddd;">' + (p.position || p.position_id || '') + '</td>';
+                            html += '<td style="padding:2px 6px;border:1px solid #ddd;">' + fmtNum(p.position_rank_within_oc) + '</td>';
+                            html += '<td style="padding:2px 6px;border:1px solid #ddd;">' + fmtNum(p.position_checkpoint_rate_score) + '</td>';
+                            html += '<td style="padding:2px 6px;border:1px solid #ddd;">' + fmtNum(p.attempt_count) + '</td>';
+                            html += '<td style="padding:2px 6px;border:1px solid #ddd;">' + (out || '—') + '</td></tr>';
+                        }
+                        html += '</tbody></table></td></tr>';
+                    }
+                }
+                tbody.innerHTML = html;
+                tbody.querySelectorAll('.oc-insights-oc-row').forEach(function(tr) {
+                    const idx = tr.getAttribute('data-oc-idx');
+                    const row = ocInsightsRows[parseInt(idx, 10)];
+                    if (row && (row.positions || []).length > 0) {
+                        tr.addEventListener('click', function() {
+                            const k = (row.oc_name || '') + '_' + idx;
+                            if (!window.ocInsightsDetailExpanded) window.ocInsightsDetailExpanded = {};
+                            window.ocInsightsDetailExpanded[k] = !window.ocInsightsDetailExpanded[k];
+                            loadOcInsights(true);
+                        });
+                    }
+                });
         }
 
         function collectExcludedOcNames() {

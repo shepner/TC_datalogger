@@ -78,7 +78,10 @@ class BigQueryClient:
         self.client = bigquery.Client(credentials=credentials, project=project_id)
 
     def execute_query(
-        self, query: str, max_results: Optional[int] = None
+        self,
+        query: str,
+        max_results: Optional[int] = None,
+        query_parameters: Optional[List] = None,
     ) -> List[Dict[str, Any]]:
         """
         Execute a SQL query and return results as a list of dictionaries.
@@ -86,13 +89,17 @@ class BigQueryClient:
         Args:
             query: SQL query string
             max_results: Maximum number of results to return (None for all)
+            query_parameters: Optional list of BigQuery ScalarQueryParameter (e.g. for @param)
 
         Returns:
             List of dictionaries, where each dictionary represents a row
         """
         try:
             logger.debug(f"Executing query: {query[:200]}...")
-            query_job = self.client.query(query)
+            job_config = None
+            if query_parameters:
+                job_config = bigquery.QueryJobConfig(query_parameters=query_parameters)
+            query_job = self.client.query(query, job_config=job_config)
             results = query_job.result(max_results=max_results)
 
             # Convert to list of dictionaries
