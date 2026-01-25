@@ -72,6 +72,13 @@
             color: green;
             margin-top: 10px;
         }
+        .oc-section-header {
+            margin: 0 0 10px 0; font-size: 16px; font-weight: 600; color: #333;
+            cursor: pointer; user-select: none;
+        }
+        .oc-section-chevron {
+            display: inline-block; width: 14px; font-size: 12px;
+        }
         /* Max Recommended OC level colors */
         /* Max OC level colors: full spectrum from red (Level 1) to purple (Level 10) */
         /* All colors are dark enough to be visible but light enough for dark text readability */
@@ -237,8 +244,8 @@
 
         <!-- Historical OC Insights (collapsed by default) -->
         <div style="margin-top: 15px; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #ddd;">
-            <h2 style="margin: 0 0 10px 0; font-size: 16px; font-weight: 600; color: #333; cursor: pointer; user-select: none;" id="oc-insights-header" onclick="toggleOcInsights()" title="Click to expand/collapse">
-                <span id="oc-insights-chevron" style="display: inline-block; width: 14px; font-size: 12px;">▶</span> Historical OC Insights
+            <h2 class="oc-section-header" id="oc-insights-header" onclick="toggleSection('oc_insights')" title="Click to expand/collapse">
+                <span id="oc-insights-chevron" class="oc-section-chevron">▶</span> Historical OC Insights
             </h2>
             <div id="oc-insights-panel" style="display: none;">
                 <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px;">
@@ -268,8 +275,10 @@
         </div>
 
             <div style="margin-top: 15px; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #ddd;">
-            <h2 id="dashboard-title" style="margin: 0 0 10px 0; font-size: 16px; font-weight: 600; color: #333;">OC Performance Dashboard</h2>
-            
+            <h2 class="oc-section-header" id="oc-performance-header" onclick="toggleSection('oc_performance')" title="Click to expand/collapse">
+                <span id="oc-performance-chevron" class="oc-section-chevron">▶</span> OC Performance Dashboard
+            </h2>
+            <div id="oc-performance-panel">
             <div style="display: flex; align-items: center; gap: 8px; flex-wrap: nowrap; margin-bottom: 8px; padding: 4px 0; border-bottom: 1px solid #eee;">
                 <div style="display: flex; align-items: center; gap: 4px;">
                     <label for="performance_days" style="margin: 0; white-space: nowrap; font-size: 12px; color: #333;">Days:</label>
@@ -341,11 +350,16 @@
                     </div>
                 </div>
             </div>
+            </div>
         </div>
 
         <div id="error" class="error" style="display: none;"></div>
 
         <div id="email-output" class="email-output" style="display: block; margin-top: 15px; padding-top: 15px; border-top: 1px solid #ddd;">
+            <h2 class="oc-section-header" id="assignment-email-header" onclick="toggleSection('assignment_email')" title="Click to expand/collapse">
+                <span id="assignment-email-chevron" class="oc-section-chevron">▶</span> Assignment Email
+            </h2>
+            <div id="assignment-email-panel">
             <div id="email-preface-toolbar" style="margin-bottom: 10px; padding: 8px 10px; background-color: #f9f9f9; border: 1px solid #eee; border-radius: 3px;">
                 <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 6px;">
                     <label style="font-weight: 600; font-size: 12px; color: #333;">Assignment Email Preface (saved):</label>
@@ -408,6 +422,7 @@
                     <!-- Assignment reasons will be populated here -->
                 </div>
             </div>
+            </div>
     </div>
 </div>
 
@@ -432,6 +447,7 @@
         // Load OC names and generate email when page loads
         window.addEventListener('DOMContentLoaded', async function() {
             try {
+                await loadSectionStates();
                 await loadOcAssignmentConfig();
                 await loadOcNames();
                 // Wait a bit for checkboxes to be rendered
@@ -704,15 +720,53 @@
             if (saveBtn) saveBtn.style.display = isHidden ? 'inline-block' : 'none';
         }
 
-        let ocInsightsExpanded = false;
         let ocInsightsRows = [];
 
-        function toggleOcInsights() {
-            ocInsightsExpanded = !ocInsightsExpanded;
-            const panel = document.getElementById('oc-insights-panel');
-            const chev = document.getElementById('oc-insights-chevron');
-            if (panel) panel.style.display = ocInsightsExpanded ? 'block' : 'none';
-            if (chev) chev.textContent = ocInsightsExpanded ? '▼' : '▶';
+        const SECTION_IDS = {
+            oc_insights:      { panel: 'oc-insights-panel',      chevron: 'oc-insights-chevron' },
+            oc_performance:   { panel: 'oc-performance-panel',   chevron: 'oc-performance-chevron' },
+            assignment_email: { panel: 'assignment-email-panel', chevron: 'assignment-email-chevron' }
+        };
+        let sectionExpanded = { oc_insights: false, oc_performance: true, assignment_email: true };
+
+        async function loadSectionStates() {
+            try {
+                const r = await fetch('/api/oc-assignment/section-states');
+                const data = await r.json();
+                if (data && typeof data === 'object') {
+                    if (typeof data.oc_insights === 'boolean') sectionExpanded.oc_insights = data.oc_insights;
+                    if (typeof data.oc_performance === 'boolean') sectionExpanded.oc_performance = data.oc_performance;
+                    if (typeof data.assignment_email === 'boolean') sectionExpanded.assignment_email = data.assignment_email;
+                }
+            } catch (e) { console.warn('loadSectionStates', e); }
+            applySectionStates();
+        }
+
+        function applySectionStates() {
+            for (const [id, ids] of Object.entries(SECTION_IDS)) {
+                const exp = sectionExpanded[id];
+                const panel = document.getElementById(ids.panel);
+                const chev = document.getElementById(ids.chevron);
+                if (panel) panel.style.display = exp ? 'block' : 'none';
+                if (chev) chev.textContent = exp ? '▼' : '▶';
+            }
+        }
+
+        async function saveSectionStates() {
+            try {
+                await fetch('/api/oc-assignment/section-states', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(sectionExpanded)
+                });
+            } catch (e) { console.warn('saveSectionStates', e); }
+        }
+
+        function toggleSection(id) {
+            if (sectionExpanded[id] === undefined) return;
+            sectionExpanded[id] = !sectionExpanded[id];
+            applySectionStates();
+            saveSectionStates();
         }
 
         function fmtNum(v) {

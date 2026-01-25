@@ -27,6 +27,7 @@ logger = logging.getLogger(__name__)
 
 # Server-shared OC assignment configuration
 OC_ASSIGNMENT_CONFIG_FILE = Path("/app/logs/oc_assignment_config.json")
+OC_ASSIGNMENT_SECTION_STATES_FILE = Path("/app/logs/oc_assignment_section_states.json")
 
 
 def _default_oc_assignment_config() -> dict:
@@ -82,6 +83,45 @@ def save_oc_assignment_config(excluded_oc_names: List[str], email_preface: str) 
     with open(OC_ASSIGNMENT_CONFIG_FILE, "w") as f:
         json.dump(cfg, f, indent=2)
     return cfg
+
+
+# Default expanded state for each collapsible section (True = expanded)
+DEFAULT_SECTION_STATES = {
+    "oc_insights": False,
+    "oc_performance": True,
+    "assignment_email": True,
+}
+
+
+def load_oc_assignment_section_states() -> dict:
+    """Load saved section expanded states; fall back to defaults. Persisted under /app/logs (outside container)."""
+    try:
+        if OC_ASSIGNMENT_SECTION_STATES_FILE.exists():
+            with open(OC_ASSIGNMENT_SECTION_STATES_FILE, "r") as f:
+                data = json.load(f)
+            if isinstance(data, dict):
+                out = dict(DEFAULT_SECTION_STATES)
+                for k in DEFAULT_SECTION_STATES:
+                    if k in data and isinstance(data[k], bool):
+                        out[k] = data[k]
+                return out
+    except Exception as e:
+        logger.warning(f"Error reading section states: {e}", exc_info=True)
+    return dict(DEFAULT_SECTION_STATES)
+
+
+def save_oc_assignment_section_states(states: dict) -> dict:
+    """Validate and persist section states to disk (outside container via /app/logs mount)."""
+    if not isinstance(states, dict):
+        raise ValueError("states must be a dict")
+    out = {}
+    for k in DEFAULT_SECTION_STATES:
+        out[k] = bool(states[k]) if k in states and isinstance(states.get(k), bool) else DEFAULT_SECTION_STATES[k]
+    OC_ASSIGNMENT_SECTION_STATES_FILE.parent.mkdir(parents=True, exist_ok=True)
+    with open(OC_ASSIGNMENT_SECTION_STATES_FILE, "w") as f:
+        json.dump(out, f, indent=2)
+    return out
+
 
 # Set template and static folders relative to /app (where we run from)
 # Set template and static folders - Flask looks relative to where app is defined
@@ -174,6 +214,26 @@ def set_oc_assignment_config():
         return jsonify({"error": str(e)}), 400
     except Exception as e:
         logger.error(f"Error saving OC assignment config: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/oc-assignment/section-states", methods=["GET"])
+def get_oc_assignment_section_states():
+    """Get saved collapsible section expanded states (persisted under /app/logs, outside container)."""
+    return jsonify(load_oc_assignment_section_states())
+
+
+@app.route("/api/oc-assignment/section-states", methods=["POST"])
+def set_oc_assignment_section_states():
+    """Save collapsible section expanded states to disk (outside container)."""
+    try:
+        data = request.get_json() or {}
+        out = save_oc_assignment_section_states(data)
+        return jsonify(out)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        logger.error(f"Error saving section states: {e}", exc_info=True)
         return jsonify({"error": str(e)}), 500
 
 
