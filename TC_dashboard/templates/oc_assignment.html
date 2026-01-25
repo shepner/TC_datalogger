@@ -83,6 +83,8 @@
             margin: 0 0 8px 0; font-size: 14px; font-weight: 600; color: #333;
             cursor: pointer; user-select: none;
         }
+        .oc-subsection { margin-left: 16px; padding-left: 10px; border-left: 3px solid #e0e0e0; }
+        .oc-subsection-indent { margin-left: 16px; }
         /* Max Recommended OC level colors */
         /* Max OC level colors: full spectrum from red (Level 1) to purple (Level 10) */
         /* All colors are dark enough to be visible but light enough for dark text readability */
@@ -365,20 +367,19 @@
                 <span id="assignment-email-chevron" class="oc-section-chevron">▶</span> Assignment Email
             </h2>
             <div id="assignment-email-panel">
-            <h3 class="oc-subsection-header" onclick="toggleSection('assignment_email_preface')" title="Click to expand/collapse">
+            <h3 class="oc-subsection-header oc-subsection" onclick="toggleSection('assignment_email_preface')" title="Click to expand/collapse">
                 <span id="assignment-email-preface-chevron" class="oc-section-chevron">▶</span> Assignment Email Preface
             </h3>
-            <div id="assignment-email-preface-panel">
+            <div id="assignment-email-preface-panel" class="oc-subsection">
             <div id="email-preface-toolbar" style="margin-bottom: 10px; padding: 8px 10px; background-color: #f9f9f9; border: 1px solid #eee; border-radius: 3px;">
                 <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 6px;">
                     <label style="font-weight: 600; font-size: 12px; color: #333;">Assignment Email Preface (saved):</label>
                     <div style="display: flex; align-items: center; gap: 8px;">
                         <span id="oc-config-status" style="font-size: 12px; color: #666;"></span>
-                        <button id="toggle-preface-btn" onclick="togglePrefaceEditor()" style="padding: 4px 10px; font-size: 12px; background-color: #f5f5f5; color: #333; border: 1px solid #ccc; border-radius: 3px; cursor: pointer;">Edit preface</button>
-                        <button id="save-preface-btn" onclick="saveOcAssignmentConfig({ source: 'preface' })" style="display: none; padding: 4px 10px; font-size: 12px; background-color: #4CAF50; color: white; border: none; border-radius: 3px; cursor: pointer;">Save</button>
+                        <button id="save-preface-btn" onclick="saveOcAssignmentConfig({ source: 'preface' })" style="padding: 4px 10px; font-size: 12px; background-color: #4CAF50; color: white; border: none; border-radius: 3px; cursor: pointer;">Save</button>
                     </div>
                 </div>
-                <div id="email-preface-body" style="display: none;">
+                <div id="email-preface-body">
                     <textarea id="email-preface" style="width: 100%; height: 140px; font-family: monospace; font-size: 11px; border: 1px solid #ccc; border-radius: 3px; padding: 6px; box-sizing: border-box; resize: vertical;" placeholder="Loading saved email preface..."></textarea>
                     <div style="margin-top: 6px; font-size: 11px; color: #777;">
                         Tip: edits here affect the generated email immediately when you regenerate (e.g., toggle a checkbox), and persist after you click Save.
@@ -386,33 +387,32 @@
                 </div>
             </div>
             </div>
-            <h3 class="oc-subsection-header" onclick="toggleSection('assignment_email_exclude_ocs')" title="Click to expand/collapse">
+            <h3 class="oc-subsection-header oc-subsection" onclick="toggleSection('assignment_email_exclude_ocs')" title="Click to expand/collapse">
                 <span id="assignment-email-exclude-ocs-chevron" class="oc-section-chevron">▶</span> Exclude OCs
             </h3>
-            <div id="assignment-email-exclude-ocs-panel">
+            <div id="assignment-email-exclude-ocs-panel" class="oc-subsection">
             <div id="oc-exclude-toolbar" style="margin-bottom: 10px; padding: 8px 10px; background-color: #f9f9f9; border: 1px solid #eee; border-radius: 3px;">
                 <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 6px;">
                     <label style="font-weight: 600; margin: 0; font-size: 12px; color: #333;">Exclude OCs:</label>
                     <div style="display: flex; align-items: center; gap: 8px;">
                         <span id="oc-exclusions-status" style="font-size: 12px; color: #666;"></span>
-                        <button id="toggle-exclusions-btn" onclick="toggleOcExclusions()" style="padding: 4px 10px; font-size: 12px; background-color: #f5f5f5; color: #333; border: 1px solid #ccc; border-radius: 3px; cursor: pointer;">Show exclusions</button>
-                        <button id="save-exclusions-btn" onclick="saveOcAssignmentConfig({ source: 'exclusions' })" style="display: none; padding: 4px 10px; font-size: 12px; background-color: #4CAF50; color: white; border: none; border-radius: 3px; cursor: pointer;">Save exclusions</button>
+                        <button id="save-exclusions-btn" onclick="saveOcAssignmentConfig({ source: 'exclusions' })" style="padding: 4px 10px; font-size: 12px; background-color: #4CAF50; color: white; border: none; border-radius: 3px; cursor: pointer;">Save exclusions</button>
                     </div>
                 </div>
-                <div id="oc-exclude-body" style="display: none;">
+                <div id="oc-exclude-body">
                     <div id="oc-checkboxes" style="display: flex; flex-direction: column; gap: 2px;">
                         <!-- OC checkboxes will be populated here -->
                     </div>
                 </div>
             </div>
             </div>
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <div class="oc-subsection" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                 <h3 class="oc-subsection-header" style="margin: 0;" onclick="toggleSection('assignment_email_generated')" title="Click to expand/collapse">
                     <span id="assignment-email-generated-chevron" class="oc-section-chevron">▶</span> Generated Email
                 </h3>
                 <a href="https://www.torn.com/factions.php?step=your#/tab=controls&option=newsletter&target=notInOC" target="_blank" style="font-size: 12px; color: #4CAF50; text-decoration: none; font-weight: 500;">Send Email →</a>
             </div>
-            <div id="assignment-email-generated-panel" style="position: relative; display: inline-block; width: 100%;">
+            <div id="assignment-email-generated-panel" class="oc-subsection" style="position: relative; display: inline-block; width: 100%;">
                 <textarea id="email-text" readonly style="padding-right: 35px;">Generating email...</textarea>
                 <button onclick="copyEmail()" style="position: absolute; top: 8px; right: 8px; background: none; border: none; cursor: pointer; padding: 4px; display: flex; align-items: center; justify-content: center; color: #4CAF50; opacity: 0.7; transition: opacity 0.2s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'" title="Copy to clipboard">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -421,7 +421,7 @@
                     </svg>
                 </button>
             </div>
-            <div id="needed-ocs-section" style="margin-top: 15px; padding: 12px; background-color: #f9f9f9; border: 1px solid #ddd; border-radius: 4px; display: none;">
+            <div id="needed-ocs-section" class="oc-subsection-indent" style="margin-top: 15px; padding: 12px; background-color: #f9f9f9; border: 1px solid #ddd; border-radius: 4px; display: none;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
                     <h3 class="oc-subsection-header" style="margin: 0;" onclick="toggleSection('assignment_email_needed_ocs')" title="Click to expand/collapse">
                         <span id="assignment-email-needed-ocs-chevron" class="oc-section-chevron">▶</span> OCs Needed
@@ -434,7 +434,7 @@
                 </div>
                 </div>
             </div>
-            <div id="assignment-reasons-section" style="margin-top: 15px; padding: 12px; background-color: #f0f8ff; border: 1px solid #b0d4f1; border-radius: 4px; display: none;">
+            <div id="assignment-reasons-section" class="oc-subsection-indent" style="margin-top: 15px; padding: 12px; background-color: #f0f8ff; border: 1px solid #b0d4f1; border-radius: 4px; display: none;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
                     <h3 class="oc-subsection-header" style="margin: 0;" onclick="toggleSection('assignment_email_reasons')" title="Click to expand/collapse">
                         <span id="assignment-email-reasons-chevron" class="oc-section-chevron">▶</span> Assignment Reasoning Report
@@ -719,30 +719,6 @@
                 savedExcludedOcNames = [];
                 savedEmailPreface = '';
             }
-        }
-
-        function togglePrefaceEditor() {
-            const body = document.getElementById('email-preface-body');
-            const toggleBtn = document.getElementById('toggle-preface-btn');
-            const saveBtn = document.getElementById('save-preface-btn');
-            if (!body) return;
-
-            const isHidden = body.style.display === 'none' || body.style.display === '';
-            body.style.display = isHidden ? 'block' : 'none';
-            if (toggleBtn) toggleBtn.textContent = isHidden ? 'Hide preface' : 'Edit preface';
-            if (saveBtn) saveBtn.style.display = isHidden ? 'inline-block' : 'none';
-        }
-
-        function toggleOcExclusions() {
-            const body = document.getElementById('oc-exclude-body');
-            const toggleBtn = document.getElementById('toggle-exclusions-btn');
-            const saveBtn = document.getElementById('save-exclusions-btn');
-            if (!body) return;
-
-            const isHidden = body.style.display === 'none' || body.style.display === '';
-            body.style.display = isHidden ? 'block' : 'none';
-            if (toggleBtn) toggleBtn.textContent = isHidden ? 'Hide exclusions' : 'Show exclusions';
-            if (saveBtn) saveBtn.style.display = isHidden ? 'inline-block' : 'none';
         }
 
         let ocInsightsRows = [];
