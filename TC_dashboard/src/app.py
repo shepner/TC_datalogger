@@ -651,7 +651,7 @@ def get_oc_insights():
     if raw == "":
         try:
             table = f"`{bigquery_client.project_id}.{bigquery_client.dataset_id}.oc_historical_insights_snapshot`"
-            rows = bigquery_client.execute_query(f"SELECT * FROM {table} ORDER BY difficulty, oc_rank, oc_name")
+            rows = bigquery_client.execute_query(f"SELECT * FROM {table} ORDER BY oc_rank, oc_name")
             return jsonify({"rows": rows, "window_days": None})
         except Exception as e:
             logger.warning(f"OC insights snapshot read failed: {e}")
