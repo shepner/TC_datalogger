@@ -209,7 +209,7 @@ oc_aggs AS (
 oc_ranks AS (
   SELECT
     oa.oc_name,
-    ROW_NUMBER() OVER (ORDER BY oa.difficulty DESC, os.oc_checkpoint_rate_score DESC) AS oc_rank
+    ROW_NUMBER() OVER (ORDER BY oa.difficulty ASC, os.oc_checkpoint_rate_score DESC) AS oc_rank
   FROM oc_aggs oa
   JOIN oc_scores os ON oa.oc_name = os.oc_name
 ),
