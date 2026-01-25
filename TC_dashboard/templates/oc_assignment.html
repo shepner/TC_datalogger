@@ -237,6 +237,8 @@
         }
         #oc-insights-table th.sortable { cursor: pointer; user-select: none; }
         #oc-insights-table th.sortable:hover { background-color: #42A5F5 !important; }
+        .oc-insights-pos-table th.oc-pos-sortable { cursor: pointer; user-select: none; }
+        .oc-insights-pos-table th.oc-pos-sortable:hover { background-color: #bbdefb !important; }
     </style>
 </head>
 <body>
@@ -842,6 +844,45 @@
                 th.textContent = label + arr;
             });
         }
+        function sortOcInsightsPosTable(th) {
+            var table = th.closest('table');
+            if (!table || !table.classList.contains('oc-insights-pos-table')) return;
+            var colIndex = parseInt(th.getAttribute('data-col'), 10);
+            if (isNaN(colIndex)) return;
+            var tbody = table.querySelector('tbody');
+            if (!tbody) return;
+            var wasCol = table.getAttribute('data-pos-sort-col');
+            var wasDir = table.getAttribute('data-pos-sort-dir');
+            var dir = (wasCol === String(colIndex) && wasDir === 'asc') ? 'desc' : 'asc';
+            table.setAttribute('data-pos-sort-col', colIndex);
+            table.setAttribute('data-pos-sort-dir', dir);
+            var rows = Array.from(tbody.querySelectorAll('tr'));
+            rows.sort(function(a, b) {
+                var ac = a.children[colIndex], bc = b.children[colIndex];
+                if (!ac || !bc) return 0;
+                var aVal = ac.getAttribute('data-sort');
+                var bVal = bc.getAttribute('data-sort');
+                if (aVal != null && aVal !== '' && bVal != null && bVal !== '') {
+                    var aNum = parseFloat(aVal), bNum = parseFloat(bVal);
+                    if (!isNaN(aNum) && !isNaN(bNum)) return dir === 'asc' ? aNum - bNum : bNum - aNum;
+                }
+                var aT = (aVal != null && aVal !== '' ? aVal : ac.textContent || '').trim();
+                var bT = (bVal != null && bVal !== '' ? bVal : bc.textContent || '').trim();
+                var c = aT < bT ? -1 : (aT > bT ? 1 : 0);
+                return dir === 'asc' ? c : -c;
+            });
+            rows.forEach(function(tr) { tbody.appendChild(tr); });
+            table.querySelectorAll('thead th.oc-pos-sortable').forEach(function(h) {
+                var lb = h.getAttribute('data-label') || '';
+                var arr = (h.getAttribute('data-col') === String(colIndex)) ? (dir === 'asc' ? ' \u2191' : ' \u2193') : ' \u2195';
+                h.textContent = lb + arr;
+            });
+        }
+        function attachOcInsightsPosSortHandlers() {
+            document.querySelectorAll('.oc-insights-pos-table thead th.oc-pos-sortable').forEach(function(th) {
+                th.onclick = function() { sortOcInsightsPosTable(th); };
+            });
+        }
 
         async function loadOcInsights(skipFetch) {
             const statusEl = document.getElementById('oc-insights-status');
@@ -948,21 +989,36 @@
                 }
                 html += '</tr>';
                 if (hasPos && isOpen) {
+                    var OUTCOME_COLS = ['Successful','Injured','Hospitalized','Jailed'];
+                    var posThs = ['Pos','Rank','Score','Attempts'].concat(OUTCOME_COLS);
                     html += '<tr class="oc-insights-pos-row" data-oc-idx="' + i + '"><td colspan="' + colCount + '" style="padding:6px 8px;border:1px solid #ddd;background:#f9f9f9;font-size:11px;">';
-                        html += '<table style="width:100%;border-collapse:collapse;margin:0;"><thead><tr style="background:#e3f2fd;"><th style="padding:2px 6px;border:1px solid #ddd;">Pos</th><th style="padding:2px 6px;border:1px solid #ddd;">Rank</th><th style="padding:2px 6px;border:1px solid #ddd;">Score</th><th style="padding:2px 6px;border:1px solid #ddd;">Attempts</th><th style="padding:2px 6px;border:1px solid #ddd;">Outcomes</th></tr></thead><tbody>';
-                        for (let j = 0; j < positions.length; j++) {
-                            const p = positions[j];
-                            const out = (p.outcomes || []).map(function(o) { return (o.outcome || '') + ':' + (o.count != null ? o.count : o['count'] != null ? o['count'] : 0); }).join(', ');
-                            html += '<tr><td style="padding:2px 6px;border:1px solid #ddd;">' + (p.position || p.position_id || '') + '</td>';
-                            html += '<td style="padding:2px 6px;border:1px solid #ddd;">' + fmtNum(p.position_rank_within_oc) + '</td>';
-                            html += '<td style="padding:2px 6px;border:1px solid #ddd;">' + fmtNum(p.position_checkpoint_rate_score) + '</td>';
-                            html += '<td style="padding:2px 6px;border:1px solid #ddd;">' + fmtNum(p.attempt_count) + '</td>';
-                            html += '<td style="padding:2px 6px;border:1px solid #ddd;">' + (out || '—') + '</td></tr>';
+                    html += '<table class="oc-insights-pos-table" style="width:100%;border-collapse:collapse;margin:0;"><thead><tr style="background:#e3f2fd;">';
+                    for (var pi = 0; pi < posThs.length; pi++) {
+                        html += '<th class="oc-pos-sortable" data-label="' + posThs[pi].replace(/"/g,'&quot;') + '" data-col="' + pi + '" style="padding:2px 6px;border:1px solid #ddd;cursor:pointer;">' + posThs[pi] + ' \u2195</th>';
+                    }
+                    html += '</tr></thead><tbody>';
+                    for (var j = 0; j < positions.length; j++) {
+                        var p = positions[j];
+                        var pNum = p.position_rank_within_oc != null ? p.position_rank_within_oc : (typeof p.position_id === 'number' ? p.position_id : (parseInt(p.position_id,10) || (j+1)));
+                        var posLabel = 'P' + pNum + (p.position ? ' ' + p.position : '');
+                        var outMap = {};
+                        (p.outcomes || []).forEach(function(o){ var k = (o.outcome || '').trim(); var c = o.count != null ? o.count : o['count']; if(k) outMap[k] = (outMap[k]||0) + (typeof c==='number'? c : (parseInt(c,10)||0)); });
+                        html += '<tr>';
+                        html += '<td style="padding:2px 6px;border:1px solid #ddd;" data-sort="' + pNum + '">' + posLabel + '</td>';
+                        html += '<td style="padding:2px 6px;border:1px solid #ddd;" data-sort="' + (p.position_rank_within_oc != null ? p.position_rank_within_oc : '') + '">' + fmtNum(p.position_rank_within_oc) + '</td>';
+                        html += '<td style="padding:2px 6px;border:1px solid #ddd;" data-sort="' + (p.position_checkpoint_rate_score != null ? p.position_checkpoint_rate_score : '') + '">' + fmtNum(p.position_checkpoint_rate_score) + '</td>';
+                        html += '<td style="padding:2px 6px;border:1px solid #ddd;" data-sort="' + (p.attempt_count != null ? p.attempt_count : '') + '">' + fmtNum(p.attempt_count) + '</td>';
+                        for (var oi = 0; oi < OUTCOME_COLS.length; oi++) {
+                            var c = outMap[OUTCOME_COLS[oi]] || 0;
+                            html += '<td style="padding:2px 6px;border:1px solid #ddd;" data-sort="' + c + '">' + (c || '\u2014') + '</td>';
                         }
-                        html += '</tbody></table></td></tr>';
+                        html += '</tr>';
+                    }
+                    html += '</tbody></table></td></tr>';
                     }
                 }
                 tbody.innerHTML = html;
+                attachOcInsightsPosSortHandlers();
                 tbody.querySelectorAll('.oc-insights-oc-row').forEach(function(tr) {
                     const idx = tr.getAttribute('data-oc-idx');
                     const row = ocInsightsRows[parseInt(idx, 10)];
