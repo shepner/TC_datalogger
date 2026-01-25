@@ -692,7 +692,8 @@ def _find_sql_path(filename: str) -> Path | None:
 
 @app.route("/api/oc-insights/refresh", methods=["POST"])
 def refresh_oc_insights():
-    """Force rebuild of oc_historical_insights_snapshot and oc_difficulty_rankings in BigQuery."""
+    """Force rebuild of oc_historical_insights_snapshot and oc_difficulty_rankings from source
+    tables (v2_faction_40832_crimes-raw, v2_torn_items-raw) in BigQuery."""
     if not bigquery_client:
         return jsonify({"error": "BigQuery client not available"}), 500
     snap_path = _find_sql_path("oc_historical_insights_snapshot.sql")

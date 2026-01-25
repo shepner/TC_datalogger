@@ -41,11 +41,11 @@ money_with_items AS (
     b.executed_at,
     b.respect_total,
     b.slots,
-    COALESCE(b.reward_money, 0) + COALESCE(SUM(it.quantity * SAFE_CAST(i.value.market_price AS INT64)), 0) AS money_total
+    COALESCE(ANY_VALUE(b.reward_money), 0) + COALESCE(SUM(it.quantity * SAFE_CAST(i.value.market_price AS INT64)), 0) AS money_total
   FROM base b
   LEFT JOIN UNNEST(b.reward_items) AS it ON TRUE
   LEFT JOIN `torncity-402423.torn_data.v2_torn_items-raw` AS i ON it.id = i.id
-  GROUP BY 1, 2, 3, 4, 5, 6, 7, 8
+  GROUP BY b.id, b.oc_name, b.difficulty, b.planning_at, b.ready_at, b.executed_at, b.respect_total, b.slots
 ),
 per_run AS (
   SELECT

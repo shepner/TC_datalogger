@@ -258,7 +258,7 @@
                     <label for="oc-insights-days" style="margin: 0; font-size: 12px; color: #333;">Days:</label>
                     <input type="text" id="oc-insights-days" placeholder="All" style="width: 60px; padding: 3px 5px; font-size: 12px; border: 1px solid #ccc; border-radius: 3px;" title="Blank = All data">
                     <button onclick="loadOcInsights()" style="padding: 3px 8px; font-size: 12px; background-color: #2196F3; color: white; border: none; border-radius: 3px; cursor: pointer;">Load</button>
-                    <button onclick="refreshOcInsights()" style="padding: 3px 8px; font-size: 12px; background-color: #666; color: white; border: none; border-radius: 3px; cursor: pointer;" title="Force rebuild of snapshot and rankings from raw data">Refresh</button>
+                    <button onclick="refreshOcInsights()" style="padding: 3px 8px; font-size: 12px; background-color: #666; color: white; border: none; border-radius: 3px; cursor: pointer;" title="Rebuild snapshot and rankings from source tables (crimes-raw, torn_items-raw)">Refresh</button>
                     <span id="oc-insights-status" style="font-size: 11px; color: #666;"></span>
                 </div>
                 <div id="oc-insights-container" style="display: none; max-height: 50vh; overflow: auto; border: 1px solid #ddd; margin-top: 6px;">
@@ -362,7 +362,7 @@
 
         <div id="error" class="error" style="display: none;"></div>
 
-        <div id="email-output" class="email-output" style="display: block; margin-top: 15px; padding-top: 15px; border-top: 1px solid #ddd;">
+        <div id="email-output" class="email-output" style="display: block; margin-top: 15px; padding-top: 15px;">
             <h2 class="oc-section-header" id="assignment-email-header" onclick="toggleSection('assignment_email')" title="Click to expand/collapse">
                 <span id="assignment-email-chevron" class="oc-section-chevron">▶</span> Assignment Email
             </h2>
@@ -782,7 +782,7 @@
         async function refreshOcInsights() {
             const statusEl = document.getElementById('oc-insights-status');
             if (!statusEl) return;
-            statusEl.textContent = 'Refreshing…';
+                statusEl.textContent = 'Refreshing from source…';
             try {
                 const r = await fetch('/api/oc-insights/refresh', { method: 'POST' });
                 const data = await r.json().catch(() => ({}));
@@ -790,7 +790,7 @@
                     statusEl.textContent = data.error || 'Refresh failed';
                     return;
                 }
-                statusEl.textContent = 'Snapshot refreshed.';
+                statusEl.textContent = 'Rebuilt from source. Loading…';
                 await loadOcInsights();
             } catch (e) {
                 statusEl.textContent = 'Error: ' + (e && e.message ? e.message : String(e));
