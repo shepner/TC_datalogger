@@ -174,6 +174,13 @@ positions_per_oc AS (
   LEFT JOIN attempt_counts ac ON pr.oc_name = ac.oc_name AND pr.position_id = ac.position_id
   LEFT JOIN position_outcomes_agg po ON pr.oc_name = po.oc_name AND pr.position_id = po.position_id
 ),
+positions_agg AS (
+  SELECT
+    oc_name,
+    ARRAY_AGG(STRUCT(position_id, position, position_checkpoint_rate_score, position_rank_within_oc, attempt_count, outcomes) ORDER BY position_rank_within_oc) AS positions
+  FROM positions_per_oc
+  GROUP BY oc_name
+),
 oc_aggs AS (
   SELECT
     oc_name,
@@ -249,25 +256,9 @@ SELECT
   oa.money_per_member_per_day_max,
   os.oc_checkpoint_rate_score,
   r.oc_rank,
-  COALESCE(
-    (
-      SELECT ARRAY_AGG(
-        STRUCT(
-          p.position_id,
-          p.position,
-          p.position_checkpoint_rate_score,
-          p.position_rank_within_oc,
-          p.attempt_count,
-          p.outcomes
-        )
-        ORDER BY p.position_rank_within_oc
-      )
-      FROM positions_per_oc p
-      WHERE p.oc_name = oa.oc_name
-    ),
-    []
-  ) AS positions
+  COALESCE(pa.positions, []) AS positions
 FROM oc_aggs oa
 LEFT JOIN oc_scores os ON oa.oc_name = os.oc_name
 LEFT JOIN oc_ranks r ON oa.oc_name = r.oc_name
+LEFT JOIN positions_agg pa ON pa.oc_name = oa.oc_name
 ORDER BY r.oc_rank, oa.oc_name;

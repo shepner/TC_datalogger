@@ -235,6 +235,8 @@
             opacity: 0.7;
             font-size: 10px;
         }
+        #oc-insights-table th.sortable { cursor: pointer; user-select: none; }
+        #oc-insights-table th.sortable:hover { background-color: #42A5F5 !important; }
     </style>
 </head>
 <body>
@@ -259,21 +261,15 @@
                     <input type="text" id="oc-insights-days" placeholder="All" style="width: 60px; padding: 3px 5px; font-size: 12px; border: 1px solid #ccc; border-radius: 3px;" title="Blank = All data">
                     <button onclick="loadOcInsights()" style="padding: 3px 8px; font-size: 12px; background-color: #2196F3; color: white; border: none; border-radius: 3px; cursor: pointer;">Load</button>
                     <button onclick="refreshOcInsights()" style="padding: 3px 8px; font-size: 12px; background-color: #666; color: white; border: none; border-radius: 3px; cursor: pointer;" title="Rebuild snapshot and rankings from source tables (crimes-raw, torn_items-raw)">Refresh</button>
+                    <label style="margin: 0; font-size: 12px; color: #333; cursor: pointer; display: flex; align-items: center; gap: 4px;">
+                        <input type="checkbox" id="oc-insights-debug" onchange="loadOcInsights(true)" style="margin: 0;"> Debug
+                    </label>
                     <span id="oc-insights-status" style="font-size: 11px; color: #666;"></span>
                 </div>
                 <div id="oc-insights-container" style="display: none; max-height: 50vh; overflow: auto; border: 1px solid #ddd; margin-top: 6px;">
                     <table id="oc-insights-table" style="width: 100%; border-collapse: collapse; font-size: 11px;">
                         <thead style="background-color: #2196F3; color: white; position: sticky; top: 0;">
-                            <tr>
-                                <th style="padding: 3px 6px; border: 1px solid #ddd; width: 22px;"></th>
-                                <th style="padding: 3px 6px; border: 1px solid #ddd;">Rank</th>
-                                <th style="padding: 3px 6px; border: 1px solid #ddd;">OC Name</th>
-                                <th style="padding: 3px 6px; border: 1px solid #ddd;">Diff</th>
-                                <th style="padding: 3px 6px; border: 1px solid #ddd;">Members</th>
-                                <th style="padding: 3px 6px; border: 1px solid #ddd;">Plan→Ready (d)</th>
-                                <th style="padding: 3px 6px; border: 1px solid #ddd;">Respect (med)</th>
-                                <th style="padding: 3px 6px; border: 1px solid #ddd;">Money (med)</th>
-                            </tr>
+                            <tr id="oc-insights-header-row"><!-- built by loadOcInsights --></tr>
                         </thead>
                         <tbody id="oc-insights-body"></tbody>
                     </table>
@@ -722,6 +718,7 @@
         }
 
         let ocInsightsRows = [];
+        let ocInsightsSort = { column: null, direction: 'asc' };
 
         const SECTION_IDS = {
             oc_insights:      { panel: 'oc-insights-panel',      chevron: 'oc-insights-chevron' },
@@ -759,6 +756,10 @@
                 const chev = document.getElementById(ids.chevron);
                 if (panel) panel.style.display = exp ? 'block' : 'none';
                 if (chev) chev.textContent = exp ? '▼' : '▶';
+            }
+            // Auto-load Historical OC Insights when section is expanded and we have no data yet
+            if (sectionExpanded.oc_insights && ocInsightsRows.length === 0 && typeof loadOcInsights === 'function') {
+                loadOcInsights();
             }
         }
 
@@ -803,6 +804,44 @@
             if (typeof v === 'number') return v % 1 === 0 ? v.toLocaleString() : v.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
             return String(v);
         }
+        function fmtMoney(v) {
+            if (v == null || v === undefined || (typeof v === 'number' && isNaN(v))) return '—';
+            const n = typeof v === 'number' ? v : parseFloat(v);
+            if (isNaN(n)) return '—';
+            return '$' + (n % 1 === 0 ? n.toLocaleString() : n.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 }));
+        }
+
+        function getOcInsightsSortVal(row, key) {
+            if (key === 'members_needed_median') return row.members_needed_median != null ? row.members_needed_median : (row.members_needed_min != null ? row.members_needed_min : row.members_needed_max);
+            return row[key];
+        }
+        function sortOcInsights(column) {
+            if (ocInsightsSort.column === column) {
+                ocInsightsSort.direction = ocInsightsSort.direction === 'asc' ? 'desc' : 'asc';
+            } else {
+                ocInsightsSort.column = column;
+                ocInsightsSort.direction = 'asc';
+            }
+            ocInsightsRows.sort((a, b) => {
+                let aVal = getOcInsightsSortVal(a, column);
+                let bVal = getOcInsightsSortVal(b, column);
+                if (aVal == null && bVal == null) return 0;
+                if (aVal == null) return 1;
+                if (bVal == null) return -1;
+                if (typeof aVal === 'number' && typeof bVal === 'number') return ocInsightsSort.direction === 'asc' ? aVal - bVal : bVal - aVal;
+                const aS = String(aVal).toLowerCase(), bS = String(bVal).toLowerCase();
+                const c = aS < bS ? -1 : (aS > bS ? 1 : 0);
+                return ocInsightsSort.direction === 'asc' ? c : -c;
+            });
+            loadOcInsights(true);
+        }
+        function updateOcInsightsSortIndicators() {
+            document.querySelectorAll('#oc-insights-table th.sortable').forEach(function(th) {
+                var label = th.getAttribute('data-label') || th.dataset.label || '';
+                var arr = (ocInsightsSort.column && th.dataset.column === ocInsightsSort.column) ? (ocInsightsSort.direction === 'asc' ? ' \u2191' : ' \u2193') : ' \u2195';
+                th.textContent = label + arr;
+            });
+        }
 
         async function loadOcInsights(skipFetch) {
             const statusEl = document.getElementById('oc-insights-status');
@@ -830,31 +869,86 @@
                 }
             }
             container.style.display = 'block';
-            // Render: each OC one main row; expandable position block below
-            let html = '';
-                const expanded = window.ocInsightsDetailExpanded || {};
-                for (let i = 0; i < ocInsightsRows.length; i++) {
-                    const row = ocInsightsRows[i];
-                    const positions = row.positions || [];
-                    const hasPos = positions.length > 0;
-                    const key = (row.oc_name || '') + '_' + i;
-                    const isOpen = !!expanded[key];
-                    const medPlan = row.planning_to_ready_days_median;
-                    const medRes = row.respect_total_median;
-                    const medMon = row.money_total_median;
-                    const members = row.members_needed_median != null ? row.members_needed_median : (row.members_needed_min != null ? row.members_needed_min : row.members_needed_max);
-                    html += '<tr class="oc-insights-oc-row" data-oc-idx="' + i + '" style="background:#fff; cursor:' + (hasPos ? 'pointer' : 'default') + ';">';
-                    html += '<td style="padding:2px 4px;border:1px solid #ddd;">' + (hasPos ? (isOpen ? '▼' : '▶') : '') + '</td>';
-                    html += '<td style="padding:2px 4px;border:1px solid #ddd;">' + fmtNum(row.oc_rank) + '</td>';
-                    html += '<td style="padding:2px 4px;border:1px solid #ddd;">' + (row.oc_name || '') + '</td>';
-                    html += '<td style="padding:2px 4px;border:1px solid #ddd;">' + fmtNum(row.difficulty) + '</td>';
-                    html += '<td style="padding:2px 4px;border:1px solid #ddd;">' + fmtNum(members) + '</td>';
-                    html += '<td style="padding:2px 4px;border:1px solid #ddd;" title="min/med/max">' + fmtNum(medPlan) + '</td>';
-                    html += '<td style="padding:2px 4px;border:1px solid #ddd;">' + fmtNum(medRes) + '</td>';
-                    html += '<td style="padding:2px 4px;border:1px solid #ddd;">' + fmtNum(medMon) + '</td>';
-                    html += '</tr>';
-                    if (hasPos && isOpen) {
-                        html += '<tr class="oc-insights-pos-row" data-oc-idx="' + i + '"><td colspan="8" style="padding:6px 8px;border:1px solid #ddd;background:#f9f9f9;font-size:11px;">';
+            var debugEl = document.getElementById('oc-insights-debug');
+            var debug = debugEl && debugEl.checked;
+            var cols = [
+                { key: '', label: '', sortable: false },
+                { key: 'oc_rank', label: 'Rank', sortable: true },
+                { key: 'oc_name', label: 'OC Name', sortable: true },
+                { key: 'difficulty', label: 'Diff', sortable: true },
+                { key: 'members_needed_median', label: 'Members', sortable: true },
+                { key: 'planning_to_ready_days_median', label: 'Days (plan\u2192ready)', sortable: true, title: 'Days from planning to ready' },
+                { key: 'respect_total_median', label: 'Respect (med)', sortable: true },
+                { key: 'money_total_median', label: '$ (med)', sortable: true, title: 'Money, median' },
+                { key: 'respect_per_member_median', label: 'Respect/mbr', sortable: true, title: 'Respect per member, median' },
+                { key: 'money_per_member_median', label: '$/mbr', sortable: true, title: 'Money per member, median' },
+                { key: 'respect_per_member_per_day_median', label: 'R/(mbr\u00b7day)', sortable: true, title: 'Respect per member per day, median' },
+                { key: 'money_per_member_per_day_median', label: '$/(mbr\u00b7day)', sortable: true, title: 'Money per member per day, median' }
+            ];
+            if (debug) {
+                cols.push({ key: 'oc_checkpoint_rate_score', label: 'Rank score', sortable: true, title: 'Checkpoint pass rate score used for ranking' });
+                cols.push({ key: 'money_range', label: 'Money range', sortable: false, title: 'Min\u2013max money. $0 can mean: no rewards in source, or item IDs not in torn_items.' });
+                cols.push({ key: 'respect_range', label: 'Respect range', sortable: false, title: 'Min\u2013max respect' });
+            }
+            var colCount = cols.length;
+            var headerTr = document.getElementById('oc-insights-header-row');
+            if (headerTr) {
+                headerTr.innerHTML = cols.map(function(c, i) {
+                    var style = 'padding:3px 6px;border:1px solid #ddd;background-color:#2196F3;color:white;' + (i === 0 ? 'width:22px;' : '') + (c.sortable ? 'cursor:pointer;' : 'cursor:default;');
+                    var attrs = 'data-column="' + (c.key || '').replace(/"/g, '&quot;') + '" style="' + style + '"';
+                    if (c.sortable) attrs += ' class="sortable" data-label="' + (c.label || '').replace(/"/g, '&quot;') + '"';
+                    if (c.title) attrs += ' title="' + c.title.replace(/"/g, '&quot;') + '"';
+                    if (c.sortable && c.key) attrs += ' onclick="sortOcInsights(\'' + String(c.key).replace(/'/g, "\\'") + '\')"';
+                    return '<th ' + attrs + '>' + (c.label || '') + '</th>';
+                }).join('');
+            }
+            if (ocInsightsSort.column) {
+                ocInsightsRows.sort(function(a, b) {
+                    var aVal = getOcInsightsSortVal(a, ocInsightsSort.column);
+                    var bVal = getOcInsightsSortVal(b, ocInsightsSort.column);
+                    if (aVal == null && bVal == null) return 0;
+                    if (aVal == null) return 1;
+                    if (bVal == null) return -1;
+                    if (typeof aVal === 'number' && typeof bVal === 'number') return ocInsightsSort.direction === 'asc' ? aVal - bVal : bVal - aVal;
+                    var aS = String(aVal).toLowerCase(), bS = String(bVal).toLowerCase();
+                    var c = aS < bS ? -1 : (aS > bS ? 1 : 0);
+                    return ocInsightsSort.direction === 'asc' ? c : -c;
+                });
+            }
+            updateOcInsightsSortIndicators();
+            var html = '';
+            var expanded = window.ocInsightsDetailExpanded || {};
+            for (var i = 0; i < ocInsightsRows.length; i++) {
+                var row = ocInsightsRows[i];
+                var positions = row.positions || [];
+                var hasPos = positions.length > 0;
+                var key = (row.oc_name || '') + '_' + i;
+                var isOpen = !!expanded[key];
+                var medPlan = row.planning_to_ready_days_median;
+                var medRes = row.respect_total_median;
+                var medMon = row.money_total_median;
+                var members = row.members_needed_median != null ? row.members_needed_median : (row.members_needed_min != null ? row.members_needed_min : row.members_needed_max);
+                html += '<tr class="oc-insights-oc-row" data-oc-idx="' + i + '" style="background:#fff; cursor:' + (hasPos ? 'pointer' : 'default') + ';">';
+                html += '<td style="padding:2px 4px;border:1px solid #ddd;">' + (hasPos ? (isOpen ? '\u25BC' : '\u25B6') : '') + '</td>';
+                html += '<td style="padding:2px 4px;border:1px solid #ddd;">' + fmtNum(row.oc_rank) + '</td>';
+                html += '<td style="padding:2px 4px;border:1px solid #ddd;">' + (row.oc_name || '') + '</td>';
+                html += '<td style="padding:2px 4px;border:1px solid #ddd;">' + fmtNum(row.difficulty) + '</td>';
+                html += '<td style="padding:2px 4px;border:1px solid #ddd;">' + fmtNum(members) + '</td>';
+                html += '<td style="padding:2px 4px;border:1px solid #ddd;" title="min/med/max">' + fmtNum(medPlan) + '</td>';
+                html += '<td style="padding:2px 4px;border:1px solid #ddd;">' + fmtNum(medRes) + '</td>';
+                html += '<td style="padding:2px 4px;border:1px solid #ddd;">' + fmtMoney(medMon) + '</td>';
+                html += '<td style="padding:2px 4px;border:1px solid #ddd;">' + fmtNum(row.respect_per_member_median) + '</td>';
+                html += '<td style="padding:2px 4px;border:1px solid #ddd;">' + fmtMoney(row.money_per_member_median) + '</td>';
+                html += '<td style="padding:2px 4px;border:1px solid #ddd;">' + fmtNum(row.respect_per_member_per_day_median) + '</td>';
+                html += '<td style="padding:2px 4px;border:1px solid #ddd;">' + fmtMoney(row.money_per_member_per_day_median) + '</td>';
+                if (debug) {
+                    html += '<td style="padding:2px 4px;border:1px solid #ddd;">' + fmtNum(row.oc_checkpoint_rate_score) + '</td>';
+                    html += '<td style="padding:2px 4px;border:1px solid #ddd;" title="Raw min\u2013max. $0 can mean: no rewards in source, or item IDs not in torn_items.">' + (row.money_total_min != null && row.money_total_max != null ? (fmtMoney(row.money_total_min) + '\u2013' + fmtMoney(row.money_total_max)) : '\u2014') + '</td>';
+                    html += '<td style="padding:2px 4px;border:1px solid #ddd;">' + (row.respect_total_min != null && row.respect_total_max != null ? (fmtNum(row.respect_total_min) + '\u2013' + fmtNum(row.respect_total_max)) : '\u2014') + '</td>';
+                }
+                html += '</tr>';
+                if (hasPos && isOpen) {
+                    html += '<tr class="oc-insights-pos-row" data-oc-idx="' + i + '"><td colspan="' + colCount + '" style="padding:6px 8px;border:1px solid #ddd;background:#f9f9f9;font-size:11px;">';
                         html += '<table style="width:100%;border-collapse:collapse;margin:0;"><thead><tr style="background:#e3f2fd;"><th style="padding:2px 6px;border:1px solid #ddd;">Pos</th><th style="padding:2px 6px;border:1px solid #ddd;">Rank</th><th style="padding:2px 6px;border:1px solid #ddd;">Score</th><th style="padding:2px 6px;border:1px solid #ddd;">Attempts</th><th style="padding:2px 6px;border:1px solid #ddd;">Outcomes</th></tr></thead><tbody>';
                         for (let j = 0; j < positions.length; j++) {
                             const p = positions[j];
