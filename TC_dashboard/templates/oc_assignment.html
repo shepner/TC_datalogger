@@ -934,7 +934,7 @@
                 html += '<td style="padding:2px 4px;border:1px solid #ddd;">' + (row.oc_name || '') + '</td>';
                 html += '<td style="padding:2px 4px;border:1px solid #ddd;">' + fmtNum(row.difficulty) + '</td>';
                 html += '<td style="padding:2px 4px;border:1px solid #ddd;">' + fmtNum(members) + '</td>';
-                html += '<td style="padding:2px 4px;border:1px solid #ddd;" title="min/med/max">' + fmtNum(medPlan) + '</td>';
+                html += '<td style="padding:2px 4px;border:1px solid #ddd;" title="min/med/max">' + (typeof medPlan === 'number' && !isNaN(medPlan) ? medPlan.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 2 }) : fmtNum(medPlan)) + '</td>';
                 html += '<td style="padding:2px 4px;border:1px solid #ddd;">' + fmtNum(medRes) + '</td>';
                 html += '<td style="padding:2px 4px;border:1px solid #ddd;">' + fmtMoney(medMon) + '</td>';
                 html += '<td style="padding:2px 4px;border:1px solid #ddd;">' + fmtNum(row.respect_per_member_median) + '</td>';
