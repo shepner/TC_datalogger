@@ -89,12 +89,6 @@ oc_scores AS (
   FROM monthly_medians
   GROUP BY 1
 ),
-oc_ranks AS (
-  SELECT
-    oc_name,
-    ROW_NUMBER() OVER (ORDER BY oc_checkpoint_rate_score DESC) AS oc_rank
-  FROM oc_scores
-),
 slot_level AS (
   SELECT
     pr.oc_name,
@@ -212,6 +206,13 @@ oc_aggs AS (
   FROM per_run
   GROUP BY oc_name
 ),
+oc_ranks AS (
+  SELECT
+    oa.oc_name,
+    ROW_NUMBER() OVER (PARTITION BY oa.difficulty ORDER BY os.oc_checkpoint_rate_score DESC) AS oc_rank
+  FROM oc_aggs oa
+  JOIN oc_scores os ON oa.oc_name = os.oc_name
+),
 source_max AS (
   SELECT
     CASE
@@ -261,4 +262,4 @@ FROM oc_aggs oa
 LEFT JOIN oc_scores os ON oa.oc_name = os.oc_name
 LEFT JOIN oc_ranks r ON oa.oc_name = r.oc_name
 LEFT JOIN positions_agg pa ON pa.oc_name = oa.oc_name
-ORDER BY r.oc_rank, oa.oc_name;
+ORDER BY oa.difficulty, r.oc_rank, oa.oc_name;
