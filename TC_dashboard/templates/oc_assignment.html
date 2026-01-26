@@ -263,8 +263,12 @@
                     <input type="text" id="oc-insights-days" placeholder="All" style="width: 60px; padding: 3px 5px; font-size: 12px; border: 1px solid #ccc; border-radius: 3px;" title="Blank = All data">
                     <button onclick="loadOcInsights()" style="padding: 3px 8px; font-size: 12px; background-color: #2196F3; color: white; border: none; border-radius: 3px; cursor: pointer;">Load</button>
                     <button onclick="refreshOcInsights()" style="padding: 3px 8px; font-size: 12px; background-color: #666; color: white; border: none; border-radius: 3px; cursor: pointer;" title="Rebuild snapshot and rankings from source tables (crimes-raw, torn_items-raw)">Refresh</button>
+                    <span style="margin-left: 8px; padding-left: 8px; border-left: 1px solid #ccc;">View:</span>
                     <label style="margin: 0; font-size: 12px; color: #333; cursor: pointer; display: flex; align-items: center; gap: 4px;">
-                        <input type="checkbox" id="oc-insights-debug" onchange="loadOcInsights(true)" style="margin: 0;"> Debug
+                        <input type="radio" name="oc-insights-view" value="summary" checked onchange="loadOcInsights(true)" style="margin: 0;"> Summary
+                    </label>
+                    <label style="margin: 0; font-size: 12px; color: #333; cursor: pointer; display: flex; align-items: center; gap: 4px;">
+                        <input type="radio" name="oc-insights-view" value="member" onchange="loadOcInsights(true)" style="margin: 0;"> By member
                     </label>
                     <span id="oc-insights-status" style="font-size: 11px; color: #666;"></span>
                 </div>
@@ -721,6 +725,7 @@
 
         let ocInsightsRows = [];
         let ocInsightsSort = { column: null, direction: 'asc' };
+        let ocInsightsMemberSort = { column: null, direction: 'asc' };
 
         const SECTION_IDS = {
             oc_insights:      { panel: 'oc-insights-panel',      chevron: 'oc-insights-chevron' },
@@ -844,6 +849,15 @@
                 th.textContent = label + arr;
             });
         }
+        function sortOcInsightsMember(column) {
+            if (ocInsightsMemberSort.column === column) {
+                ocInsightsMemberSort.direction = ocInsightsMemberSort.direction === 'asc' ? 'desc' : 'asc';
+            } else {
+                ocInsightsMemberSort.column = column;
+                ocInsightsMemberSort.direction = 'asc';
+            }
+            loadOcInsights(true);
+        }
         function sortOcInsightsPosTable(th) {
             var table = th.closest('table');
             if (!table || !table.classList.contains('oc-insights-pos-table')) return;
@@ -910,8 +924,9 @@
                 }
             }
             container.style.display = 'block';
-            var debugEl = document.getElementById('oc-insights-debug');
-            var debug = debugEl && debugEl.checked;
+            var viewEl = document.querySelector('input[name="oc-insights-view"]:checked');
+            var view = viewEl ? viewEl.value : 'summary';
+            if (view === 'summary') {
             var cols = [
                 { key: '', label: '', sortable: false },
                 { key: 'oc_rank', label: 'Rank', sortable: true },
@@ -926,11 +941,6 @@
                 { key: 'respect_per_member_per_day_median', label: 'R/(mbr\u00b7day)', sortable: true, title: 'Respect per member per day, median' },
                 { key: 'money_per_member_per_day_median', label: '$/(mbr\u00b7day)', sortable: true, title: 'Money per member per day, median' }
             ];
-            if (debug) {
-                cols.push({ key: 'oc_checkpoint_rate_score', label: 'Rank score', sortable: true, title: 'Checkpoint pass rate score used for ranking' });
-                cols.push({ key: 'money_range', label: 'Money range', sortable: false, title: 'Min\u2013max money. $0 can mean: no rewards in source, or item IDs not in torn_items.' });
-                cols.push({ key: 'respect_range', label: 'Respect range', sortable: false, title: 'Min\u2013max respect' });
-            }
             var colCount = cols.length;
             var headerTr = document.getElementById('oc-insights-header-row');
             if (headerTr) {
@@ -982,11 +992,6 @@
                 html += '<td style="padding:2px 4px;border:1px solid #ddd;">' + fmtMoney(row.money_per_member_median) + '</td>';
                 html += '<td style="padding:2px 4px;border:1px solid #ddd;">' + fmtNum(row.respect_per_member_per_day_median) + '</td>';
                 html += '<td style="padding:2px 4px;border:1px solid #ddd;">' + fmtMoney(row.money_per_member_per_day_median) + '</td>';
-                if (debug) {
-                    html += '<td style="padding:2px 4px;border:1px solid #ddd;">' + fmtNum(row.oc_checkpoint_rate_score) + '</td>';
-                    html += '<td style="padding:2px 4px;border:1px solid #ddd;" title="Raw min\u2013max. $0 can mean: no rewards in source, or item IDs not in torn_items.">' + (row.money_total_min != null && row.money_total_max != null ? (fmtMoney(row.money_total_min) + '\u2013' + fmtMoney(row.money_total_max)) : '\u2014') + '</td>';
-                    html += '<td style="padding:2px 4px;border:1px solid #ddd;">' + (row.respect_total_min != null && row.respect_total_max != null ? (fmtNum(row.respect_total_min) + '\u2013' + fmtNum(row.respect_total_max)) : '\u2014') + '</td>';
-                }
                 html += '</tr>';
                 if (hasPos && isOpen) {
                     var OUTCOME_COLS = ['Successful','Injured','Hospitalized','Jailed'];
@@ -1031,6 +1036,66 @@
                         });
                     }
                 });
+            } else {
+                var flat = [];
+                for (var i = 0; i < ocInsightsRows.length; i++) {
+                    var r = ocInsightsRows[i];
+                    var positions = r.positions || [];
+                    for (var j = 0; j < positions.length; j++) {
+                        var p = positions[j];
+                        var byMember = p.latest_by_member || [];
+                        var pNum = p.position_rank_within_oc != null ? p.position_rank_within_oc : (parseInt(p.position_id, 10) || (j + 1));
+                        var posLabel = 'P' + pNum + (p.position ? ' ' + p.position : '');
+                        for (var k = 0; k < byMember.length; k++) {
+                            var m = byMember[k];
+                            flat.push({
+                                oc_name: r.oc_name || '',
+                                level: r.difficulty,
+                                position: posLabel,
+                                member_name: m.member_name != null ? m.member_name : ('#' + (m.member_id != null ? m.member_id : '?')),
+                                checkpoint_pass_rate: m.checkpoint_pass_rate
+                            });
+                        }
+                    }
+                }
+                if (ocInsightsMemberSort.column) {
+                    flat.sort(function(a, b) {
+                        var key = ocInsightsMemberSort.column;
+                        var aVal = a[key];
+                        var bVal = b[key];
+                        if (aVal == null && bVal == null) return 0;
+                        if (aVal == null) return 1;
+                        if (bVal == null) return -1;
+                        if (typeof aVal === 'number' && typeof bVal === 'number')
+                            return ocInsightsMemberSort.direction === 'asc' ? aVal - bVal : bVal - aVal;
+                        var aS = String(aVal).toLowerCase(), bS = String(bVal).toLowerCase();
+                        var c = aS < bS ? -1 : (aS > bS ? 1 : 0);
+                        return ocInsightsMemberSort.direction === 'asc' ? c : -c;
+                    });
+                }
+                var memberCols = [
+                    { key: 'oc_name', label: 'OC Name' },
+                    { key: 'level', label: 'Level' },
+                    { key: 'position', label: 'Position' },
+                    { key: 'member_name', label: 'Member' },
+                    { key: 'checkpoint_pass_rate', label: 'Checkpoint rate' }
+                ];
+                var headerTr = document.getElementById('oc-insights-header-row');
+                if (headerTr) {
+                    headerTr.innerHTML = memberCols.map(function(c) {
+                        return '<th class="sortable" data-column="' + (c.key || '').replace(/"/g, '&quot;') + '" data-label="' + (c.label || '').replace(/"/g, '&quot;') + '" style="padding:3px 6px;border:1px solid #ddd;background-color:#2196F3;color:white;cursor:pointer;" onclick="sortOcInsightsMember(\'' + String(c.key).replace(/'/g, "\\'") + '\')">' + (c.label || '') + ' \u2195</th>';
+                    }).join('');
+                }
+                document.querySelectorAll('#oc-insights-table th.sortable').forEach(function(th) {
+                    var col = th.dataset.column;
+                    var arr = (ocInsightsMemberSort.column && col === ocInsightsMemberSort.column) ? (ocInsightsMemberSort.direction === 'asc' ? ' \u2191' : ' \u2193') : ' \u2195';
+                    th.textContent = (th.dataset.label || col || '') + arr;
+                });
+                var mhtml = flat.map(function(row) {
+                    return '<tr><td style="padding:2px 4px;border:1px solid #ddd;">' + (row.oc_name || '') + '</td><td style="padding:2px 4px;border:1px solid #ddd;">' + fmtNum(row.level) + '</td><td style="padding:2px 4px;border:1px solid #ddd;">' + (row.position || '') + '</td><td style="padding:2px 4px;border:1px solid #ddd;">' + (row.member_name || '') + '</td><td style="padding:2px 4px;border:1px solid #ddd;">' + fmtNum(row.checkpoint_pass_rate) + '</td></tr>';
+                }).join('');
+                tbody.innerHTML = mhtml;
+            }
         }
 
         function collectExcludedOcNames() {

@@ -638,6 +638,51 @@ def get_oc_performance():
         return jsonify({"error": str(e)}), 500
 
 
+def _enrich_oc_insights_member_names(rows: list, bq: BigQueryClient) -> None:
+    """Add member_name to each latest_by_member entry using faction_members. Modifies rows in place."""
+    member_ids = set()
+    for row in rows:
+        for p in row.get("positions") or []:
+            for m in p.get("latest_by_member") or []:
+                mid = m.get("member_id")
+                if mid is not None:
+                    member_ids.add(mid)
+    valid_ids = []
+    for x in member_ids:
+        try:
+            valid_ids.append(int(x))
+        except (TypeError, ValueError):
+            pass
+    if not valid_ids:
+        return
+    proj, ds = bq.project_id, bq.dataset_id
+    table = f"`{proj}.{ds}.v2_faction_40832_members-raw`"
+    in_clause = ",".join(str(i) for i in valid_ids)
+    try:
+        member_rows = bq.execute_query(f"SELECT id, name FROM {table} WHERE id IN ({in_clause})")
+    except Exception as e:
+        logger.warning(f"Could not resolve member names for OC insights: {e}")
+        return
+    id_to_name = {r["id"]: (r.get("name") or str(r["id"])) for r in member_rows}
+    for row in rows:
+        pos_list = row.get("positions") or []
+        new_pos = []
+        for p in pos_list:
+            p_dict = dict(p) if not isinstance(p, dict) else p.copy()
+            lbm = p_dict.get("latest_by_member") or []
+            new_lbm = []
+            for m in lbm:
+                m_dict = dict(m) if not isinstance(m, dict) else m.copy()
+                mid = m_dict.get("member_id")
+                m_dict["member_name"] = id_to_name.get(
+                    mid, str(mid) if mid is not None else "?"
+                )
+                new_lbm.append(m_dict)
+            p_dict["latest_by_member"] = new_lbm
+            new_pos.append(p_dict)
+        row["positions"] = new_pos
+
+
 @app.route("/api/oc-insights", methods=["GET"])
 def get_oc_insights():
     """
@@ -652,6 +697,7 @@ def get_oc_insights():
         try:
             table = f"`{bigquery_client.project_id}.{bigquery_client.dataset_id}.oc_historical_insights_snapshot`"
             rows = bigquery_client.execute_query(f"SELECT * FROM {table} ORDER BY oc_rank, oc_name")
+            _enrich_oc_insights_member_names(rows, bigquery_client)
             return jsonify({"rows": rows, "window_days": None})
         except Exception as e:
             logger.warning(f"OC insights snapshot read failed: {e}")
@@ -676,6 +722,7 @@ def get_oc_insights():
             sql,
             query_parameters=[ScalarQueryParameter("window_days_back", "INT64", days_back)],
         )
+        _enrich_oc_insights_member_names(rows, bigquery_client)
         return jsonify({"rows": rows, "window_days": days_back})
     except Exception as e:
         logger.error(f"OC insights compute failed: {e}", exc_info=True)
