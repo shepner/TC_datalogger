@@ -2,7 +2,8 @@
 --
 -- Computes per-OC stats: members_needed, planning→ready days, respect/money (total, per-member,
 -- per-member-per-day) with min/median/max; OC and position difficulty ranks from checkpoint_pass_rate;
--- position-level attempt/outcome counts. Money = rewards.money + item market value.
+-- position-level attempt/outcome counts; and latest checkpoint_pass_rate per member per position
+-- (latest_by_member: ARRAY<STRUCT<member_id, checkpoint_pass_rate, executed_at>>). Money = rewards.money + item market value.
 --
 -- Parameter: @window_days_back INT64 (nullable)
 --   - NULL: use all data (for snapshot rebuild); window_days and source_max_executed_at set accordingly.
@@ -38,7 +39,7 @@ money_with_items AS (
     b.difficulty,
     b.planning_at,
     b.ready_at,
-    b.executed_at,
+    b.executed_at AS executed_at,
     b.respect_total,
     b.slots,
     COALESCE(ANY_VALUE(b.reward_money), 0) + COALESCE(SUM(it.quantity * SAFE_CAST(i.value.market_price AS INT64)), 0) AS money_total
@@ -61,6 +62,7 @@ per_run AS (
     (respect_total / NULLIF(ARRAY_LENGTH(slots), 0)) / NULLIF((ready_at - planning_at) / 86400.0, 0) AS respect_per_member_per_day,
     (money_total / NULLIF(ARRAY_LENGTH(slots), 0)) / NULLIF((ready_at - planning_at) / 86400.0, 0) AS money_per_member_per_day,
     ready_at,
+    executed_at,
     slots
   FROM money_with_items
 ),
@@ -155,6 +157,38 @@ position_outcomes_agg AS (
   FROM outcome_counts
   GROUP BY 1, 2
 ),
+member_latest_rate AS (
+  SELECT
+    pr.oc_name,
+    s.position_id,
+    s.position,
+    s.user.id AS member_id,
+    COALESCE(CAST(s.checkpoint_pass_rate AS FLOAT64), 0) AS checkpoint_pass_rate,
+    pr.executed_at
+  FROM per_run pr
+  CROSS JOIN UNNEST(pr.slots) AS s
+  WHERE s.user.id IS NOT NULL
+),
+member_latest_ranked AS (
+  SELECT
+    oc_name,
+    position_id,
+    position,
+    member_id,
+    checkpoint_pass_rate,
+    executed_at,
+    ROW_NUMBER() OVER (PARTITION BY oc_name, position_id, member_id ORDER BY executed_at DESC) AS rn
+  FROM member_latest_rate
+),
+member_latest_per_pos AS (
+  SELECT
+    oc_name,
+    position_id,
+    ARRAY_AGG(STRUCT(member_id, checkpoint_pass_rate, executed_at) ORDER BY member_id) AS latest_by_member
+  FROM member_latest_ranked
+  WHERE rn = 1
+  GROUP BY oc_name, position_id
+),
 positions_per_oc AS (
   SELECT
     pr.oc_name,
@@ -163,15 +197,17 @@ positions_per_oc AS (
     pr.position_checkpoint_rate_score,
     pr.position_rank_within_oc,
     COALESCE(ac.attempt_count, 0) AS attempt_count,
-    COALESCE(po.outcomes, []) AS outcomes
+    COALESCE(po.outcomes, []) AS outcomes,
+    COALESCE(ml.latest_by_member, []) AS latest_by_member
   FROM pos_ranks pr
   LEFT JOIN attempt_counts ac ON pr.oc_name = ac.oc_name AND pr.position_id = ac.position_id
   LEFT JOIN position_outcomes_agg po ON pr.oc_name = po.oc_name AND pr.position_id = po.position_id
+  LEFT JOIN member_latest_per_pos ml ON pr.oc_name = ml.oc_name AND pr.position_id = ml.position_id
 ),
 positions_agg AS (
   SELECT
     oc_name,
-    ARRAY_AGG(STRUCT(position_id, position, position_checkpoint_rate_score, position_rank_within_oc, attempt_count, outcomes) ORDER BY position_rank_within_oc) AS positions
+    ARRAY_AGG(STRUCT(position_id, position, position_checkpoint_rate_score, position_rank_within_oc, attempt_count, outcomes, latest_by_member) ORDER BY position_rank_within_oc) AS positions
   FROM positions_per_oc
   GROUP BY oc_name
 ),
