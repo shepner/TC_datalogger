@@ -820,6 +820,7 @@
 
         function getOcInsightsSortVal(row, key) {
             if (key === 'members_needed_median') return row.members_needed_median != null ? row.members_needed_median : (row.members_needed_min != null ? row.members_needed_min : row.members_needed_max);
+            if (key === 'drop_from_prev') return row.drop_from_prev_sort != null ? row.drop_from_prev_sort : null;
             return row[key];
         }
         function sortOcInsights(column) {
@@ -931,6 +932,7 @@
                 { key: '', label: '', sortable: false },
                 { key: 'oc_rank', label: 'Rank', sortable: true },
                 { key: 'difficulty', label: 'Level', sortable: true, title: 'Difficulty level; OCs are compared within the same level; ranks are global 1,2,3…' },
+                { key: 'drop_from_prev', label: 'Drop from prev.', sortable: true, title: 'Average drop in checkpoint rate when moving from the previous (easier) OC to one in this level. Shown as avg (min–max).' },
                 { key: 'oc_name', label: 'OC Name', sortable: true },
                 { key: 'members_needed_median', label: 'Members', sortable: true },
                 { key: 'planning_to_ready_days_median', label: 'Days (plan\u2192ready)', sortable: true, title: 'Days from planning to ready' },
@@ -967,6 +969,39 @@
                 });
             }
             updateOcInsightsSortIndicators();
+            (function() {
+                var rowsByRank = ocInsightsRows.slice().sort(function(a, b) {
+                    var ar = a.oc_rank, br = b.oc_rank;
+                    if (ar == null && br == null) return 0;
+                    if (ar == null) return 1;
+                    if (br == null) return -1;
+                    return (typeof ar === 'number' ? ar : parseFloat(ar) || 0) - (typeof br === 'number' ? br : parseFloat(br) || 0);
+                });
+                var byLevel = {};
+                for (var i = 1; i < rowsByRank.length; i++) {
+                    var sPrev = parseFloat(rowsByRank[i - 1].oc_checkpoint_rate_score), sCurr = parseFloat(rowsByRank[i].oc_checkpoint_rate_score);
+                    if (isNaN(sPrev) || isNaN(sCurr)) continue;
+                    var drop = sPrev - sCurr;
+                    var L = rowsByRank[i].difficulty;
+                    if (L == null) continue;
+                    if (!byLevel[L]) byLevel[L] = [];
+                    byLevel[L].push(drop);
+                }
+                var levelDrop = {};
+                for (var L in byLevel) {
+                    var arr = byLevel[L];
+                    if (!arr || arr.length === 0) continue;
+                    var avg = arr.reduce(function(s, x) { return s + x; }, 0) / arr.length;
+                    var min = Math.min.apply(null, arr), max = Math.max.apply(null, arr);
+                    levelDrop[L] = { str: min === max ? avg.toFixed(1) : avg.toFixed(1) + ' (' + min.toFixed(1) + '\u2013' + max.toFixed(1) + ')', sort: avg };
+                }
+                for (var i = 0; i < ocInsightsRows.length; i++) {
+                    var r = ocInsightsRows[i];
+                    var ld = levelDrop[r.difficulty];
+                    r.drop_from_prev_str = ld ? ld.str : '\u2014';
+                    r.drop_from_prev_sort = ld ? ld.sort : null;
+                }
+            })();
             var html = '';
             var expanded = window.ocInsightsDetailExpanded || {};
             for (var i = 0; i < ocInsightsRows.length; i++) {
@@ -983,6 +1018,7 @@
                 html += '<td style="padding:2px 4px;border:1px solid #ddd;">' + (hasPos ? (isOpen ? '\u25BC' : '\u25B6') : '') + '</td>';
                 html += '<td style="padding:2px 4px;border:1px solid #ddd;">' + fmtNum(row.oc_rank) + '</td>';
                 html += '<td style="padding:2px 4px;border:1px solid #ddd;">' + fmtNum(row.difficulty) + '</td>';
+                html += '<td style="padding:2px 4px;border:1px solid #ddd;" title="Avg drop in checkpoint rate from previous OC to this level (min–max)">' + (row.drop_from_prev_str || '\u2014') + '</td>';
                 html += '<td style="padding:2px 4px;border:1px solid #ddd;">' + (row.oc_name || '') + '</td>';
                 html += '<td style="padding:2px 4px;border:1px solid #ddd;">' + fmtNum(members) + '</td>';
                 html += '<td style="padding:2px 4px;border:1px solid #ddd;" title="min/med/max">' + (typeof medPlan === 'number' && !isNaN(medPlan) ? medPlan.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 2 }) : fmtNum(medPlan)) + '</td>';
