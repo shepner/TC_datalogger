@@ -997,11 +997,17 @@
                     var min = Math.min.apply(null, arr), max = Math.max.apply(null, arr);
                     levelDrop[L] = { str: min === max ? avg.toFixed(1) : avg.toFixed(1) + ' (' + min.toFixed(1) + '\u2013' + max.toFixed(1) + ')', sort: avg };
                 }
+                var firstInRank = rowsByRank[0];
                 for (var i = 0; i < ocInsightsRows.length; i++) {
                     var r = ocInsightsRows[i];
-                    var ld = levelDrop[r.difficulty];
-                    r.drop_from_prev_str = ld ? ld.str : '\u2014';
-                    r.drop_from_prev_sort = ld ? ld.sort : null;
+                    if (firstInRank && r === firstInRank) {
+                        r.drop_from_prev_str = '\u2014';
+                        r.drop_from_prev_sort = null;
+                    } else {
+                        var ld = levelDrop[r.difficulty];
+                        r.drop_from_prev_str = ld ? ld.str : '\u2014';
+                        r.drop_from_prev_sort = ld ? ld.sort : null;
+                    }
                 }
             })();
             var html = '';
