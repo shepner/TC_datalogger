@@ -932,7 +932,7 @@
                 { key: '', label: '', sortable: false },
                 { key: 'oc_rank', label: 'Rank', sortable: true },
                 { key: 'difficulty', label: 'Level', sortable: true, title: 'Difficulty level; OCs are compared within the same level; ranks are global 1,2,3…' },
-                { key: 'drop_from_prev', label: 'Drop from prev.', sortable: true, title: 'Difference in oc_checkpoint_rate_score between this OC and the immediately previous one in rank order (uses same scores as ranking).' },
+                { key: 'drop_from_prev', label: 'Drop from prev.', sortable: true, title: 'Within-level average drop in oc_checkpoint_rate_score to the next OC (same scores as ranking). Shown as avg (min–max). Rank 1 only is blank.' },
                 { key: 'oc_name', label: 'OC Name', sortable: true },
                 { key: 'members_needed_median', label: 'Members', sortable: true },
                 { key: 'planning_to_ready_days_median', label: 'Days (plan\u2192ready)', sortable: true, title: 'Days from planning to ready' },
@@ -977,22 +977,35 @@
                     if (br == null) return -1;
                     return (typeof ar === 'number' ? ar : parseFloat(ar) || 0) - (typeof br === 'number' ? br : parseFloat(br) || 0);
                 });
-                for (var i = 0; i < rowsByRank.length; i++) {
-                    var r = rowsByRank[i];
-                    if (i === 0) {
+                var byLevel = {};
+                for (var i = 1; i < rowsByRank.length; i++) {
+                    var prev = rowsByRank[i - 1], curr = rowsByRank[i];
+                    if (prev.difficulty == null || curr.difficulty == null || prev.difficulty !== curr.difficulty) continue;
+                    var sPrev = parseFloat(prev.oc_checkpoint_rate_score), sCurr = parseFloat(curr.oc_checkpoint_rate_score);
+                    if (isNaN(sPrev) || isNaN(sCurr)) continue;
+                    var drop = sPrev - sCurr;
+                    var L = curr.difficulty;
+                    if (!byLevel[L]) byLevel[L] = [];
+                    byLevel[L].push(drop);
+                }
+                var levelDrop = {};
+                for (var L in byLevel) {
+                    var arr = byLevel[L];
+                    if (!arr || arr.length === 0) continue;
+                    var avg = arr.reduce(function(s, x) { return s + x; }, 0) / arr.length;
+                    var min = Math.min.apply(null, arr), max = Math.max.apply(null, arr);
+                    levelDrop[L] = { str: min === max ? avg.toFixed(1) : avg.toFixed(1) + ' (' + min.toFixed(1) + '\u2013' + max.toFixed(1) + ')', sort: avg };
+                }
+                var firstInRank = rowsByRank[0];
+                for (var i = 0; i < ocInsightsRows.length; i++) {
+                    var r = ocInsightsRows[i];
+                    if (firstInRank && r === firstInRank) {
                         r.drop_from_prev_str = '\u2014';
                         r.drop_from_prev_sort = null;
                     } else {
-                        var prev = rowsByRank[i - 1];
-                        var sPrev = parseFloat(prev.oc_checkpoint_rate_score), sCurr = parseFloat(r.oc_checkpoint_rate_score);
-                        if (!isNaN(sPrev) && !isNaN(sCurr)) {
-                            var d = sPrev - sCurr;
-                            r.drop_from_prev_str = d.toFixed(1);
-                            r.drop_from_prev_sort = d;
-                        } else {
-                            r.drop_from_prev_str = '\u2014';
-                            r.drop_from_prev_sort = null;
-                        }
+                        var ld = levelDrop[r.difficulty];
+                        r.drop_from_prev_str = ld ? ld.str : '\u2014';
+                        r.drop_from_prev_sort = ld ? ld.sort : null;
                     }
                 }
             })();
@@ -1012,7 +1025,7 @@
                 html += '<td style="padding:2px 4px;border:1px solid #ddd;">' + (hasPos ? (isOpen ? '\u25BC' : '\u25B6') : '') + '</td>';
                 html += '<td style="padding:2px 4px;border:1px solid #ddd;">' + fmtNum(row.oc_rank) + '</td>';
                 html += '<td style="padding:2px 4px;border:1px solid #ddd;">' + fmtNum(row.difficulty) + '</td>';
-                html += '<td style="padding:2px 4px;border:1px solid #ddd;" title="Drop in oc_checkpoint_rate_score from the immediately previous OC in rank order">' + (row.drop_from_prev_str || '\u2014') + '</td>';
+                html += '<td style="padding:2px 4px;border:1px solid #ddd;" title="Avg drop to next OC within this level (min–max)">' + (row.drop_from_prev_str || '\u2014') + '</td>';
                 html += '<td style="padding:2px 4px;border:1px solid #ddd;">' + (row.oc_name || '') + '</td>';
                 html += '<td style="padding:2px 4px;border:1px solid #ddd;">' + fmtNum(members) + '</td>';
                 html += '<td style="padding:2px 4px;border:1px solid #ddd;" title="min/med/max">' + (typeof medPlan === 'number' && !isNaN(medPlan) ? medPlan.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 2 }) : fmtNum(medPlan)) + '</td>';
