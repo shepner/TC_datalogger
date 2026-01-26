@@ -1,6 +1,7 @@
 """OC Assignment Email Generator for Torn City faction management."""
 
 import logging
+import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
@@ -159,6 +160,23 @@ class OCEmailGenerator:
         except Exception as e:
             logger.warning(f"Error getting members with OC history: {e}")
             return set()
+
+    def get_oc_historical_for_assignment(self) -> List[Dict[str, Any]]:
+        """
+        Fetch oc_name, difficulty, oc_rank, oc_checkpoint_rate_score from
+        oc_historical_insights_snapshot for drop calculation (overcome-the-drop rule).
+        On failure returns [] so oc_drop_map stays empty and the rule is not used.
+        """
+        try:
+            table = f"`{self.bq.project_id}.{self.bq.dataset_id}.oc_historical_insights_snapshot`"
+            query = (
+                f"SELECT oc_name, difficulty, oc_rank, oc_checkpoint_rate_score "
+                f"FROM {table} ORDER BY oc_rank, oc_name"
+            )
+            return self.bq.execute_query(query)
+        except Exception as e:
+            logger.warning(f"get_oc_historical_for_assignment failed: {e}")
+            return []
 
     def get_oc_participation_counts_30d(self) -> List[Dict[str, Any]]:
         """
@@ -613,6 +631,7 @@ class OCEmailGenerator:
             future_performance = executor.submit(self.get_member_max_oc_and_rates)
             future_oc_rates = executor.submit(self.get_member_checkpoint_rates)
             future_oc_history = executor.submit(self.get_members_with_oc_history)
+            future_historical = executor.submit(self.get_oc_historical_for_assignment)
             
             # Wait for all queries to complete
             logger.info("Waiting for parallel queries to complete...")
@@ -622,8 +641,33 @@ class OCEmailGenerator:
             member_performance = future_performance.result()  # member_name -> {max_recommended_oc, level_rates, has_80_plus}
             member_oc_rates = future_oc_rates.result()  # member_name -> oc_name_position_id -> rate
             members_with_oc_history = future_oc_history.result()
+            historical_rows = future_historical.result()
         
         logger.info("All parallel queries completed")
+        
+        # Build oc_drop_map from historical insights for "overcome the drop" rule.
+        # Per-OC drop = prev.oc_checkpoint_rate_score - curr.oc_checkpoint_rate_score when prev.difficulty == curr.difficulty.
+        oc_drop_map = {}
+        if historical_rows:
+            rows_sorted = sorted(
+                historical_rows,
+                key=lambda r: (
+                    0 if r.get("oc_rank") is not None else 1,
+                    float(r.get("oc_rank") or 0),
+                    str(r.get("oc_name") or ""),
+                ),
+            )
+            prev = None
+            for row in rows_sorted:
+                if prev is not None and prev.get("difficulty") == row.get("difficulty"):
+                    s_prev = float(prev.get("oc_checkpoint_rate_score") or 0)
+                    s_curr = float(row.get("oc_checkpoint_rate_score") or 0)
+                    drop = s_prev - s_curr
+                    key = (row.get("oc_name") or "").strip().lower()
+                    if key:
+                        oc_drop_map[key] = drop
+                prev = row
+        logger.info(f"oc_drop_map built with {len(oc_drop_map)} entries for overcome-the-drop")
         
         # Debug: Log if member_oc_rates is empty or missing data
         if not member_oc_rates:
@@ -952,8 +996,36 @@ class OCEmailGenerator:
                             and member_highest_level_rate is not None
                             and float(member_highest_level_rate) >= 90
                         ):
-                            pass
+                            return True  # jump: no level_rate for this oc_difficulty; allow based on 90%+ at highest
                         else:
+                            # Overcome the drop: if best_rate - drop >= threshold, allow (including oc_difficulty > member_max_oc)
+                            best_rate = None
+                            try:
+                                if member_level_rates:
+                                    vals = []
+                                    for x in member_level_rates.values():
+                                        if x is None:
+                                            continue
+                                        try:
+                                            v = float(x)
+                                            if 0 <= v <= 1:
+                                                v = v * 100
+                                            vals.append(v)
+                                        except (ValueError, TypeError):
+                                            continue
+                                    if vals:
+                                        best_rate = max(vals)
+                                if best_rate is None and member_highest_level_rate is not None:
+                                    best_rate = float(member_highest_level_rate)
+                                    if 0 <= best_rate <= 1:
+                                        best_rate = best_rate * 100
+                            except (ValueError, TypeError):
+                                pass
+                            drop = oc_drop_map.get((oc.get('oc_name') or '').strip().lower())
+                            if drop is not None and best_rate is not None:
+                                threshold = 0 if oc_difficulty == 1 else 80
+                                if best_rate - drop >= threshold:
+                                    return True
                             return False
                     try:
                         rate_num = float(level_rate)
@@ -1070,12 +1142,9 @@ class OCEmailGenerator:
                     if oc_difficulty == 1:
                         filtered_oc_list.append(oc)
                 else:
-                    # Members with OC history: only check OCs at or below their max recommended level
-                    # Also allow Level 1 as a fallback (max - 1 level rule)
+                    # Members with OC history: allow 1..member_max_oc and above (overcome-the-drop can assign higher)
                     if member_max_oc is not None:
-                        # Check OCs at max level and within 1 level below (for fallback)
-                        min_allowed_level = max(1, member_max_oc - 1)
-                        if oc_difficulty <= member_max_oc and oc_difficulty >= min_allowed_level:
+                        if oc_difficulty >= 1:
                             filtered_oc_list.append(oc)
                             if oc_id is not None:
                                 seen_oc_ids.add(oc_id)
@@ -1213,53 +1282,93 @@ class OCEmailGenerator:
                                 f"Jump recommendation: assigning to Level {oc_difficulty} based on {float(highest_rate):.1f}% at Level {highest_level}"
                             )
                         else:
-                            logger.debug(f"Skipping {member_name} for Level {oc_difficulty} OC {oc_name}: no level-based rate data for this level")
-                            assignment_reasons[member_name]['considered_ocs'].append({
-                                'oc_id': oc_id,
-                                'oc_name': oc_name,
-                                'level': oc_difficulty,
-                                'reason_skipped': 'No level-based rate data for this level'
-                            })
-                            continue
+                            # Overcome the drop: if best_rate - drop >= threshold, allow and fall through
+                            best_rate = None
+                            try:
+                                if member_level_rates:
+                                    vals = []
+                                    for x in member_level_rates.values():
+                                        if x is None:
+                                            continue
+                                        try:
+                                            v = float(x)
+                                            if 0 <= v <= 1:
+                                                v = v * 100
+                                            vals.append(v)
+                                        except (ValueError, TypeError):
+                                            continue
+                                    if vals:
+                                        best_rate = max(vals)
+                                if best_rate is None and highest_rate is not None:
+                                    best_rate = float(highest_rate)
+                                    if 0 <= best_rate <= 1:
+                                        best_rate = best_rate * 100
+                            except (ValueError, TypeError):
+                                pass
+                            drop = oc_drop_map.get((oc_name or '').strip().lower())
+                            if drop is not None and best_rate is not None:
+                                threshold = 0 if oc_difficulty == 1 else 80
+                                if best_rate - drop >= threshold:
+                                    assignment_reasons[member_name]['warnings'].append(
+                                        f"Overcome the drop: assigning to Level {oc_difficulty} OC '{oc_name}' (best_rate {best_rate:.1f}% - drop {drop:.1f} >= {threshold})"
+                                    )
+                                    # fall through to "Check if OC has space"
+                                else:
+                                    extra = f"; best_rate - drop = {best_rate - drop:.1f} < {threshold}"
+                                    logger.debug(f"Skipping {member_name} for Level {oc_difficulty} OC {oc_name}: no level-based rate data for this level{extra}")
+                                    assignment_reasons[member_name]['considered_ocs'].append({
+                                        'oc_id': oc_id, 'oc_name': oc_name, 'level': oc_difficulty,
+                                        'reason_skipped': f'No level-based rate data for this level{extra}'
+                                    })
+                                    continue
+                            else:
+                                logger.debug(f"Skipping {member_name} for Level {oc_difficulty} OC {oc_name}: no level-based rate data for this level")
+                                assignment_reasons[member_name]['considered_ocs'].append({
+                                    'oc_id': oc_id, 'oc_name': oc_name, 'level': oc_difficulty,
+                                    'reason_skipped': 'No level-based rate data for this level'
+                                })
+                                continue
                     
-                    # Ensure rate is in percentage format
-                    try:
-                        rate_num = float(level_rate)
-                        if 0 <= rate_num <= 1:
-                            rate_num = rate_num * 100
-                    except (ValueError, TypeError):
-                        logger.debug(f"Skipping {member_name} for Level {oc_difficulty} OC {oc_name}: invalid rate format")
-                        assignment_reasons[member_name]['considered_ocs'].append({
-                            'oc_id': oc_id,
-                            'oc_name': oc_name,
-                            'level': oc_difficulty,
-                            'reason_skipped': f'Invalid rate format: {level_rate}'
-                        })
-                        continue
-                    
-                    # STRICT CHECK: Rate must be in valid range
-                    # Level 1 OCs: 0-90% (per guidelines: "Only with Level 1 OCs, participants may have a 0 to 90 success rate")
-                    # Level 2+ OCs: 80-90%
-                    if oc_difficulty == 1:
-                        if not (0 <= rate_num <= 90):
-                            logger.debug(f"Skipping {member_name} for Level {oc_difficulty} OC {oc_name}: rate {rate_num} not in 0-90 range")
+                    # When level_rate is not None: ensure percentage format and strict check
+                    # (when level_rate is None we fell through from jump or overcome and skip to "Check if OC has space")
+                    if level_rate is not None:
+                        try:
+                            rate_num = float(level_rate)
+                            if 0 <= rate_num <= 1:
+                                rate_num = rate_num * 100
+                        except (ValueError, TypeError):
+                            logger.debug(f"Skipping {member_name} for Level {oc_difficulty} OC {oc_name}: invalid rate format")
                             assignment_reasons[member_name]['considered_ocs'].append({
                                 'oc_id': oc_id,
                                 'oc_name': oc_name,
                                 'level': oc_difficulty,
-                                'reason_skipped': f'Level rate {rate_num:.1f}% not in 0-90% range'
+                                'reason_skipped': f'Invalid rate format: {level_rate}'
                             })
                             continue
-                    else:
-                        if not (80 <= rate_num <= 90):
-                            logger.debug(f"Skipping {member_name} for Level {oc_difficulty} OC {oc_name}: rate {rate_num} not in 80-90 range")
-                            assignment_reasons[member_name]['considered_ocs'].append({
-                                'oc_id': oc_id,
-                                'oc_name': oc_name,
-                                'level': oc_difficulty,
-                                'reason_skipped': f'Level rate {rate_num:.1f}% not in 80-90% range'
-                            })
-                            continue
+                        
+                        # STRICT CHECK: Rate must be in valid range
+                        # Level 1 OCs: 0-90% (per guidelines: "Only with Level 1 OCs, participants may have a 0 to 90 success rate")
+                        # Level 2+ OCs: 80-90%
+                        if oc_difficulty == 1:
+                            if not (0 <= rate_num <= 90):
+                                logger.debug(f"Skipping {member_name} for Level {oc_difficulty} OC {oc_name}: rate {rate_num} not in 0-90 range")
+                                assignment_reasons[member_name]['considered_ocs'].append({
+                                    'oc_id': oc_id,
+                                    'oc_name': oc_name,
+                                    'level': oc_difficulty,
+                                    'reason_skipped': f'Level rate {rate_num:.1f}% not in 0-90% range'
+                                })
+                                continue
+                        else:
+                            if not (80 <= rate_num <= 90):
+                                logger.debug(f"Skipping {member_name} for Level {oc_difficulty} OC {oc_name}: rate {rate_num} not in 80-90 range")
+                                assignment_reasons[member_name]['considered_ocs'].append({
+                                    'oc_id': oc_id,
+                                    'oc_name': oc_name,
+                                    'level': oc_difficulty,
+                                    'reason_skipped': f'Level rate {rate_num:.1f}% not in 80-90% range'
+                                })
+                                continue
                 
                 # Check if OC has space
                 if oc_id not in assignments:
@@ -1273,10 +1382,9 @@ class OCEmailGenerator:
                 
                 if available_slots > 0:
                     # CRITICAL: Before assigning, check if this OC is appropriate for the PRIMARY member
-                    # Don't assign primary member to an OC that's more than 1 level below their max
-                    # This prevents high-level members from being grouped into low-level OCs
+                    # Allow all lower: if member meets minimums for higher, they may join any easier OC (min_allowed_level=1)
                     if member_max_oc is not None:
-                        min_allowed_level = member_max_oc - 1
+                        min_allowed_level = 1
                         if oc_difficulty < min_allowed_level:
                             # OC is more than 1 level below their max - skip it and continue searching
                             assignment_reasons[member_name]['considered_ocs'].append({
@@ -1318,12 +1426,9 @@ class OCEmailGenerator:
                             other_member_perf = member_performance.get(other_member_name, {})
                             other_member_max_oc = other_member_perf.get('max_recommended_oc')
                             
-                            # If other member has a max recommended OC, only group if:
-                            # OC is at or within 1 level of their max (oc_difficulty >= max_oc - 1)
-                            # This means: if max is 3, only group into Level 2, 3, or higher
-                            # Never group into Level 1 if their max is 3
+                            # If other member has a max recommended OC: allow all lower (min_allowed_level=1)
                             if other_member_max_oc is not None:
-                                min_allowed_level = other_member_max_oc - 1
+                                min_allowed_level = 1
                                 if oc_difficulty < min_allowed_level:
                                     # OC is more than 1 level below their max - don't group
                                     logger.debug(f"Not grouping {other_member_name} into Level {oc_difficulty} OC: their max is {other_member_max_oc}, minimum allowed is {min_allowed_level}")
@@ -2103,6 +2208,30 @@ class OCEmailGenerator:
         
         # Log what we're returning
         logger.info(f"Returning needed_ocs: {needed_ocs}")
+        
+        # Optional validation of assignment invariants (gated by OC_ASSIGNMENT_VALIDATE)
+        if os.getenv("OC_ASSIGNMENT_VALIDATE"):
+            for member_name, data in assignment_reasons.items():
+                try:
+                    al = data.get("assigned_level")
+                    mro = data.get("max_recommended_oc")
+                    if al is not None and mro is not None:
+                        al_int, mro_int = int(al), int(mro)
+                        if al_int > mro_int:
+                            warnings = data.get("warnings", [])
+                            if not any("Overcome the drop" in str(w) for w in warnings):
+                                logger.warning(
+                                    f"OC_ASSIGNMENT_VALIDATE: {member_name} assigned_level={al_int} > max_recommended_oc={mro_int} without 'Overcome the drop' in warnings"
+                                )
+                    for w in data.get("warnings", []) or []:
+                        if str(w).startswith("Overcome the drop"):
+                            if data.get("assigned_level") is None:
+                                logger.warning(
+                                    f"OC_ASSIGNMENT_VALIDATE: {member_name} has 'Overcome the drop' warning but assigned_level is None"
+                                )
+                            break
+                except (ValueError, TypeError) as e:
+                    logger.debug(f"OC_ASSIGNMENT_VALIDATE skip {member_name}: {e}")
         
         # Return both email text, needed OCs, and assignment reasons
         return {
