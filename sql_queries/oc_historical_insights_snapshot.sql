@@ -249,6 +249,60 @@ oc_ranks AS (
   FROM oc_aggs oa
   JOIN oc_scores os ON oa.oc_name = os.oc_name
 ),
+oc_with_rank AS (
+  SELECT
+    oa.oc_name,
+    oa.difficulty,
+    os.oc_checkpoint_rate_score,
+    r.oc_rank,
+    -- Calculate rank within same difficulty for drop calculation
+    ROW_NUMBER() OVER (PARTITION BY oa.difficulty ORDER BY os.oc_checkpoint_rate_score DESC) AS rank_within_difficulty
+  FROM oc_aggs oa
+  JOIN oc_scores os ON oa.oc_name = os.oc_name
+  JOIN oc_ranks r ON oa.oc_name = r.oc_name
+),
+-- First compute within-difficulty raw drops between adjacent OCs,
+-- then aggregate to a per-difficulty average. This mirrors the
+-- original frontend behavior which showed a single representative
+-- drop per difficulty level rather than per-OC micro-differences.
+oc_drop_level_stats AS (
+  SELECT
+    d.difficulty,
+    -- Use the average drop within each difficulty and floor it at 1.0
+    -- to avoid unrealistically tiny values like 0.1 percentage points.
+    GREATEST(AVG(d.raw_drop), 1.0) AS avg_drop
+  FROM (
+    SELECT
+      curr.difficulty,
+      CASE
+        WHEN prev.oc_name IS NOT NULL THEN
+          prev.oc_checkpoint_rate_score - curr.oc_checkpoint_rate_score
+        ELSE NULL
+      END AS raw_drop
+    FROM oc_with_rank curr
+    LEFT JOIN oc_with_rank prev ON 
+      prev.difficulty = curr.difficulty
+      AND prev.rank_within_difficulty = curr.rank_within_difficulty - 1
+  ) AS d
+  WHERE d.raw_drop IS NOT NULL
+  GROUP BY d.difficulty
+),
+oc_drops AS (
+  SELECT
+    w.oc_name,
+    w.difficulty,
+    w.oc_checkpoint_rate_score,
+    w.oc_rank,
+    CASE
+      -- Match frontend: only the single global Rank 1 OC has no drop;
+      -- all others show the representative average for their difficulty.
+      WHEN w.oc_rank = 1 THEN NULL
+      ELSE s.avg_drop
+    END AS drop_from_prev
+  FROM oc_with_rank w
+  LEFT JOIN oc_drop_level_stats s
+    ON w.difficulty = s.difficulty
+),
 source_max AS (
   SELECT
     CASE
@@ -291,11 +345,11 @@ SELECT
   oa.money_per_member_per_day_min,
   oa.money_per_member_per_day_median,
   oa.money_per_member_per_day_max,
-  os.oc_checkpoint_rate_score,
-  r.oc_rank,
+  od.oc_checkpoint_rate_score,
+  od.oc_rank,
+  od.drop_from_prev,
   COALESCE(pa.positions, []) AS positions
 FROM oc_aggs oa
-LEFT JOIN oc_scores os ON oa.oc_name = os.oc_name
-LEFT JOIN oc_ranks r ON oa.oc_name = r.oc_name
+LEFT JOIN oc_drops od ON oa.oc_name = od.oc_name
 LEFT JOIN positions_agg pa ON pa.oc_name = oa.oc_name
-ORDER BY r.oc_rank, oa.oc_name;
+ORDER BY od.oc_rank, oa.oc_name;

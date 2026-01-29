@@ -163,20 +163,100 @@ class OCEmailGenerator:
 
     def get_oc_historical_for_assignment(self) -> List[Dict[str, Any]]:
         """
-        Fetch oc_name, difficulty, oc_rank, oc_checkpoint_rate_score from
+        Fetch oc_name, difficulty, oc_rank, oc_checkpoint_rate_score, drop_from_prev from
         oc_historical_insights_snapshot for drop calculation (overcome-the-drop rule).
         On failure returns [] so oc_drop_map stays empty and the rule is not used.
         """
         try:
             table = f"`{self.bq.project_id}.{self.bq.dataset_id}.oc_historical_insights_snapshot`"
             query = (
-                f"SELECT oc_name, difficulty, oc_rank, oc_checkpoint_rate_score "
+                f"SELECT oc_name, difficulty, oc_rank, oc_checkpoint_rate_score, drop_from_prev "
                 f"FROM {table} ORDER BY oc_rank, oc_name"
             )
             return self.bq.execute_query(query)
         except Exception as e:
             logger.warning(f"get_oc_historical_for_assignment failed: {e}")
             return []
+
+    def get_member_highest_historical_oc(self, member_id_to_name: Dict[int, str]) -> Dict[str, Dict[str, Any]]:
+        """
+        Get each member's highest checkpoint rate from their highest difficulty rank OC in historical DB.
+        
+        Returns:
+            Dict[member_name -> {
+                'oc_name': str,
+                'difficulty': int,
+                'oc_rank': int,
+                'position': str,
+                'checkpoint_rate': float
+            }]
+        """
+        try:
+            table = f"`{self.bq.project_id}.{self.bq.dataset_id}.oc_historical_insights_snapshot`"
+            # Query to get member's highest checkpoint rate from highest difficulty rank OC
+            query = f"""
+            WITH member_oc_rates AS (
+              SELECT
+                oc_name,
+                oc_rank,
+                difficulty,
+                position.position,
+                member.member_id,
+                member.checkpoint_pass_rate
+              FROM {table},
+              UNNEST(positions) AS position,
+              UNNEST(position.latest_by_member) AS member
+              WHERE member.member_id IS NOT NULL
+            ),
+            member_max_rank AS (
+              SELECT
+                member_id,
+                MAX(oc_rank) AS max_oc_rank
+              FROM member_oc_rates
+              GROUP BY member_id
+            ),
+            member_best_at_max_rank AS (
+              SELECT
+                mor.member_id,
+                mor.oc_name,
+                mor.oc_rank,
+                mor.difficulty,
+                mor.position,
+                mor.checkpoint_pass_rate,
+                ROW_NUMBER() OVER (PARTITION BY mor.member_id ORDER BY mor.checkpoint_pass_rate DESC) AS rn
+              FROM member_oc_rates mor
+              INNER JOIN member_max_rank mmr ON mor.member_id = mmr.member_id AND mor.oc_rank = mmr.max_oc_rank
+            )
+            SELECT
+              member_id,
+              oc_name,
+              oc_rank,
+              difficulty,
+              position,
+              checkpoint_pass_rate
+            FROM member_best_at_max_rank
+            WHERE rn = 1
+            """
+            results = self.bq.execute_query(query)
+            
+            # Map member_id to member_name
+            member_data = {}
+            for row in results:
+                member_id = row.get('member_id')
+                if member_id and member_id in member_id_to_name:
+                    member_name = member_id_to_name[member_id]
+                    member_data[member_name] = {
+                        'oc_name': row.get('oc_name', ''),
+                        'difficulty': row.get('difficulty'),
+                        'oc_rank': row.get('oc_rank'),
+                        'position': row.get('position', ''),
+                        'checkpoint_rate': float(row.get('checkpoint_pass_rate', 0))
+                    }
+            
+            return member_data
+        except Exception as e:
+            logger.warning(f"get_member_highest_historical_oc failed: {e}")
+            return {}
 
     def get_oc_participation_counts_30d(self) -> List[Dict[str, Any]]:
         """
@@ -645,28 +725,83 @@ class OCEmailGenerator:
         
         logger.info("All parallel queries completed")
         
-        # Build oc_drop_map from historical insights for "overcome the drop" rule.
-        # Per-OC drop = prev.oc_checkpoint_rate_score - curr.oc_checkpoint_rate_score when prev.difficulty == curr.difficulty.
-        oc_drop_map = {}
+        # Build member_id_to_name mapping for historical OC lookup
+        member_id_to_name = {}
+        for member in members:
+            member_id = member.get('member_id')
+            member_name = member.get('member_name')
+            if member_id and member_name:
+                member_id_to_name[member_id] = member_name
+        
+        # Get member's highest historical OC performance (highest checkpoint rate from highest difficulty rank)
+        member_highest_historical = self.get_member_highest_historical_oc(member_id_to_name)
+        logger.info(f"Found highest historical OC data for {len(member_highest_historical)} members")
+        
+        # Build oc_name -> oc_rank map for displaying difficulty rank
+        oc_rank_map = {}
         if historical_rows:
-            rows_sorted = sorted(
-                historical_rows,
-                key=lambda r: (
-                    0 if r.get("oc_rank") is not None else 1,
-                    float(r.get("oc_rank") or 0),
-                    str(r.get("oc_name") or ""),
-                ),
-            )
-            prev = None
-            for row in rows_sorted:
-                if prev is not None and prev.get("difficulty") == row.get("difficulty"):
-                    s_prev = float(prev.get("oc_checkpoint_rate_score") or 0)
-                    s_curr = float(row.get("oc_checkpoint_rate_score") or 0)
-                    drop = s_prev - s_curr
-                    key = (row.get("oc_name") or "").strip().lower()
-                    if key:
-                        oc_drop_map[key] = drop
-                prev = row
+            for row in historical_rows:
+                oc_name = (row.get("oc_name") or "").strip().lower()
+                oc_rank = row.get("oc_rank")
+                if oc_name and oc_rank is not None:
+                    oc_rank_map[oc_name] = int(oc_rank)
+        
+        # Build oc_drop_map from historical insights for "overcome the drop" rule.
+        # Use drop_from_prev directly from the database (now stored as a float in percentage points).
+        oc_drop_map = {}
+        # Also build rank -> drop mapping for cumulative drop calculations
+        rank_to_drop_map = {}  # rank -> drop_from_prev for that rank
+        if historical_rows:
+            # Use drop_from_prev from the database - it's now a float representing percentage points
+            for row in historical_rows:
+                drop_from_prev = row.get("drop_from_prev")
+                oc_name = (row.get("oc_name") or "").strip().lower()
+                oc_rank = row.get("oc_rank")
+                if oc_name and drop_from_prev is not None:
+                    try:
+                        drop_value = float(drop_from_prev)
+                        # Validate drop is reasonable (0-50 percentage points)
+                        # Store it if valid; NULL values (rank 1 OC) are skipped
+                        if 0 <= drop_value <= 50:
+                            oc_drop_map[oc_name] = drop_value
+                            # Also store by rank for cumulative calculations
+                            if oc_rank is not None:
+                                try:
+                                    rank_int = int(oc_rank)
+                                    # If multiple OCs have same rank, use average (shouldn't happen, but handle it)
+                                    if rank_int not in rank_to_drop_map:
+                                        rank_to_drop_map[rank_int] = drop_value
+                                    else:
+                                        # Average if multiple OCs at same rank (unlikely)
+                                        rank_to_drop_map[rank_int] = (rank_to_drop_map[rank_int] + drop_value) / 2.0
+                                except (ValueError, TypeError):
+                                    pass
+                        else:
+                            logger.warning(f"Invalid drop_from_prev value {drop_value} for OC {oc_name}, skipping")
+                    except (ValueError, TypeError) as e:
+                        logger.debug(f"Could not parse drop_from_prev for OC {oc_name}: {e}")
+                        pass
+            
+            # If we didn't get drop_from_prev from DB (backward compatibility), calculate it
+            if not oc_drop_map:
+                rows_sorted = sorted(
+                    historical_rows,
+                    key=lambda r: (
+                        0 if r.get("oc_rank") is not None else 1,
+                        float(r.get("oc_rank") or 0),
+                        str(r.get("oc_name") or ""),
+                    ),
+                )
+                prev = None
+                for row in rows_sorted:
+                    if prev is not None and prev.get("difficulty") == row.get("difficulty"):
+                        s_prev = float(prev.get("oc_checkpoint_rate_score") or 0)
+                        s_curr = float(row.get("oc_checkpoint_rate_score") or 0)
+                        drop = s_prev - s_curr
+                        key = (row.get("oc_name") or "").strip().lower()
+                        if key:
+                            oc_drop_map[key] = drop
+                    prev = row
         logger.info(f"oc_drop_map built with {len(oc_drop_map)} entries for overcome-the-drop")
         
         # Debug: Log if member_oc_rates is empty or missing data
@@ -728,6 +863,32 @@ class OCEmailGenerator:
             
             if not ocs:
                 return "No available OCs found. Please create new OCs first."
+
+        # Only consider OCs that are Recruiting (accepting members); exclude Planning
+        ocs = [o for o in ocs if (o.get("status") or "").strip().lower() == "recruiting"]
+        if not ocs:
+            return "No available OCs found. Only Planning OCs exist; Recruiting OCs are required for assignment."
+        logger.info(f"Using {len(ocs)} Recruiting OCs for assignment (Planning excluded)")
+
+        # Helper function to calculate cumulative drop by summing actual drop values for each rank step
+        def calculate_cumulative_drop(from_rank, to_rank):
+            """
+            Calculate cumulative drop by summing drop_from_prev for each rank step.
+            Returns the total cumulative drop, or None if calculation not possible.
+            """
+            if from_rank is None or to_rank is None or from_rank >= to_rank:
+                return None
+            
+            cumulative = 0.0
+            for rank in range(from_rank + 1, to_rank + 1):
+                if rank in rank_to_drop_map:
+                    cumulative += rank_to_drop_map[rank]
+                else:
+                    # Missing drop data for a rank - can't calculate cumulative
+                    logger.debug(f"Missing drop data for rank {rank}, cannot calculate cumulative drop from rank {from_rank} to {to_rank}")
+                    return None
+            
+            return cumulative
 
         # Enrich members with participation data and activity status
         # Participation data now includes both 30d and 7d counts from a single query
@@ -932,6 +1093,9 @@ class OCEmailGenerator:
             member_highest_level = member_perf.get('highest_level')
             member_highest_level_rate = member_perf.get('highest_level_rate')
             is_jump_recommendation = bool(member_perf.get('is_jump_recommendation'))
+            # Get member's highest historical OC rate for "move up" calculations
+            member_highest_hist = member_highest_historical.get(member_name, {})
+            member_highest_hist_rate = member_highest_hist.get('checkpoint_rate')
             
             if is_excluded_oc(oc):
                 return False
@@ -998,34 +1162,62 @@ class OCEmailGenerator:
                         ):
                             return True  # jump: no level_rate for this oc_difficulty; allow based on 90%+ at highest
                         else:
-                            # Overcome the drop: if best_rate - drop >= threshold, allow (including oc_difficulty > member_max_oc)
+                            # Overcome the drop: use member's highest checkpoint rate from highest difficulty rank OC in historical DB
+                            # This is the "move up" calculation - using drop_from_prev from Historical DB
                             best_rate = None
-                            try:
-                                if member_level_rates:
-                                    vals = []
-                                    for x in member_level_rates.values():
-                                        if x is None:
-                                            continue
-                                        try:
-                                            v = float(x)
-                                            if 0 <= v <= 1:
-                                                v = v * 100
-                                            vals.append(v)
-                                        except (ValueError, TypeError):
-                                            continue
-                                    if vals:
-                                        best_rate = max(vals)
-                                if best_rate is None and member_highest_level_rate is not None:
+                            best_rate_source = None
+                            # Prefer highest historical OC rate from Historical DB
+                            if member_highest_hist_rate is not None:
+                                try:
+                                    best_rate = float(member_highest_hist_rate)
+                                    if 0 <= best_rate <= 1:
+                                        best_rate = best_rate * 100
+                                    best_rate_source = f"highest historical OC (rank {member_highest_hist.get('oc_rank', 'N/A')})"
+                                except (ValueError, TypeError):
+                                    pass
+                            # Fallback to closest difficulty rate (member_max_oc level) if highest historical not available
+                            if best_rate is None and member_max_oc is not None and member_level_rates:
+                                closest_rate = member_level_rates.get(member_max_oc)
+                                if closest_rate is not None:
+                                    try:
+                                        best_rate = float(closest_rate)
+                                        if 0 <= best_rate <= 1:
+                                            best_rate = best_rate * 100
+                                        best_rate_source = f"Level {member_max_oc} rate"
+                                    except (ValueError, TypeError):
+                                        pass
+                            # Final fallback to highest_level_rate
+                            if best_rate is None and member_highest_level_rate is not None:
+                                try:
                                     best_rate = float(member_highest_level_rate)
                                     if 0 <= best_rate <= 1:
                                         best_rate = best_rate * 100
-                            except (ValueError, TypeError):
-                                pass
-                            drop = oc_drop_map.get((oc.get('oc_name') or '').strip().lower())
-                            if drop is not None and best_rate is not None:
-                                threshold = 0 if oc_difficulty == 1 else 80
-                                if best_rate - drop >= threshold:
-                                    return True
+                                    best_rate_source = f"highest level rate"
+                                except (ValueError, TypeError):
+                                    pass
+                            # Use drop_from_prev from Historical DB for "move up" calculation
+                            # IMPORTANT: Drop is ACCUMULATIVE - sum actual drop values for each rank step
+                            oc_name_normalized = (oc.get('oc_name') or '').strip().lower()
+                            oc_rank_for_check = oc_rank_map.get(oc_name_normalized)
+                            member_highest_rank = member_highest_hist.get('oc_rank')
+                            
+                            if best_rate is not None and member_highest_rank is not None and oc_rank_for_check is not None and oc_rank_for_check > member_highest_rank:
+                                # Calculate cumulative drop by summing drops for each rank step
+                                cumulative_drop = calculate_cumulative_drop(member_highest_rank, oc_rank_for_check)
+                                if cumulative_drop is not None and cumulative_drop > 0:
+                                    threshold = 0 if oc_difficulty == 1 else 80
+                                    predicted_rate = best_rate - cumulative_drop
+                                    if predicted_rate >= threshold:
+                                        rank_diff = oc_rank_for_check - member_highest_rank
+                                        drops_list = [f"{rank_to_drop_map.get(r, 0):.1f}%" for r in range(member_highest_rank + 1, oc_rank_for_check + 1) if r in rank_to_drop_map]
+                                        logger.debug(
+                                            f"Member can overcome drop to {oc.get('oc_name')} (Level {oc_difficulty}): "
+                                            f"{best_rate_source} rate {best_rate:.1f}% - sum([{', '.join(drops_list)}]) = "
+                                            f"{best_rate:.1f}% - {cumulative_drop:.1f}% = {predicted_rate:.1f}% >= {threshold}%"
+                                        )
+                                        return True  # overcome the drop: allow using highest historical OC rate with cumulative drop
+                            elif oc_rank_for_check is None or member_highest_rank is None:
+                                logger.debug(f"No rank data available for drop calculation: OC rank={oc_rank_for_check}, member highest rank={member_highest_rank}")
                             return False
                     try:
                         rate_num = float(level_rate)
@@ -1078,12 +1270,90 @@ class OCEmailGenerator:
             member_max_oc = member_perf.get('max_recommended_oc')
             member_level_rates = member_perf.get('level_rates', {})
             
+            # Get member's highest historical OC data for predicted rate calculations
+            highest_historical = member_highest_historical.get(member_name, {})
+            highest_rate = highest_historical.get('checkpoint_rate')
+            highest_oc_rank = highest_historical.get('oc_rank')
+            
+            # Helper function to enrich OC entry with oc_rank and predicted checkpoint rate
+            def enrich_oc_entry(oc_entry_dict, oc_name_str):
+                oc_name_norm = (oc_name_str or '').strip().lower()
+                oc_entry_dict['oc_rank'] = oc_rank_map.get(oc_name_norm)
+                
+                # Calculate predicted checkpoint rate
+                if highest_rate is not None and oc_entry_dict.get('oc_rank') is not None:
+                    considered_oc_rank = oc_entry_dict.get('oc_rank')
+                    
+                    # If considered OC has lower difficulty rank than member's highest, and member's rate >= 80%,
+                    # the member should be able to handle it (no drop calculation needed)
+                    if (highest_oc_rank is not None and 
+                        considered_oc_rank is not None and 
+                        considered_oc_rank < highest_oc_rank and 
+                        highest_rate >= 80):
+                        # Member can handle this OC - use their highest rate as predicted rate
+                        oc_entry_dict['predicted_checkpoint_rate'] = highest_rate
+                    else:
+                        # Calculate drop: only if considered OC has higher or equal difficulty rank
+                        # Use drop_from_prev (float) from Historical DB
+                        # IMPORTANT: Drop is ACCUMULATIVE per additional difficulty rank
+                        drop = oc_drop_map.get(oc_name_norm)
+                        if drop is not None:
+                            try:
+                                drop_float = float(drop)
+                                if drop_float > 0:
+                                    # Calculate rank difference for accumulative drop
+                                    rank_diff = 1  # Default to 1 if ranks not available
+                                    if highest_oc_rank is not None and considered_oc_rank is not None:
+                                        rank_diff = max(1, considered_oc_rank - highest_oc_rank)
+                                    
+                                    # Accumulative drop: multiply single-step drop by rank difference
+                                    cumulative_drop = drop_float * rank_diff
+                                    predicted_rate = highest_rate - cumulative_drop
+                                    oc_entry_dict['predicted_checkpoint_rate'] = predicted_rate
+                                    # Debug logging for predicted rate calculation
+                                    # Note: member_name here refers to the primary member, but highest_rate/highest_oc_rank
+                                    # may have been temporarily set for grouped member checks
+                                    debug_member = getattr(enrich_oc_entry, '_debug_member', member_name)
+                                    if debug_member in ["Mazcariu", "Rachel420"] or (highest_oc_rank is not None and considered_oc_rank is not None and considered_oc_rank > highest_oc_rank):
+                                        logger.info(
+                                            f"PREDICTED_RATE: {debug_member} -> {oc_name_str}: "
+                                            f"highest_rate={highest_rate:.1f}%, drop_per_rank={drop_float:.1f}%, "
+                                            f"rank_diff={rank_diff}, cumulative_drop={cumulative_drop:.1f}%, "
+                                            f"predicted={predicted_rate:.1f}%, "
+                                            f"highest_rank={highest_oc_rank}, considered_rank={considered_oc_rank}"
+                                        )
+                                else:
+                                    # Drop is 0 or negative, use highest rate directly
+                                    oc_entry_dict['predicted_checkpoint_rate'] = highest_rate
+                            except (ValueError, TypeError) as e:
+                                # Invalid drop value, use highest rate as fallback
+                                logger.warning(f"Invalid drop value '{drop}' for OC {oc_name_str}: {e}")
+                                oc_entry_dict['predicted_checkpoint_rate'] = highest_rate
+                        elif highest_oc_rank is not None and considered_oc_rank is not None:
+                            # If we have ranks but no drop data, and considered OC is lower rank,
+                            # use highest rate (member should be able to handle it)
+                            if considered_oc_rank < highest_oc_rank and highest_rate >= 80:
+                                oc_entry_dict['predicted_checkpoint_rate'] = highest_rate
+                            elif considered_oc_rank > highest_oc_rank:
+                                # Higher rank OC but no drop data - log warning
+                                logger.warning(
+                                    f"No drop_from_prev data for OC {oc_name_str} (rank {considered_oc_rank}) "
+                                    f"when member's highest is rank {highest_oc_rank}. Cannot calculate predicted rate."
+                                )
+                        else:
+                            # No drop data and no rank comparison possible
+                            logger.debug(f"No drop data for OC {oc_name_str}, cannot calculate predicted rate")
+                
+                return oc_entry_dict
+            
             # Debug logging for specific members
             if member_name in ["Adilon_Scorpian", "Hiyori"]:
                 logger.info(f"DEBUG {member_name}: Starting assignment, member_max_oc = {member_max_oc}, level_rates = {member_level_rates}")
             
             # Initialize assignment tracking for this member
             if member_name not in assignment_reasons:
+                # Get member's highest historical OC data
+                highest_historical = member_highest_historical.get(member_name, {})
                 assignment_reasons[member_name] = {
                     'assigned_oc_id': None,
                     'assigned_oc_name': None,
@@ -1092,7 +1362,8 @@ class OCEmailGenerator:
                     'reason': None,
                     'grouped_with': [],
                     'considered_ocs': [],
-                    'warnings': []
+                    'warnings': [],
+                    'highest_historical_oc': highest_historical  # Store for display
                 }
             
             # Filter OC list to only include OCs at or below member's max recommended level
@@ -1167,12 +1438,14 @@ class OCEmailGenerator:
             for oc in filtered_oc_list:
                 # Skip excluded OCs
                 if is_excluded_oc(oc):
-                    assignment_reasons[member_name]['considered_ocs'].append({
+                    oc_entry = {
                         'oc_id': oc.get('oc_id'),
                         'oc_name': oc.get('oc_name', 'Unknown'),
                         'level': oc.get('difficulty'),
                         'reason_skipped': 'Excluded OC (No Reserve or similar)'
-                    })
+                    }
+                    enrich_oc_entry(oc_entry, oc.get('oc_name', 'Unknown'))
+                    assignment_reasons[member_name]['considered_ocs'].append(oc_entry)
                     continue
                 
                 oc_difficulty = oc.get('difficulty')
@@ -1245,21 +1518,25 @@ class OCEmailGenerator:
                             has_valid_oc_rate = True
                         else:
                             logger.info(f"Skipping {member_name} for Level {oc_difficulty} OC '{oc_name}': has OC-specific data with best rate {best_oc_rate} (not in 0-90 range)")
-                            assignment_reasons[member_name]['considered_ocs'].append({
+                            oc_entry = {
                                 'oc_id': oc_id,
                                 'oc_name': oc_name,
                                 'level': oc_difficulty,
                                 'reason_skipped': f'OC-specific rate {best_oc_rate:.1f}% not in 0-90% range'
-                            })
+                            }
+                            enrich_oc_entry(oc_entry, oc_name)
+                            assignment_reasons[member_name]['considered_ocs'].append(oc_entry)
                             continue
                     else:
                         logger.info(f"Skipping {member_name} for Level {oc_difficulty} OC '{oc_name}': has OC-specific data with best rate {best_oc_rate} (not in 80-90 range)")
-                        assignment_reasons[member_name]['considered_ocs'].append({
+                        oc_entry = {
                             'oc_id': oc_id,
                             'oc_name': oc_name,
                             'level': oc_difficulty,
                             'reason_skipped': f'OC-specific rate {best_oc_rate:.1f}% not in 80-90% range'
-                        })
+                        }
+                        enrich_oc_entry(oc_entry, oc_name)
+                        assignment_reasons[member_name]['considered_ocs'].append(oc_entry)
                         continue
                     
                 # If no OC-specific data, fallback to level-based check
@@ -1282,51 +1559,89 @@ class OCEmailGenerator:
                                 f"Jump recommendation: assigning to Level {oc_difficulty} based on {float(highest_rate):.1f}% at Level {highest_level}"
                             )
                         else:
-                            # Overcome the drop: if best_rate - drop >= threshold, allow and fall through
+                            # Overcome the drop: use member's highest checkpoint rate from highest difficulty rank OC in historical DB
+                            # This is the "move up" calculation - using drop_from_prev from Historical DB
                             best_rate = None
-                            try:
-                                if member_level_rates:
-                                    vals = []
-                                    for x in member_level_rates.values():
-                                        if x is None:
-                                            continue
-                                        try:
-                                            v = float(x)
-                                            if 0 <= v <= 1:
-                                                v = v * 100
-                                            vals.append(v)
-                                        except (ValueError, TypeError):
-                                            continue
-                                    if vals:
-                                        best_rate = max(vals)
-                                if best_rate is None and highest_rate is not None:
+                            best_rate_source = None
+                            # Prefer highest historical OC rate from Historical DB
+                            if highest_historical.get('checkpoint_rate') is not None:
+                                try:
+                                    best_rate = float(highest_historical.get('checkpoint_rate'))
+                                    if 0 <= best_rate <= 1:
+                                        best_rate = best_rate * 100
+                                    best_rate_source = f"highest historical OC (rank {highest_historical.get('oc_rank', 'N/A')})"
+                                except (ValueError, TypeError):
+                                    pass
+                            # Fallback to closest difficulty rate (member_max_oc level) if highest historical not available
+                            if best_rate is None and member_max_oc is not None and member_level_rates:
+                                closest_rate = member_level_rates.get(member_max_oc)
+                                if closest_rate is not None:
+                                    try:
+                                        best_rate = float(closest_rate)
+                                        if 0 <= best_rate <= 1:
+                                            best_rate = best_rate * 100
+                                        best_rate_source = f"Level {member_max_oc} rate"
+                                    except (ValueError, TypeError):
+                                        pass
+                            # Final fallback to highest_level_rate
+                            if best_rate is None and highest_rate is not None:
+                                try:
                                     best_rate = float(highest_rate)
                                     if 0 <= best_rate <= 1:
                                         best_rate = best_rate * 100
-                            except (ValueError, TypeError):
-                                pass
-                            drop = oc_drop_map.get((oc_name or '').strip().lower())
-                            if drop is not None and best_rate is not None:
-                                threshold = 0 if oc_difficulty == 1 else 80
-                                if best_rate - drop >= threshold:
-                                    assignment_reasons[member_name]['warnings'].append(
-                                        f"Overcome the drop: assigning to Level {oc_difficulty} OC '{oc_name}' (best_rate {best_rate:.1f}% - drop {drop:.1f} >= {threshold})"
-                                    )
-                                    # fall through to "Check if OC has space"
+                                    best_rate_source = f"highest level rate"
+                                except (ValueError, TypeError):
+                                    pass
+                            # Use drop_from_prev from Historical DB for "move up" calculation
+                            # IMPORTANT: Drop is ACCUMULATIVE - sum actual drop values for each rank step
+                            oc_name_normalized = (oc_name or '').strip().lower()
+                            oc_rank_for_check = oc_rank_map.get(oc_name_normalized)
+                            highest_oc_rank = highest_historical.get('oc_rank')
+                            
+                            if best_rate is not None and highest_oc_rank is not None and oc_rank_for_check is not None and oc_rank_for_check > highest_oc_rank:
+                                # Calculate cumulative drop by summing drops for each rank step
+                                cumulative_drop = calculate_cumulative_drop(highest_oc_rank, oc_rank_for_check)
+                                if cumulative_drop is not None and cumulative_drop > 0:
+                                    threshold = 0 if oc_difficulty == 1 else 80
+                                    calculated_rate = best_rate - cumulative_drop
+                                    if calculated_rate >= threshold:
+                                        rank_diff = oc_rank_for_check - highest_oc_rank
+                                        drops_list = [f"{rank_to_drop_map.get(r, 0):.1f}%" for r in range(highest_oc_rank + 1, oc_rank_for_check + 1) if r in rank_to_drop_map]
+                                        drops_sum_str = ' + '.join(drops_list)
+                                        assignment_reasons[member_name]['warnings'].append(
+                                            f"Overcome the drop: assigning to Level {oc_difficulty} OC '{oc_name}' "
+                                            f"using {best_rate_source} ({best_rate:.1f}% - ({drops_sum_str}) = {best_rate:.1f}% - {cumulative_drop:.1f}% = {calculated_rate:.1f}% >= {threshold})"
+                                        )
+                                        logger.info(
+                                            f"Member {member_name} can overcome drop to {oc_name} (Level {oc_difficulty}): "
+                                            f"{best_rate_source} rate {best_rate:.1f}% - ({drops_sum_str}) = "
+                                            f"{best_rate:.1f}% - {cumulative_drop:.1f}% = {calculated_rate:.1f}% >= {threshold}%"
+                                        )
+                                        # fall through to "Check if OC has space"
+                                    else:
+                                        drops_list = [f"{rank_to_drop_map.get(r, 0):.1f}%" for r in range(highest_oc_rank + 1, oc_rank_for_check + 1) if r in rank_to_drop_map]
+                                        drops_sum_str = ' + '.join(drops_list)
+                                        extra = f"; {best_rate_source} {best_rate:.1f}% - ({drops_sum_str}) = {best_rate:.1f}% - {cumulative_drop:.1f}% = {calculated_rate:.1f}% < {threshold}"
+                                        logger.debug(f"Skipping {member_name} for Level {oc_difficulty} OC {oc_name}: no level-based rate data for this level{extra}")
+                                        oc_entry = {
+                                            'oc_id': oc_id, 'oc_name': oc_name, 'level': oc_difficulty,
+                                            'reason_skipped': f'No level-based rate data for this level{extra}'
+                                        }
+                                        enrich_oc_entry(oc_entry, oc_name)
+                                        assignment_reasons[member_name]['considered_ocs'].append(oc_entry)
+                                        continue
                                 else:
-                                    extra = f"; best_rate - drop = {best_rate - drop:.1f} < {threshold}"
-                                    logger.debug(f"Skipping {member_name} for Level {oc_difficulty} OC {oc_name}: no level-based rate data for this level{extra}")
-                                    assignment_reasons[member_name]['considered_ocs'].append({
-                                        'oc_id': oc_id, 'oc_name': oc_name, 'level': oc_difficulty,
-                                        'reason_skipped': f'No level-based rate data for this level{extra}'
-                                    })
-                                    continue
+                                    logger.debug(f"Cannot calculate cumulative drop from rank {highest_oc_rank} to {oc_rank_for_check} for OC {oc_name}")
+                            elif oc_rank_for_check is None or highest_oc_rank is None:
+                                logger.debug(f"No rank data for drop calculation: OC rank={oc_rank_for_check}, member highest rank={highest_oc_rank}")
                             else:
                                 logger.debug(f"Skipping {member_name} for Level {oc_difficulty} OC {oc_name}: no level-based rate data for this level")
-                                assignment_reasons[member_name]['considered_ocs'].append({
+                                oc_entry = {
                                     'oc_id': oc_id, 'oc_name': oc_name, 'level': oc_difficulty,
                                     'reason_skipped': 'No level-based rate data for this level'
-                                })
+                                }
+                                enrich_oc_entry(oc_entry, oc_name)
+                                assignment_reasons[member_name]['considered_ocs'].append(oc_entry)
                                 continue
                     
                     # When level_rate is not None: ensure percentage format and strict check
@@ -1387,14 +1702,44 @@ class OCEmailGenerator:
                         min_allowed_level = 1
                         if oc_difficulty < min_allowed_level:
                             # OC is more than 1 level below their max - skip it and continue searching
-                            assignment_reasons[member_name]['considered_ocs'].append({
+                            oc_entry = {
                                 'oc_id': oc_id,
                                 'oc_name': oc_name,
                                 'level': oc_difficulty,
                                 'reason_skipped': f'OC level {oc_difficulty} is more than 1 level below max recommended {member_max_oc}'
-                            })
+                            }
+                            enrich_oc_entry(oc_entry, oc_name)
+                            assignment_reasons[member_name]['considered_ocs'].append(oc_entry)
                             logger.debug(f"Skipping {member_name} for Level {oc_difficulty} OC '{oc_name}': more than 1 level below max {member_max_oc}")
                             continue
+                    
+                    # CRITICAL: Check predicted rate before assigning to higher difficulty rank OCs
+                    # If predicted rate < 80% and OC has higher difficulty rank than member's highest, don't assign
+                    oc_entry_for_check = {'oc_id': oc_id, 'oc_name': oc_name, 'level': oc_difficulty}
+                    enrich_oc_entry(oc_entry_for_check, oc_name)
+                    predicted_rate = oc_entry_for_check.get('predicted_checkpoint_rate')
+                    oc_rank = oc_entry_for_check.get('oc_rank')
+                    
+                    if (predicted_rate is not None and 
+                        highest_oc_rank is not None and 
+                        oc_rank is not None and 
+                        oc_rank > highest_oc_rank and 
+                        predicted_rate < 80):
+                        # Member's predicted rate is below 80% for a higher difficulty rank OC - skip assignment
+                        oc_entry = {
+                            'oc_id': oc_id,
+                            'oc_name': oc_name,
+                            'level': oc_difficulty,
+                            'oc_rank': oc_rank,
+                            'predicted_checkpoint_rate': predicted_rate,
+                            'reason_skipped': f'Predicted checkpoint rate {predicted_rate:.1f}% < 80% for higher difficulty rank OC (member highest rank: {highest_oc_rank}, OC rank: {oc_rank})'
+                        }
+                        assignment_reasons[member_name]['considered_ocs'].append(oc_entry)
+                        logger.info(
+                            f"Skipping {member_name} for Level {oc_difficulty} OC '{oc_name}' (rank {oc_rank}): "
+                            f"predicted rate {predicted_rate:.1f}% < 80% (member's highest rank: {highest_oc_rank})"
+                        )
+                        continue
                     
                     # Found a suitable OC! Now try to group other unassigned members who can join this same OC
                     # This ensures unused members are grouped together
@@ -1425,6 +1770,51 @@ class OCEmailGenerator:
                             # This prevents grouping high-level members into low-level OCs
                             other_member_perf = member_performance.get(other_member_name, {})
                             other_member_max_oc = other_member_perf.get('max_recommended_oc')
+                            
+                            # CRITICAL: Check predicted rate for grouped members too
+                            # If predicted rate < 80% and OC has higher difficulty rank than member's highest, don't group
+                            other_highest_historical = member_highest_historical.get(other_member_name, {})
+                            other_highest_oc_rank = other_highest_historical.get('oc_rank')
+                            other_oc_entry_for_check = {'oc_id': oc_id, 'oc_name': oc_name, 'level': oc_difficulty}
+                            # Need to temporarily set highest_rate and highest_oc_rank for enrich_oc_entry
+                            # Store original values
+                            orig_highest_rate = highest_rate
+                            orig_highest_oc_rank = highest_oc_rank
+                            other_highest_rate = other_highest_historical.get('checkpoint_rate')
+                            highest_rate = other_highest_rate
+                            highest_oc_rank = other_highest_oc_rank
+                            # Set debug member name for logging
+                            enrich_oc_entry._debug_member = other_member_name
+                            enrich_oc_entry(other_oc_entry_for_check, oc_name)
+                            # Restore original values
+                            highest_rate = orig_highest_rate
+                            highest_oc_rank = orig_highest_oc_rank
+                            delattr(enrich_oc_entry, '_debug_member')
+                            
+                            other_predicted_rate = other_oc_entry_for_check.get('predicted_checkpoint_rate')
+                            other_oc_rank = other_oc_entry_for_check.get('oc_rank')
+                            
+                            # Debug logging for grouped members
+                            if other_member_name in ["Mazcariu", "Rachel420"] or (other_highest_oc_rank is not None and other_oc_rank is not None and other_oc_rank > other_highest_oc_rank):
+                                logger.info(
+                                    f"GROUPING_CHECK: {other_member_name} -> {oc_name}: "
+                                    f"highest_rate={other_highest_historical.get('checkpoint_rate')}, "
+                                    f"predicted_rate={other_predicted_rate}, "
+                                    f"highest_rank={other_highest_oc_rank}, considered_rank={other_oc_rank}"
+                                )
+                            
+                            if (other_predicted_rate is not None and 
+                                other_highest_oc_rank is not None and 
+                                other_oc_rank is not None and 
+                                other_oc_rank > other_highest_oc_rank and 
+                                other_predicted_rate < 80):
+                                # Grouped member's predicted rate is below 80% for a higher difficulty rank OC - don't group
+                                # Note: predicted_rate already uses accumulative drop from enrich_oc_entry
+                                logger.info(
+                                    f"Not grouping {other_member_name} into Level {oc_difficulty} OC '{oc_name}' (rank {other_oc_rank}): "
+                                    f"predicted rate {other_predicted_rate:.1f}% < 80% (member's highest rank: {other_highest_oc_rank})"
+                                )
+                                continue
                             
                             # If other member has a max recommended OC: allow all lower (min_allowed_level=1)
                             if other_member_max_oc is not None:
@@ -1488,6 +1878,8 @@ class OCEmailGenerator:
                         
                         # Record assignment reasoning
                         if m_name not in assignment_reasons:
+                            # Get member's highest historical OC data
+                            highest_historical_grouped = member_highest_historical.get(m_name, {})
                             assignment_reasons[m_name] = {
                                 'assigned_oc_id': None,
                                 'assigned_oc_name': None,
@@ -1496,7 +1888,8 @@ class OCEmailGenerator:
                                 'reason': None,
                                 'grouped_with': [],
                                 'considered_ocs': [],
-                                'warnings': []
+                                'warnings': [],
+                                'highest_historical_oc': highest_historical_grouped  # Store for display
                             }
                         
                         assignment_reasons[m_name]['assigned_oc_id'] = oc_id
@@ -1508,15 +1901,135 @@ class OCEmailGenerator:
                         
                         # Add the assigned OC to considered_ocs so it shows up when details are expanded
                         # This helps users see what OC was selected even when it was the first one checked
-                        assignment_reasons[m_name]['considered_ocs'].append({
+                        # Calculate assigned_count after assignment (includes current members)
+                        final_assigned_count = len(assignments[oc_id])
+                        
+                        # Get this member's highest historical OC data for detailed reason
+                        m_highest_historical = member_highest_historical.get(m_name, {})
+                        m_highest_rate = m_highest_historical.get('checkpoint_rate')
+                        m_highest_oc_rank = m_highest_historical.get('oc_rank')
+                        m_max_oc = member_performance.get(m_name, {}).get('max_recommended_oc')
+                        
+                        # Build detailed reason similar to rejected higher-level OCs
+                        detailed_reason_parts = []
+                        if m_max_oc is not None and oc_difficulty > m_max_oc:
+                            detailed_reason_parts.append(f'OC level {oc_difficulty} is above max recommended level {m_max_oc}')
+                        
+                        # Get OC rank and predicted rate for this member
+                        oc_name_normalized = oc_name.strip().lower()
+                        m_oc_rank = oc_rank_map.get(oc_name_normalized)
+                        m_predicted_rate = None
+                        
+                        if m_highest_rate is not None and m_oc_rank is not None:
+                            if m_highest_oc_rank is not None and m_oc_rank is not None:
+                                if m_oc_rank < m_highest_oc_rank and m_highest_rate >= 80:
+                                    m_predicted_rate = m_highest_rate
+                                elif m_oc_rank > m_highest_oc_rank:
+                                    # Calculate cumulative drop by summing drops for each rank step
+                                    cumulative_drop = calculate_cumulative_drop(m_highest_oc_rank, m_oc_rank)
+                                    if cumulative_drop is not None and cumulative_drop > 0:
+                                        m_predicted_rate = m_highest_rate - cumulative_drop
+                                    else:
+                                        # Fallback: use single drop if cumulative can't be calculated
+                                        drop = oc_drop_map.get(oc_name_normalized)
+                                        if drop is not None:
+                                            try:
+                                                drop_float = float(drop)
+                                                if drop_float > 0:
+                                                    m_predicted_rate = m_highest_rate - drop_float
+                                                else:
+                                                    m_predicted_rate = m_highest_rate
+                                            except (ValueError, TypeError):
+                                                m_predicted_rate = m_highest_rate
+                                        else:
+                                            m_predicted_rate = m_highest_rate
+                                else:
+                                    # Same rank - use highest rate
+                                    m_predicted_rate = m_highest_rate
+                            
+                            if m_oc_rank is not None:
+                                detailed_reason_parts.append(f'Difficulty rank: {m_oc_rank}')
+                            if m_predicted_rate is not None and m_highest_oc_rank is not None and m_oc_rank is not None and m_oc_rank > m_highest_oc_rank:
+                                # Calculate cumulative drop for display
+                                cumulative_drop = calculate_cumulative_drop(m_highest_oc_rank, m_oc_rank)
+                                if cumulative_drop is not None:
+                                    drops_list = [f"{rank_to_drop_map.get(r, 0):.1f}%" for r in range(m_highest_oc_rank + 1, m_oc_rank + 1) if r in rank_to_drop_map]
+                                    drops_sum_str = ' + '.join(drops_list)
+                                    detailed_reason_parts.append(f'Predicted checkpoint rate: {m_highest_rate:.1f}% - ({drops_sum_str}) = {m_highest_rate:.1f}% - {cumulative_drop:.1f}% = {m_predicted_rate:.1f}%')
+                                else:
+                                    # Fallback display
+                                    drop_val = oc_drop_map.get(oc_name_normalized, 0)
+                                    detailed_reason_parts.append(f'Predicted checkpoint rate: {m_highest_rate:.1f}% - {drop_val:.1f}% = {m_predicted_rate:.1f}%')
+                            
+                            # Add "overcome the drop" info if applicable
+                            if m_highest_oc_rank is not None and m_oc_rank is not None and m_oc_rank > m_highest_oc_rank:
+                                cumulative_drop = calculate_cumulative_drop(m_highest_oc_rank, m_oc_rank)
+                                if cumulative_drop is not None and cumulative_drop > 0:
+                                    threshold = 0 if oc_difficulty == 1 else 80
+                                    calculated_rate = m_highest_rate - cumulative_drop
+                                    drops_list = [f"{rank_to_drop_map.get(r, 0):.1f}%" for r in range(m_highest_oc_rank + 1, m_oc_rank + 1) if r in rank_to_drop_map]
+                                    drops_sum_str = ' + '.join(drops_list)
+                                    if calculated_rate >= threshold:
+                                        detailed_reason_parts.append(
+                                            f'Could potentially overcome drop using highest historical OC (rank {m_highest_oc_rank}) '
+                                            f'({m_highest_rate:.1f}% - ({drops_sum_str}) = {m_highest_rate:.1f}% - {cumulative_drop:.1f}% = {calculated_rate:.1f}% >= {threshold}%)'
+                                        )
+                                    else:
+                                        detailed_reason_parts.append(
+                                            f'Cannot overcome drop using highest historical OC (rank {m_highest_oc_rank}) '
+                                            f'({m_highest_rate:.1f}% - ({drops_sum_str}) = {m_highest_rate:.1f}% - {cumulative_drop:.1f}% = {calculated_rate:.1f}% < {threshold}%)'
+                                        )
+                        
+                        # Build the reason: detailed parts first, then "Selected for assignment"
+                        reason_text = '; '.join(detailed_reason_parts) if detailed_reason_parts else ''
+                        if reason_text:
+                            reason_text += f'; Selected for assignment (total: {total_slots}, filled: {filled_slots}, assigned: {final_assigned_count})'
+                        else:
+                            reason_text = f'Selected for assignment (total: {total_slots}, filled: {filled_slots}, assigned: {final_assigned_count})'
+                        
+                        oc_entry = {
                             'oc_id': oc_id,
                             'oc_name': oc_name,
                             'level': oc_difficulty,
-                            'reason_skipped': '✅ Selected for assignment',
+                            'oc_rank': m_oc_rank,
+                            'predicted_checkpoint_rate': m_predicted_rate,
+                            'reason_skipped': reason_text,
                             'total_slots': total_slots,
                             'filled_slots': filled_slots,
+                            'assigned_count': final_assigned_count,
                             'available_slots': available_slots
-                        })
+                        }
+                        assignment_reasons[m_name]['considered_ocs'].append(oc_entry)
+                        
+                        # If assigned above max recommended level, set a backup/alternative assignment
+                        if m_max_oc is not None and oc_difficulty > m_max_oc:
+                            backup_member = next((m for m in members_sorted if m['member_name'] == m_name), None)
+                            if backup_member is not None:
+                                for level in range(m_max_oc, 0, -1):
+                                    if assignment_reasons[m_name].get('backup_oc_id') is not None:
+                                        break
+                                    for backup_oc in ocs:
+                                        if is_excluded_oc(backup_oc):
+                                            continue
+                                        try:
+                                            b_difficulty = int(backup_oc.get('difficulty'))
+                                        except (ValueError, TypeError):
+                                            continue
+                                        if b_difficulty != level:
+                                            continue
+                                        if not can_member_join_oc(backup_member, backup_oc):
+                                            continue
+                                        b_oc_id = backup_oc.get('oc_id')
+                                        b_total = backup_oc.get('total_slots', 0)
+                                        b_filled = backup_oc.get('filled_slots', 0)
+                                        b_assigned = len(assignments.get(b_oc_id, []))
+                                        if b_total - b_filled - b_assigned <= 0:
+                                            continue
+                                        assignment_reasons[m_name]['backup_oc_id'] = b_oc_id
+                                        assignment_reasons[m_name]['backup_oc_name'] = backup_oc.get('oc_name', 'Unknown')
+                                        assignment_reasons[m_name]['backup_level'] = b_difficulty
+                                        logger.debug(f"Backup assignment for {m_name}: Level {b_difficulty} - {assignment_reasons[m_name]['backup_oc_name']} (ID: {b_oc_id})")
+                                        break
                     
                     if len(members_to_assign) > 1:
                         logger.info(f"Grouped {len(members_to_assign)} members together in OC {oc_id} ({oc.get('oc_name')}): {', '.join(members_to_assign)}")
@@ -1527,12 +2040,260 @@ class OCEmailGenerator:
                 else:
                     if member_name in ["Adilon_Scorpian", "Hiyori", "DubZzZ"]:
                         logger.info(f"DEBUG {member_name}: OC {oc_id} ({oc_name}, Level {oc_difficulty}) has no available slots (total: {total_slots}, filled: {filled_slots}, assigned: {assigned_count})")
-                    assignment_reasons[member_name]['considered_ocs'].append({
+                    oc_entry = {
                         'oc_id': oc_id,
                         'oc_name': oc_name,
                         'level': oc_difficulty,
                         'reason_skipped': f'No available slots (total: {total_slots}, filled: {filled_slots}, assigned: {assigned_count})'
-                    })
+                    }
+                    enrich_oc_entry(oc_entry, oc_name)
+                    assignment_reasons[member_name]['considered_ocs'].append(oc_entry)
+            
+            # After main loop, evaluate higher-level OCs to show why they weren't considered
+            # This helps users understand why members weren't advanced to more difficult OCs
+            if member_max_oc is not None and has_oc_history:
+                member_perf = member_performance.get(member_name, {})
+                member_level_rates = member_perf.get('level_rates', {})
+                member_highest_level_rate = member_perf.get('highest_level_rate')
+                member_oc_specific_rates = member_oc_rates.get(member_name, {})
+                
+                # Use the member's highest checkpoint rate from highest difficulty rank OC in historical DB
+                # This is the "move up" calculation - using drop_from_prev from Historical DB
+                best_rate_for_eval = None
+                best_rate_source_eval = None
+                highest_historical_eval = member_highest_historical.get(member_name, {})
+                # Prefer highest historical OC rate from Historical DB
+                if highest_historical_eval.get('checkpoint_rate') is not None:
+                    try:
+                        best_rate_for_eval = float(highest_historical_eval.get('checkpoint_rate'))
+                        if 0 <= best_rate_for_eval <= 1:
+                            best_rate_for_eval = best_rate_for_eval * 100
+                        best_rate_source_eval = f"highest historical OC (rank {highest_historical_eval.get('oc_rank', 'N/A')})"
+                    except (ValueError, TypeError):
+                        pass
+                # Fallback to closest difficulty rate (member_max_oc level) if highest historical not available
+                if best_rate_for_eval is None and member_max_oc is not None and member_level_rates:
+                    closest_difficulty_rate = member_level_rates.get(member_max_oc)
+                    if closest_difficulty_rate is not None:
+                        try:
+                            best_rate_for_eval = float(closest_difficulty_rate)
+                            if 0 <= best_rate_for_eval <= 1:
+                                best_rate_for_eval = best_rate_for_eval * 100
+                            best_rate_source_eval = f"Level {member_max_oc} rate"
+                        except (ValueError, TypeError):
+                            pass
+                # Final fallback to highest_level_rate
+                if best_rate_for_eval is None and member_highest_level_rate is not None:
+                    try:
+                        best_rate_for_eval = float(member_highest_level_rate)
+                        if 0 <= best_rate_for_eval <= 1:
+                            best_rate_for_eval = best_rate_for_eval * 100
+                        best_rate_source_eval = f"highest level rate"
+                    except (ValueError, TypeError):
+                        pass
+                
+                # Check all OCs that are above the member's max recommended level
+                # Use the original ocs list to ensure we check all available OCs
+                for oc in ocs:
+                    if is_excluded_oc(oc):
+                        continue
+                    
+                    oc_id = oc.get('oc_id')
+                    oc_name = oc.get('oc_name', '').strip()
+                    oc_difficulty = oc.get('difficulty')
+                    if oc_difficulty is None:
+                        continue
+                    try:
+                        oc_difficulty = int(oc_difficulty)
+                    except (ValueError, TypeError):
+                        continue
+                    
+                    # Only check OCs above max recommended level (including Level max_oc+1, max_oc+2, etc.)
+                    # This ensures we evaluate Level 4 OCs when max is 3, Level 5 when max is 4, etc.
+                    if oc_difficulty <= member_max_oc:
+                        continue
+                    
+                    # Check if already in considered_ocs - if so, we'll still evaluate it to ensure
+                    # the "above max level" reason is included, but we'll update the reason if needed
+                    existing_entry = None
+                    for c in assignment_reasons.get(member_name, {}).get('considered_ocs', []):
+                        if c.get('oc_id') == oc_id and c.get('level') == oc_difficulty:
+                            existing_entry = c
+                            break
+                    
+                    # If already in list but reason doesn't mention "above max level", we'll add it
+                    # Otherwise, if it's already there with the right reason, skip to avoid duplicates
+                    if existing_entry and 'above max recommended level' in existing_entry.get('reason_skipped', '').lower():
+                        continue
+                    
+                    # Get OC's difficulty rank and calculate predicted checkpoint rate
+                    oc_name_normalized = oc_name.strip().lower()
+                    oc_rank = oc_rank_map.get(oc_name_normalized)
+                    highest_historical = member_highest_historical.get(member_name, {})
+                    highest_rate = highest_historical.get('checkpoint_rate')
+                    highest_oc_rank = highest_historical.get('oc_rank')
+                    predicted_rate = None
+                    if highest_rate is not None and oc_rank is not None:
+                        # If considered OC has lower difficulty rank than member's highest, and member's rate >= 80%,
+                        # the member should be able to handle it (no drop calculation needed)
+                        if (highest_oc_rank is not None and 
+                            oc_rank is not None and 
+                            oc_rank < highest_oc_rank and 
+                            highest_rate >= 80):
+                            # Member can handle this OC - use their highest rate as predicted rate
+                            predicted_rate = highest_rate
+                        else:
+                            # Calculate cumulative drop: sum actual drop values for each rank step
+                            if highest_oc_rank is not None and oc_rank is not None and oc_rank > highest_oc_rank:
+                                cumulative_drop = calculate_cumulative_drop(highest_oc_rank, oc_rank)
+                                if cumulative_drop is not None and cumulative_drop > 0:
+                                    predicted_rate = highest_rate - cumulative_drop
+                                else:
+                                    # Fallback: use single drop if cumulative can't be calculated
+                                    drop = oc_drop_map.get(oc_name_normalized)
+                                    if drop is not None:
+                                        try:
+                                            drop_float = float(drop)
+                                            if drop_float > 0:
+                                                predicted_rate = highest_rate - drop_float
+                                            else:
+                                                predicted_rate = highest_rate
+                                        except (ValueError, TypeError):
+                                            predicted_rate = highest_rate
+                                    else:
+                                        predicted_rate = highest_rate
+                            elif highest_oc_rank is not None and oc_rank is not None and oc_rank == highest_oc_rank:
+                                # Same rank - use highest rate
+                                predicted_rate = highest_rate
+                            else:
+                                # No rank comparison possible
+                                predicted_rate = highest_rate
+                    
+                    # Evaluate why this higher-level OC wasn't considered
+                    reason_parts = []
+                    reason_parts.append(f'OC level {oc_difficulty} is above max recommended level {member_max_oc}')
+                    if oc_rank is not None:
+                        reason_parts.append(f'Difficulty rank: {oc_rank}')
+                    if predicted_rate is not None and highest_oc_rank is not None and oc_rank is not None and oc_rank > highest_oc_rank:
+                        # Calculate cumulative drop for display
+                        cumulative_drop = calculate_cumulative_drop(highest_oc_rank, oc_rank)
+                        if cumulative_drop is not None:
+                            drops_list = [f"{rank_to_drop_map.get(r, 0):.1f}%" for r in range(highest_oc_rank + 1, oc_rank + 1) if r in rank_to_drop_map]
+                            drops_sum_str = ' + '.join(drops_list)
+                            reason_parts.append(f'Predicted checkpoint rate: {highest_rate:.1f}% - ({drops_sum_str}) = {highest_rate:.1f}% - {cumulative_drop:.1f}% = {predicted_rate:.1f}%')
+                        else:
+                            # Fallback display
+                            drop_per_rank = oc_drop_map.get(oc_name_normalized, 0)
+                            reason_parts.append(f'Predicted checkpoint rate: {highest_rate:.1f}% - {drop_per_rank:.1f}% = {predicted_rate:.1f}%')
+                    
+                    # Check if member has OC-specific data for this OC
+                    has_oc_specific_data = False
+                    best_oc_rate = None
+                    for key, rate in member_oc_specific_rates.items():
+                        if key.lower().startswith(oc_name.lower() + '_'):
+                            has_oc_specific_data = True
+                            try:
+                                rate_num = float(rate)
+                                if 0 <= rate_num <= 1:
+                                    rate_num = rate_num * 100
+                                if best_oc_rate is None or rate_num > best_oc_rate:
+                                    best_oc_rate = rate_num
+                            except (ValueError, TypeError):
+                                pass
+                    
+                    if has_oc_specific_data and best_oc_rate is not None:
+                        # Check if OC-specific rate would qualify
+                        if oc_difficulty == 1:
+                            if not (0 <= best_oc_rate <= 90):
+                                reason_parts.append(f'OC-specific rate {best_oc_rate:.1f}% not in 0-90% range')
+                        else:
+                            if not (80 <= best_oc_rate <= 90):
+                                reason_parts.append(f'OC-specific rate {best_oc_rate:.1f}% not in 80-90% range')
+                    else:
+                        # Check level-based rate
+                        level_rate = member_level_rates.get(oc_difficulty)
+                        if level_rate is not None:
+                            try:
+                                rate_num = float(level_rate)
+                                if 0 <= rate_num <= 1:
+                                    rate_num = rate_num * 100
+                                
+                                if oc_difficulty == 1:
+                                    if not (0 <= rate_num <= 90):
+                                        reason_parts.append(f'Level rate {rate_num:.1f}% not in 0-90% range')
+                                else:
+                                    if not (80 <= rate_num <= 90):
+                                        reason_parts.append(f'Level rate {rate_num:.1f}% not in 80-90% range')
+                            except (ValueError, TypeError):
+                                reason_parts.append('Invalid level rate format')
+                        else:
+                            # No level rate - check "overcome the drop" using highest historical OC rate with drop_from_prev from Historical DB
+                            # IMPORTANT: Drop is ACCUMULATIVE - sum actual drop values for each rank step
+                            if best_rate_for_eval is not None:
+                                oc_name_normalized = oc_name.strip().lower()
+                                oc_rank_for_check = oc_rank_map.get(oc_name_normalized)
+                                highest_rank_eval = highest_historical_eval.get('oc_rank')
+                                
+                                if highest_rank_eval is not None and oc_rank_for_check is not None and oc_rank_for_check > highest_rank_eval:
+                                    # Calculate cumulative drop by summing drops for each rank step
+                                    cumulative_drop = calculate_cumulative_drop(highest_rank_eval, oc_rank_for_check)
+                                    if cumulative_drop is not None and cumulative_drop > 0:
+                                        threshold = 0 if oc_difficulty == 1 else 80
+                                        calculated_rate = best_rate_for_eval - cumulative_drop
+                                        drops_list = [f"{rank_to_drop_map.get(r, 0):.1f}%" for r in range(highest_rank_eval + 1, oc_rank_for_check + 1) if r in rank_to_drop_map]
+                                        drops_sum_str = ' + '.join(drops_list)
+                                        if calculated_rate >= threshold:
+                                            # Actually could qualify via "overcome the drop" - but still above max
+                                            reason_parts.append(
+                                                f'Could potentially overcome drop using {best_rate_source_eval} '
+                                                f'({best_rate_for_eval:.1f}% - ({drops_sum_str}) = {best_rate_for_eval:.1f}% - {cumulative_drop:.1f}% = {calculated_rate:.1f}% >= {threshold}%), '
+                                                f'but above max recommended level'
+                                            )
+                                        else:
+                                            reason_parts.append(
+                                                f'Cannot overcome drop using {best_rate_source_eval} '
+                                                f'({best_rate_for_eval:.1f}% - ({drops_sum_str}) = {best_rate_for_eval:.1f}% - {cumulative_drop:.1f}% = {calculated_rate:.1f}% < {threshold}%)'
+                                            )
+                                else:
+                                    reason_parts.append(
+                                        f'No level rate data for Level {oc_difficulty} and no drop_from_prev data available for "overcome the drop" rule. '
+                                        f'{best_rate_source_eval}: {best_rate_for_eval:.1f}%'
+                                    )
+                            else:
+                                reason_parts.append(
+                                    f'No level rate data for Level {oc_difficulty} and no highest historical OC rate available. '
+                                    f'Max recommended: Level {member_max_oc}'
+                                )
+                    
+                    # Add to considered_ocs with comprehensive reason, or update existing entry
+                    oc_entry = {
+                        'oc_id': oc_id,
+                        'oc_name': oc_name,
+                        'level': oc_difficulty,
+                        'oc_rank': oc_rank,
+                        'predicted_checkpoint_rate': predicted_rate,
+                        'reason_skipped': '; '.join(reason_parts)
+                    }
+                    if existing_entry:
+                        # Don't overwrite entries that are already selected for assignment
+                        # They already have the correct predicted rate and detailed reason
+                        if 'Selected for assignment' in existing_entry.get('reason_skipped', ''):
+                            # This OC was selected - don't modify it, just skip
+                            continue
+                        
+                        # Update the existing entry to include "above max level" reason and new fields
+                        existing_reason = existing_entry.get('reason_skipped', '')
+                        if 'above max recommended level' not in existing_reason.lower():
+                            # Prepend the "above max level" reason to the existing reason
+                            existing_entry['reason_skipped'] = '; '.join(reason_parts) + '; ' + existing_reason
+                        # Update oc_rank and predicted_rate if not already set
+                        if oc_rank is not None and existing_entry.get('oc_rank') is None:
+                            existing_entry['oc_rank'] = oc_rank
+                        if predicted_rate is not None and existing_entry.get('predicted_checkpoint_rate') is None:
+                            existing_entry['predicted_checkpoint_rate'] = predicted_rate
+                    else:
+                        # Add new entry
+                        assignment_reasons[member_name]['considered_ocs'].append(oc_entry)
             
             # If member wasn't assigned and has OC history, try all OCs (not just activity-based list)
             if member_name not in assigned_members and has_oc_history:
@@ -1749,6 +2510,8 @@ class OCEmailGenerator:
                         assigned_members.add(member_name)
                         logger.info(f"Fallback: Assigned new member {member_name} to Level 1 OC {oc_id} ({oc.get('oc_name')}) - {available_slots} slots available")
                         if member_name not in assignment_reasons:
+                            # Get member's highest historical OC data
+                            highest_historical_new = member_highest_historical.get(member_name, {})
                             assignment_reasons[member_name] = {
                                 'assigned_oc_id': None,
                                 'assigned_oc_name': None,
@@ -1757,7 +2520,8 @@ class OCEmailGenerator:
                                 'reason': None,
                                 'grouped_with': [],
                                 'considered_ocs': [],
-                                'warnings': []
+                                'warnings': [],
+                                'highest_historical_oc': highest_historical_new  # Store for display
                             }
                         assignment_reasons[member_name]['assigned_oc_id'] = oc_id
                         assignment_reasons[member_name]['assigned_oc_name'] = oc.get('oc_name', 'Unknown')
@@ -1770,6 +2534,8 @@ class OCEmailGenerator:
                 if member_name not in assigned_members:
                     logger.warning(f"Fallback: Could not assign {member_name} to Level 1 OC - found {level_1_ocs_found} Level 1 OCs, {level_1_ocs_available} with available slots")
                     if member_name not in assignment_reasons:
+                        # Get member's highest historical OC data
+                        highest_historical_unassigned = member_highest_historical.get(member_name, {})
                         assignment_reasons[member_name] = {
                             'assigned_oc_id': None,
                             'assigned_oc_name': None,
@@ -1778,7 +2544,8 @@ class OCEmailGenerator:
                             'reason': 'unassigned',
                             'grouped_with': [],
                             'considered_ocs': [],
-                            'warnings': [f'No Level 1 OCs available (found {level_1_ocs_found} Level 1 OCs, {level_1_ocs_available} with available slots)']
+                            'warnings': [f'No Level 1 OCs available (found {level_1_ocs_found} Level 1 OCs, {level_1_ocs_available} with available slots)'],
+                            'highest_historical_oc': highest_historical_unassigned  # Store for display
                         }
         
         # Now handle members with OC history who couldn't be assigned
@@ -1831,6 +2598,8 @@ class OCEmailGenerator:
                         warning_msg = f"Member {member_name} (max OC {member_max_oc}) was not assigned but Level {member_max_oc} OC '{oc.get('oc_name')}' ({oc_id}) is available with {available_slots} slots. This indicates a bug in the assignment logic."
                         logger.warning(warning_msg)
                         if member_name not in assignment_reasons:
+                            # Get member's highest historical OC data
+                            highest_historical_warning = member_highest_historical.get(member_name, {})
                             assignment_reasons[member_name] = {
                                 'assigned_oc_id': None,
                                 'assigned_oc_name': None,
@@ -1839,7 +2608,8 @@ class OCEmailGenerator:
                                 'reason': None,
                                 'grouped_with': [],
                                 'considered_ocs': [],
-                                'warnings': []
+                                'warnings': [],
+                                'highest_historical_oc': highest_historical_warning  # Store for display
                             }
                         assignment_reasons[member_name]['warnings'].append(warning_msg)
                         break
@@ -1971,6 +2741,8 @@ class OCEmailGenerator:
             for member_name in unassigned:
                 if member_name not in assignment_reasons:
                     member_perf = member_performance.get(member_name, {})
+                    # Get member's highest historical OC data
+                    highest_historical_final = member_highest_historical.get(member_name, {})
                     assignment_reasons[member_name] = {
                         'assigned_oc_id': None,
                         'assigned_oc_name': None,
@@ -1979,7 +2751,8 @@ class OCEmailGenerator:
                         'reason': 'unassigned',
                         'grouped_with': [],
                         'considered_ocs': [],
-                        'warnings': ['Member was not assigned to any OC']
+                        'warnings': ['Member was not assigned to any OC'],
+                        'highest_historical_oc': highest_historical_final  # Store for display
                     }
         
         if spawn_suggestions:
@@ -2051,9 +2824,13 @@ class OCEmailGenerator:
                 # Format: Lv <number> - <OC Name> - <OC URL>
                 email_lines.append(f"Lv {level} - {oc_name} - {oc_url}")
                 
-                # Member list (one per line with dashes)
+                # Member list (one per line with dashes); include backup/alternative when assigned above max
                 for member_name in level_assignments[oc_id]:
                     email_lines.append(f"- {member_name}")
+                    reason = assignment_reasons.get(member_name, {})
+                    if reason.get('backup_oc_id') and reason.get('backup_oc_name') is not None and reason.get('backup_level') is not None:
+                        backup_url = f"https://www.torn.com/factions.php?step=your#/tab=crimes&crimeId={reason['backup_oc_id']}"
+                        email_lines.append(f"  If too difficult: Lv {reason['backup_level']} - {reason['backup_oc_name']} - {backup_url}")
                 
                 # Add 2 blank lines between each OC assignment for proper email formatting
                 email_lines.append("")

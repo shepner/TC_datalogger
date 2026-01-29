@@ -436,17 +436,17 @@
                 </div>
                 </div>
             </div>
-            <div id="assignment-reasons-section" class="oc-subsection-indent" style="margin-top: 15px; padding: 12px; background-color: #f0f8ff; border: 1px solid #b0d4f1; border-radius: 4px; display: none;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+            <div id="assignment-reasons-section" style="display: none;">
+                <div class="oc-subsection" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; margin-top: 15px;">
                     <h3 class="oc-subsection-header" style="margin: 0;" onclick="toggleSection('assignment_email_reasons')" title="Click to expand/collapse">
                         <span id="assignment-email-reasons-chevron" class="oc-section-chevron">▶</span> Assignment Reasoning Report
                     </h3>
                     <button onclick="toggleAssignmentReasons()" style="font-size: 12px; padding: 4px 8px; background-color: #4CAF50; color: white; border: none; border-radius: 3px; cursor: pointer;">Toggle Details</button>
                 </div>
-                <div id="assignment-email-reasons-panel">
-                <div id="assignment-reasons-list" style="font-family: monospace; font-size: 12px; color: #555; line-height: 1.6;">
-                    <!-- Assignment reasons will be populated here -->
-                </div>
+                <div id="assignment-email-reasons-panel" class="oc-subsection">
+                    <div id="assignment-reasons-list" style="font-family: monospace; font-size: 12px; color: #555; line-height: 1.6;">
+                        <!-- Assignment reasons will be populated here -->
+                    </div>
                 </div>
             </div>
             </div>
@@ -932,16 +932,18 @@
                 { key: '', label: '', sortable: false },
                 { key: 'oc_rank', label: 'Rank', sortable: true },
                 { key: 'difficulty', label: 'Level', sortable: true, title: 'Difficulty level; OCs are compared within the same level; ranks are global 1,2,3…' },
-                { key: 'drop_from_prev', label: 'Drop from prev.', sortable: true, title: 'Within-level average drop in oc_checkpoint_rate_score to the next OC (same scores as ranking). Shown as avg (min–max). Rank 1 only is blank.' },
+                { key: 'drop_from_prev', label: 'Drop from prev.', sortable: true, title: 'Drop in checkpoint rate (percentage points) to the previous OC within the same level. First OC in a level has no drop.' },
                 { key: 'oc_name', label: 'OC Name', sortable: true },
                 { key: 'members_needed_median', label: 'Members', sortable: true },
                 { key: 'planning_to_ready_days_median', label: 'Days (plan\u2192ready)', sortable: true, title: 'Days from planning to ready' },
-                { key: 'respect_total_median', label: 'Respect (med)', sortable: true },
+                // Monetary metrics first
                 { key: 'money_total_median', label: '$ (med)', sortable: true, title: 'Money, median' },
-                { key: 'respect_per_member_median', label: 'Respect/mbr', sortable: true, title: 'Respect per member, median' },
                 { key: 'money_per_member_median', label: '$/mbr', sortable: true, title: 'Money per member, median' },
-                { key: 'respect_per_member_per_day_median', label: 'R/(mbr\u00b7day)', sortable: true, title: 'Respect per member per day, median' },
-                { key: 'money_per_member_per_day_median', label: '$/(mbr\u00b7day)', sortable: true, title: 'Money per member per day, median' }
+                { key: 'money_per_member_per_day_median', label: '$/(mbr\u00b7day)', sortable: true, title: 'Money per member per day, median' },
+                // Then respect metrics
+                { key: 'respect_total_median', label: 'Respect (med)', sortable: true },
+                { key: 'respect_per_member_median', label: 'Respect/mbr', sortable: true, title: 'Respect per member, median' },
+                { key: 'respect_per_member_per_day_median', label: 'R/(mbr\u00b7day)', sortable: true, title: 'Respect per member per day, median' }
             ];
             var colCount = cols.length;
             var headerTr = document.getElementById('oc-insights-header-row');
@@ -970,42 +972,20 @@
             }
             updateOcInsightsSortIndicators();
             (function() {
-                var rowsByRank = ocInsightsRows.slice().sort(function(a, b) {
-                    var ar = a.oc_rank, br = b.oc_rank;
-                    if (ar == null && br == null) return 0;
-                    if (ar == null) return 1;
-                    if (br == null) return -1;
-                    return (typeof ar === 'number' ? ar : parseFloat(ar) || 0) - (typeof br === 'number' ? br : parseFloat(br) || 0);
-                });
-                var byLevel = {};
-                for (var i = 1; i < rowsByRank.length; i++) {
-                    var prev = rowsByRank[i - 1], curr = rowsByRank[i];
-                    if (prev.difficulty == null || curr.difficulty == null || prev.difficulty !== curr.difficulty) continue;
-                    var sPrev = parseFloat(prev.oc_checkpoint_rate_score), sCurr = parseFloat(curr.oc_checkpoint_rate_score);
-                    if (isNaN(sPrev) || isNaN(sCurr)) continue;
-                    var drop = sPrev - sCurr;
-                    var L = curr.difficulty;
-                    if (!byLevel[L]) byLevel[L] = [];
-                    byLevel[L].push(drop);
-                }
-                var levelDrop = {};
-                for (var L in byLevel) {
-                    var arr = byLevel[L];
-                    if (!arr || arr.length === 0) continue;
-                    var avg = arr.reduce(function(s, x) { return s + x; }, 0) / arr.length;
-                    var min = Math.min.apply(null, arr), max = Math.max.apply(null, arr);
-                    levelDrop[L] = { str: min === max ? avg.toFixed(1) : avg.toFixed(1) + ' (' + min.toFixed(1) + '\u2013' + max.toFixed(1) + ')', sort: avg };
-                }
-                var firstInRank = rowsByRank[0];
+                // Use the numeric drop_from_prev field from the snapshot directly.
+                // It is stored in percentage points on the same 0–100 scale as member
+                // checkpoint rates, so we just format it to a single decimal place.
+                if (!ocInsightsRows || ocInsightsRows.length === 0) return;
                 for (var i = 0; i < ocInsightsRows.length; i++) {
                     var r = ocInsightsRows[i];
-                    if (firstInRank && r === firstInRank) {
+                    var raw = r.drop_from_prev;
+                    var num = raw != null ? parseFloat(raw) : NaN;
+                    if (isNaN(num)) {
                         r.drop_from_prev_str = '\u2014';
                         r.drop_from_prev_sort = null;
                     } else {
-                        var ld = levelDrop[r.difficulty];
-                        r.drop_from_prev_str = ld ? ld.str : '\u2014';
-                        r.drop_from_prev_sort = ld ? ld.sort : null;
+                        r.drop_from_prev_str = num.toFixed(1);
+                        r.drop_from_prev_sort = num;
                     }
                 }
             })();
@@ -1018,23 +998,25 @@
                 var key = (row.oc_name || '') + '_' + i;
                 var isOpen = !!expanded[key];
                 var medPlan = row.planning_to_ready_days_median;
-                var medRes = row.respect_total_median;
                 var medMon = row.money_total_median;
+                var medRes = row.respect_total_median;
                 var members = row.members_needed_median != null ? row.members_needed_median : (row.members_needed_min != null ? row.members_needed_min : row.members_needed_max);
                 html += '<tr class="oc-insights-oc-row" data-oc-idx="' + i + '" style="background:#fff; cursor:' + (hasPos ? 'pointer' : 'default') + ';">';
                 html += '<td style="padding:2px 4px;border:1px solid #ddd;">' + (hasPos ? (isOpen ? '\u25BC' : '\u25B6') : '') + '</td>';
                 html += '<td style="padding:2px 4px;border:1px solid #ddd;">' + fmtNum(row.oc_rank) + '</td>';
                 html += '<td style="padding:2px 4px;border:1px solid #ddd;">' + fmtNum(row.difficulty) + '</td>';
-                html += '<td style="padding:2px 4px;border:1px solid #ddd;" title="Avg drop to next OC within this level (min–max)">' + (row.drop_from_prev_str || '\u2014') + '</td>';
+                html += '<td style="padding:2px 4px;border:1px solid #ddd;" title="Drop in checkpoint rate (percentage points) to the previous OC within this level">' + (row.drop_from_prev_str || '\u2014') + '</td>';
                 html += '<td style="padding:2px 4px;border:1px solid #ddd;">' + (row.oc_name || '') + '</td>';
                 html += '<td style="padding:2px 4px;border:1px solid #ddd;">' + fmtNum(members) + '</td>';
                 html += '<td style="padding:2px 4px;border:1px solid #ddd;" title="min/med/max">' + (typeof medPlan === 'number' && !isNaN(medPlan) ? medPlan.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 2 }) : fmtNum(medPlan)) + '</td>';
-                html += '<td style="padding:2px 4px;border:1px solid #ddd;">' + fmtNum(medRes) + '</td>';
+                // Monetary metrics first
                 html += '<td style="padding:2px 4px;border:1px solid #ddd;">' + fmtMoney(medMon) + '</td>';
-                html += '<td style="padding:2px 4px;border:1px solid #ddd;">' + fmtNum(row.respect_per_member_median) + '</td>';
                 html += '<td style="padding:2px 4px;border:1px solid #ddd;">' + fmtMoney(row.money_per_member_median) + '</td>';
-                html += '<td style="padding:2px 4px;border:1px solid #ddd;">' + fmtNum(row.respect_per_member_per_day_median) + '</td>';
                 html += '<td style="padding:2px 4px;border:1px solid #ddd;">' + fmtMoney(row.money_per_member_per_day_median) + '</td>';
+                // Then respect metrics
+                html += '<td style="padding:2px 4px;border:1px solid #ddd;">' + fmtNum(medRes) + '</td>';
+                html += '<td style="padding:2px 4px;border:1px solid #ddd;">' + fmtNum(row.respect_per_member_median) + '</td>';
+                html += '<td style="padding:2px 4px;border:1px solid #ddd;">' + fmtNum(row.respect_per_member_per_day_median) + '</td>';
                 html += '</tr>';
                 if (hasPos && isOpen) {
                     var OUTCOME_COLS = ['Successful','Injured','Hospitalized','Jailed'];
@@ -1365,6 +1347,8 @@
         }
 
         let assignmentReasonsExpanded = false;
+        // Track individual member expansion state
+        let memberExpandedState = {};
         
         function toggleAssignmentReasons() {
             assignmentReasonsExpanded = !assignmentReasonsExpanded;
@@ -1374,6 +1358,18 @@
                 const reasons = window.lastAssignmentReasons || {};
                 displayAssignmentReasons(reasons);
             }
+        }
+        
+        function toggleMemberDetails(memberName) {
+            // Toggle individual member's expanded state
+            if (!memberExpandedState[memberName]) {
+                memberExpandedState[memberName] = true;
+            } else {
+                memberExpandedState[memberName] = false;
+            }
+            // Re-render to show updated state
+            const reasons = window.lastAssignmentReasons || {};
+            displayAssignmentReasons(reasons);
         }
 
         function displayAssignmentReasons(reasons) {
@@ -1401,19 +1397,77 @@
                 const assigned = reason.assigned_oc_id !== null && reason.assigned_oc_id !== undefined;
                 const maxOC = reason.max_recommended_oc !== null && reason.max_recommended_oc !== undefined ? reason.max_recommended_oc : 'N/A';
                 
-                // Header
-                html += `<div style="margin-bottom: 12px; padding: 8px; background-color: ${assigned ? '#e8f5e9' : '#fff3cd'}; border: 1px solid ${assigned ? '#c8e6c9' : '#ffc107'}; border-radius: 3px;">`;
-                html += `<div style="font-weight: 600; margin-bottom: 4px; color: #333;">${memberName}</div>`;
+                // Determine box color based on assignment relative to max recommended
+                let boxBgColor = '#fff3cd';  // default: yellow for unassigned
+                let boxBorderColor = '#ffc107';  // default: yellow border
+                
+                if (assigned && maxOC !== 'N/A' && typeof maxOC === 'number' && typeof reason.assigned_level === 'number') {
+                    const assignedLevel = reason.assigned_level;
+                    const maxLevel = maxOC;
+                    if (assignedLevel > maxLevel) {
+                        // Green for above max
+                        boxBgColor = '#e8f5e9';
+                        boxBorderColor = '#c8e6c9';
+                    } else if (assignedLevel < maxLevel) {
+                        // Red for below max
+                        boxBgColor = '#ffebee';
+                        boxBorderColor = '#ef5350';
+                    } else {
+                        // Blue for at max
+                        boxBgColor = '#e3f2fd';
+                        boxBorderColor = '#64b5f6';
+                    }
+                } else if (assigned) {
+                    // Assigned but can't determine level comparison - use default green
+                    boxBgColor = '#e8f5e9';
+                    boxBorderColor = '#c8e6c9';
+                }
+                
+                // Header with expand/collapse control
+                const isMemberExpanded = memberExpandedState[memberName] || false;
+                const memberDetailsVisible = assignmentReasonsExpanded || isMemberExpanded || !assigned;
+                const chevron = memberDetailsVisible ? '▼' : '▶';
+                
+                // Build max recommended indicator
+                let maxRecommendedHtml = '';
+                if (maxOC !== 'N/A' && typeof maxOC === 'number' && typeof reason.assigned_level === 'number') {
+                    const assignedLevel = reason.assigned_level;
+                    const maxLevel = maxOC;
+                    if (assignedLevel > maxLevel) {
+                        maxRecommendedHtml = `<span style="color: #2e7d32; font-weight: 600;">Max Recommended: Level ${maxOC} ↑ Above Max</span>`;
+                    } else if (assignedLevel < maxLevel) {
+                        maxRecommendedHtml = `<span style="color: #d32f2f; font-weight: 600;">Max Recommended: Level ${maxOC} ↓ Below Max</span>`;
+                    } else {
+                        maxRecommendedHtml = `<span style="color: #1976d2; font-weight: 600;">Max Recommended: Level ${maxOC} ✓ At Max</span>`;
+                    }
+                } else {
+                    maxRecommendedHtml = `<span style="color: #666;">Max Recommended: Level ${maxOC}</span>`;
+                }
+                
+                html += `<div style="margin-bottom: 12px; padding: 8px; background-color: ${boxBgColor}; border: 1px solid ${boxBorderColor}; border-radius: 3px;">`;
+                html += `<div style="font-weight: 600; margin-bottom: 4px; color: #333; cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: 6px;" onclick="toggleMemberDetails('${memberName.replace(/'/g, "\\'")}')" title="Click to expand/collapse details">`;
+                html += `<div style="display: flex; align-items: center; gap: 6px;">`;
+                html += `<span style="font-size: 10px; color: #666; user-select: none;">${chevron}</span>`;
+                html += `<span>${memberName}</span>`;
+                html += `</div>`;
+                html += `<div style="font-size: 11px; font-weight: normal;">${maxRecommendedHtml}</div>`;
+                html += `</div>`;
                 
                 if (assigned) {
                     html += `<div style="font-size: 11px; color: #555; margin-bottom: 4px;">`;
                     html += `Assigned to: <strong>Level ${reason.assigned_level} - ${reason.assigned_oc_name}</strong> (ID: ${reason.assigned_oc_id})`;
                     html += ` | Reason: <strong>${reason.reason || 'unknown'}</strong>`;
-                    html += ` | Max Recommended: <strong>Level ${maxOC}</strong>`;
+                    
                     if (reason.grouped_with && reason.grouped_with.length > 0) {
                         html += ` | Grouped with: ${reason.grouped_with.join(', ')}`;
                     }
                     html += `</div>`;
+                    
+                    if (reason.backup_oc_id != null && reason.backup_oc_id !== undefined && reason.backup_level != null && reason.backup_oc_name) {
+                        html += `<div style="font-size: 11px; color: #1565c0; margin-bottom: 4px; margin-left: 8px;">`;
+                        html += `If too difficult: <strong>Level ${reason.backup_level} - ${reason.backup_oc_name}</strong> (ID: ${reason.backup_oc_id})`;
+                        html += `</div>`;
+                    }
                     
                     // Show warnings if any
                     if (reason.warnings && reason.warnings.length > 0) {
@@ -1426,8 +1480,7 @@
                     }
                 } else {
                     html += `<div style="font-size: 11px; color: #856404; margin-bottom: 4px;">`;
-                    html += `Not assigned | Max Recommended: <strong>Level ${maxOC}</strong>`;
-                    html += ` | Reason: <strong>${reason.reason || 'unknown'}</strong>`;
+                    html += `Not assigned | Reason: <strong>${reason.reason || 'unknown'}</strong>`;
                     html += `</div>`;
                     
                     // Show detailed information about why they weren't assigned
@@ -1457,15 +1510,75 @@
                     }
                 }
                 
-                // Show considered OCs if expanded or if unassigned
-                if ((assignmentReasonsExpanded || !assigned) && reason.considered_ocs && reason.considered_ocs.length > 0) {
+                // Show considered OCs if expanded (globally or individually) or if unassigned
+                if (memberDetailsVisible && reason.considered_ocs && reason.considered_ocs.length > 0) {
                     html += `<div style="margin-top: 8px; padding: 6px; background-color: rgba(255,255,255,0.7); border-radius: 3px; font-size: 11px;">`;
+                    
+                    // Display member's highest historical OC data at the beginning
+                    if (reason.highest_historical_oc && reason.highest_historical_oc.oc_name) {
+                        const hist = reason.highest_historical_oc;
+                        html += `<div style="margin-bottom: 8px; padding: 4px; background-color: #e3f2fd; border-left: 3px solid #2196f3; font-size: 10px;">`;
+                        html += `<strong>Highest Historical OC:</strong> ${hist.oc_name} (Level ${hist.difficulty}, Difficulty Rank ${hist.oc_rank || 'N/A'}, Position: ${hist.position || 'N/A'}, Checkpoint Rate: ${hist.checkpoint_rate?.toFixed(1) || 'N/A'}%)`;
+                        html += `</div>`;
+                    }
+                    
                     html += `<strong>Considered OCs (${reason.considered_ocs.length}):</strong><ul style="margin: 4px 0; padding-left: 20px; max-height: 200px; overflow-y: auto;">`;
-                    reason.considered_ocs.forEach(oc => {
+                    // Sort considered OCs by difficulty rank (ascending - lower rank = easier)
+                    // OCs without a rank will be sorted to the end
+                    const sortedOCs = [...reason.considered_ocs].sort((a, b) => {
+                        const rankA = a.oc_rank !== undefined && a.oc_rank !== null ? a.oc_rank : 9999;
+                        const rankB = b.oc_rank !== undefined && b.oc_rank !== null ? b.oc_rank : 9999;
+                        return rankA - rankB;
+                    });
+                    sortedOCs.forEach(oc => {
                         html += `<li style="margin-bottom: 2px;">`;
                         html += `<strong>Level ${oc.level} - ${oc.oc_name}</strong> (ID: ${oc.oc_id})`;
-                        html += `<br><span style="color: #d32f2f; font-size: 10px; margin-left: 20px;">❌ ${oc.reason_skipped}</span>`;
-                        if (oc.total_slots !== undefined || oc.filled_slots !== undefined || oc.available_slots !== undefined) {
+                        // Display difficulty rank if available
+                        if (oc.oc_rank !== undefined && oc.oc_rank !== null) {
+                            html += ` <span style="color: #666; font-size: 10px;">[Difficulty Rank: ${oc.oc_rank}]</span>`;
+                        }
+                        // Display predicted checkpoint rate if available
+                        if (oc.predicted_checkpoint_rate !== undefined && oc.predicted_checkpoint_rate !== null) {
+                            const predictedRate = parseFloat(oc.predicted_checkpoint_rate);
+                            const rateColor = predictedRate >= 80 ? '#2e7d32' : '#d32f2f';
+                            html += ` <span style="color: ${rateColor}; font-size: 10px; font-weight: 600;">[Predicted Rate: ${predictedRate.toFixed(1)}%]</span>`;
+                        }
+                        // Use checkmark and green color for selected OCs, X and red for skipped
+                        const isSelected = oc.reason_skipped && (oc.reason_skipped.includes('Selected') || oc.reason_skipped.includes('✅'));
+                        const icon = isSelected ? '✅' : '❌';
+                        const color = isSelected ? '#2e7d32' : '#d32f2f';
+                        
+                        // Split reason_skipped to separate "Selected for assignment" from detailed reasons
+                        let reasonText = (oc.reason_skipped || '').replace(/✅\s*/g, '').trim();
+                        let selectedText = null;
+                        
+                        if (isSelected) {
+                            // Extract "Selected for assignment" part
+                            const selectedMatch = reasonText.match(/Selected for assignment \([^)]+\)/);
+                            if (selectedMatch) {
+                                selectedText = selectedMatch[0];
+                                // Remove it from reasonText, also remove trailing semicolon/space
+                                reasonText = reasonText.replace(/;\s*Selected for assignment \([^)]+\)/, '').replace(/Selected for assignment \([^)]+\)/, '').trim();
+                                // Clean up trailing semicolons
+                                reasonText = reasonText.replace(/;\s*$/, '').trim();
+                            }
+                        }
+                        
+                        // Display detailed reason (if any)
+                        if (reasonText) {
+                            html += `<br><span style="color: ${color}; font-size: 10px; margin-left: 20px;">${icon} ${reasonText}</span>`;
+                        }
+                        
+                        // Display "Selected for assignment" on separate line with checkmark
+                        if (selectedText) {
+                            html += `<br><span style="color: #2e7d32; font-size: 10px; margin-left: 20px;">✅ ${selectedText}</span>`;
+                        } else if (!isSelected) {
+                            // For skipped OCs without selected text, show the reason
+                            html += `<br><span style="color: ${color}; font-size: 10px; margin-left: 20px;">${icon} ${reasonText}</span>`;
+                        }
+                        
+                        // For skipped OCs that don't have it in reasonText, show slot details if available
+                        if (!isSelected && (oc.total_slots !== undefined || oc.filled_slots !== undefined || oc.available_slots !== undefined)) {
                             html += `<br><span style="color: #666; font-size: 10px; margin-left: 20px;">`;
                             if (oc.total_slots !== undefined) html += `Slots: ${oc.filled_slots || 0}/${oc.total_slots || 0}`;
                             if (oc.available_slots !== undefined) html += ` (${oc.available_slots} available)`;
