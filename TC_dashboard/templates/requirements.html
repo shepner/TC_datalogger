@@ -542,11 +542,11 @@
                 if (!allMet) {
                     if (!ocMet && !tradingMet) {
                         reasons.push(`✗ OC requirement not met (${ocCount} < 3)`);
-                        reasons.push(`✗ Trading requirement not met (${tradingCount} ≤ 480)`);
+                        reasons.push(`✗ Trading requirement not met (${tradingCount} ≤ 460)`);
                     } else if (!ocMet) {
                         reasons.push(`✗ OC requirement not met (${ocCount} < 3)`);
                     } else if (!tradingMet) {
-                        reasons.push(`✗ Trading requirement not met (${tradingCount} ≤ 480)`);
+                        reasons.push(`✗ Trading requirement not met (${tradingCount} ≤ 460)`);
                     }
                     if (!hasChains) {
                         reasons.push('✗ No chain participation');
@@ -599,9 +599,9 @@
             } else if (type === 'trading_count') {
                 // Color scale: 0 = no color, 1-239 = progressively darker yellow, 240+ = progressively darker green
                 // Discrete mapping: 0 = no color, 1-79 = light yellow, 80-159 = yellow, 160-239 = dark yellow
-                //                  240-359 = light green, 360-479 = green, 480+ = dark green
+                //                  240-359 = light green, 360-459 = green, 460+ = dark green
                 if (value === 0) return '';
-                if (value >= 480) return 'cell-green-dark';
+                if (value >= 460) return 'cell-green-dark';
                 if (value >= 360) return 'cell-green';
                 if (value >= 240) return 'cell-green-light';
                 if (value >= 160) return 'cell-yellow-dark';
