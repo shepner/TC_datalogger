@@ -519,7 +519,7 @@
             const tradingMet = member.trading_requirement_met || false;
             const allMet = member.all_requirements_met || false;
 
-            if (isAtTopRole(member.position)) {
+            if (isAtTopRole(member.position) && allMet) {
                 return 'At top role - maintain current rank';
             }
 
@@ -666,8 +666,10 @@
                 const allRequirementsMet = member.all_requirements_met || false;
 
                 // Create sort key: maintain < kick < demote < none < promote
-                if (atTopRole) {
+                if (atTopRole && allRequirementsMet) {
                     member.role_action_sort = '0_maintain';
+                } else if (atTopRole && !allRequirementsMet) {
+                    member.role_action_sort = '2_demote';
                 } else if (atLowestRole && !allRequirementsMet) {
                     member.role_action_sort = '1_kick';
                 } else if (!allRequirementsMet && !atLowestRole) {
@@ -716,8 +718,10 @@
                 const canPromote = member.can_promote || false;
                 const allRequirementsMet = member.all_requirements_met || false;
 
-                if (atTopRole) {
+                if (atTopRole && allRequirementsMet) {
                     actions.maintain.push(member);
+                } else if (atTopRole && !allRequirementsMet) {
+                    actions.demote.push(member);
                 } else if (atLowestRole && !allRequirementsMet) {
                     actions.kick.push(member);
                 } else if (canPromote && allRequirementsMet) {
@@ -786,11 +790,16 @@
                     const canPromote = member.can_promote || false;
                     const allRequirementsMet = member.all_requirements_met || false;
                     
-                    if (atTopRole) {
-                        // At top role - always maintain
+                    if (atTopRole && allRequirementsMet) {
+                        // At top role and meeting requirements - maintain
                         roleActionDisplay = 'MAINTAIN';
                         roleActionClass = 'action-maintain';
                         roleActionTooltip = 'At top role - maintain current rank';
+                    } else if (atTopRole && !allRequirementsMet) {
+                        // At top role but requirements not met - demote
+                        roleActionDisplay = `DEMOTE → ${prevRole || 'Previous Role'}`;
+                        roleActionClass = 'action-demote';
+                        roleActionTooltip = getPromotionReason(member);
                     } else if (atLowestRole && !allRequirementsMet) {
                         // At lowest role and requirements not met - kick from faction
                         roleActionDisplay = 'KICK';
