@@ -172,7 +172,8 @@
             border-radius: 3px;
             font-size: 11px;
         }
-        .role-action-cell {
+        .role-action-cell,
+        .tooltip-cell {
             position: relative;
             cursor: help;
         }
@@ -520,7 +521,11 @@
             const allMet = member.all_requirements_met || false;
 
             if (isAtTopRole(member.position) && allMet) {
-                return 'At top role - maintain current rank';
+                const topReasons = ['At top role - maintain current rank'];
+                topReasons.push(ocMet ? `✓ OC requirement met (${member.oc_count_30d || 0} ≥ 3 OCs in 30d)` : `✓ Trading requirement met (${member.trading_count_30d || 0} > 460 items in 30d)`);
+                topReasons.push('✓ Chain participation');
+                topReasons.push(`✓ Active (${daysInactive} days inactive)`);
+                return topReasons.join('\\n');
             }
 
             if (allMet && daysInactive <= 2) {
@@ -557,6 +562,60 @@
                 }
                 return reasons.length > 0 ? reasons.join('\\n') : 'Cannot determine reason';
             }
+        }
+
+        function getInOCTooltip(member) {
+            return member.is_in_oc
+                ? 'Currently in an active OC.'
+                : 'Not currently in an active OC.';
+        }
+
+        function getOCMetTooltip(member) {
+            const c = member.oc_count_30d || 0;
+            return member.oc_requirement_met
+                ? `OC requirement met (${c} ≥ 3 OCs in last 30 days).`
+                : `OC requirement not met (${c} < 3 OCs in last 30 days).`;
+        }
+
+        function getTradingMetTooltip(member) {
+            const c = member.trading_count_30d || 0;
+            return member.trading_requirement_met
+                ? `Trading requirement met (${c} > 460 items in last 30 days).`
+                : `Trading requirement not met (${c} ≤ 460 items in last 30 days).`;
+        }
+
+        function getChainsMetTooltip(member) {
+            return member.chain_participation
+                ? 'Chain participation requirement met (participated in chains in last 30 days).'
+                : 'Chain participation requirement not met (no chain participation in last 30 days).';
+        }
+
+        function getAllMetTooltip(member) {
+            const daysInFaction = member.days_in_faction || 0;
+            if (daysInFaction < 30) {
+                return 'N/A - Less than 30 days in faction. Requirements are not evaluated until 30 days.';
+            }
+            if (member.all_requirements_met) {
+                const parts = ['All requirements met:'];
+                if (member.oc_requirement_met) {
+                    parts.push(`✓ OC (${member.oc_count_30d || 0} ≥ 3 in 30d)`);
+                } else {
+                    parts.push(`✓ Trading (${member.trading_count_30d || 0} > 460 in 30d)`);
+                }
+                parts.push('✓ Chain participation');
+                return parts.join('\\n');
+            }
+            const parts = ['Requirements not met:'];
+            if (!member.oc_requirement_met) {
+                parts.push(`✗ OC (${member.oc_count_30d || 0} < 3 in 30d)`);
+            }
+            if (!member.trading_requirement_met) {
+                parts.push(`✗ Trading (${member.trading_count_30d || 0} ≤ 460 in 30d)`);
+            }
+            if (!member.chain_participation) {
+                parts.push('✗ No chain participation');
+            }
+            return parts.join('\\n');
         }
 
         async function loadReport() {
@@ -793,39 +852,35 @@
                     const allRequirementsMet = member.all_requirements_met || false;
                     
                     if (atTopRole && allRequirementsMet) {
-                        // At top role and meeting requirements - maintain
                         roleActionDisplay = 'MAINTAIN';
                         roleActionClass = 'action-maintain';
-                        roleActionTooltip = 'At top role - maintain current rank';
                     } else if (atTopRole && !allRequirementsMet) {
-                        // At top role but requirements not met - demote
                         roleActionDisplay = `DEMOTE → ${prevRole || 'Previous Role'}`;
                         roleActionClass = 'action-demote';
-                        roleActionTooltip = getPromotionReason(member);
                     } else if (atLowestRole && !allRequirementsMet) {
-                        // At lowest role and requirements not met - kick from faction
                         roleActionDisplay = 'KICK';
                         roleActionClass = 'action-kick';
-                        roleActionTooltip = getPromotionReason(member);
                     } else if (canPromote && allRequirementsMet && nextRole) {
-                        // Requirements met, active, and in promotable chain with a next role - promote
                         roleActionDisplay = `PROMOTE → ${nextRole}`;
                         roleActionClass = 'action-promote';
-                        roleActionTooltip = getPromotionReason(member);
                     } else if (!allRequirementsMet && !atLowestRole) {
-                        // Requirements not met and not at lowest role - demote
                         roleActionDisplay = `DEMOTE → ${prevRole || 'Previous Role'}`;
                         roleActionClass = 'action-demote';
-                        roleActionTooltip = getPromotionReason(member);
                     } else {
-                        // No action needed
                         roleActionDisplay = 'NONE';
                         roleActionClass = 'action-none';
-                        roleActionTooltip = getPromotionReason(member);
                     }
+                    roleActionTooltip = getPromotionReason(member);
                 } else {
                     roleActionTooltip = 'N/A - Less than 30 days in faction';
                 }
+
+                const inOCTip = getInOCTooltip(member).replace(/"/g, '&quot;');
+                const ocMetTip = getOCMetTooltip(member).replace(/"/g, '&quot;');
+                const tradingMetTip = getTradingMetTooltip(member).replace(/"/g, '&quot;');
+                const chainsMetTip = getChainsMetTooltip(member).replace(/"/g, '&quot;');
+                const allMetTip = getAllMetTooltip(member).replace(/"/g, '&quot;');
+                const roleActionTipEsc = roleActionTooltip.replace(/"/g, '&quot;');
 
                 row.innerHTML = `
                     <td>${member.member_name}</td>
@@ -833,16 +888,16 @@
                     <td>${member.position || '-'}</td>
                     <td class="${getCellClass(daysInFaction, 'days_in_faction')}">${daysInFaction}</td>
                     <td class="${getCellClass(daysInactive, 'days_inactive')}">${daysInactive}</td>
-                    <td class="${member.is_in_oc ? '' : 'cell-red'}">${member.is_in_oc ? '✓' : '✗'}</td>
+                    <td class="tooltip-cell ${member.is_in_oc ? '' : 'cell-red'}" data-tooltip="${inOCTip}" onmouseenter="showRoleActionTooltip(event)" onmouseleave="hideRoleActionTooltip()" onmousemove="updateRoleActionTooltipPosition(event)">${member.is_in_oc ? '✓' : '✗'}</td>
                     <td class="${getCellClass(ocCount, 'oc_count')}">${ocCount}</td>
                     <td class="${getCellClass(member.oc_count_7d || 0, 'oc_count_7d')}">${member.oc_count_7d || 0}</td>
-                    <td class="${member.oc_requirement_met ? '' : 'cell-red'}">${ocMet}</td>
+                    <td class="tooltip-cell ${member.oc_requirement_met ? '' : 'cell-red'}" data-tooltip="${ocMetTip}" onmouseenter="showRoleActionTooltip(event)" onmouseleave="hideRoleActionTooltip()" onmousemove="updateRoleActionTooltipPosition(event)">${ocMet}</td>
                     <td class="${getCellClass(tradingCount, 'trading_count')}">${tradingCount}</td>
-                    <td class="${member.trading_requirement_met ? '' : 'cell-red'}">${tradingMet}</td>
-                    <td class="${member.chain_participation ? '' : 'cell-red'}">${chainsMet}</td>
-                    <td class="${allMetClass}">${allMetDisplay}</td>
+                    <td class="tooltip-cell ${member.trading_requirement_met ? '' : 'cell-red'}" data-tooltip="${tradingMetTip}" onmouseenter="showRoleActionTooltip(event)" onmouseleave="hideRoleActionTooltip()" onmousemove="updateRoleActionTooltipPosition(event)">${tradingMet}</td>
+                    <td class="tooltip-cell ${member.chain_participation ? '' : 'cell-red'}" data-tooltip="${chainsMetTip}" onmouseenter="showRoleActionTooltip(event)" onmouseleave="hideRoleActionTooltip()" onmousemove="updateRoleActionTooltipPosition(event)">${chainsMet}</td>
+                    <td class="tooltip-cell ${allMetClass}" data-tooltip="${allMetTip}" onmouseenter="showRoleActionTooltip(event)" onmouseleave="hideRoleActionTooltip()" onmousemove="updateRoleActionTooltipPosition(event)">${allMetDisplay}</td>
                     <td class="role-action-cell" 
-                        data-tooltip="${roleActionTooltip.replace(/"/g, '&quot;')}"
+                        data-tooltip="${roleActionTipEsc}"
                         onmouseenter="showRoleActionTooltip(event)"
                         onmouseleave="hideRoleActionTooltip()"
                         onmousemove="updateRoleActionTooltipPosition(event)">
