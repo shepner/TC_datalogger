@@ -736,6 +736,8 @@
                     member.role_action_sort = '2_demote';
                 } else if (canPromote && allRequirementsMet && hasNextPromotableRole) {
                     member.role_action_sort = '4_promote';
+                } else if (atLowestRole && allRequirementsMet && !canPromote) {
+                    member.role_action_sort = '0_maintain'; // Lowest role, requirements met, not promotable (e.g. inactive)
                 } else {
                     member.role_action_sort = '3_none';
                 }
@@ -787,6 +789,8 @@
                     actions.kick.push(member);
                 } else if (canPromote && allRequirementsMet && hasNextPromotableRole) {
                     actions.promote.push(member);
+                } else if (atLowestRole && allRequirementsMet && !canPromote) {
+                    actions.maintain.push(member);
                 } else if (!allRequirementsMet && !atLowestRole) {
                     actions.demote.push(member);
                 } else {
@@ -863,6 +867,9 @@
                     } else if (canPromote && allRequirementsMet && nextRole) {
                         roleActionDisplay = `PROMOTE → ${nextRole}`;
                         roleActionClass = 'action-promote';
+                    } else if (atLowestRole && allRequirementsMet && !canPromote) {
+                        roleActionDisplay = 'MAINTAIN';
+                        roleActionClass = 'action-maintain';
                     } else if (!allRequirementsMet && !atLowestRole) {
                         roleActionDisplay = `DEMOTE → ${prevRole || 'Previous Role'}`;
                         roleActionClass = 'action-demote';
