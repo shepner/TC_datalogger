@@ -14,7 +14,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
 COPY src/ /app/src/
-COPY config/ /app/config/
+RUN mkdir -p /app/config
 COPY docker/entrypoint.sh /app/docker/entrypoint.sh
 
 # Make entrypoint executable
