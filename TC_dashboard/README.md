@@ -155,6 +155,35 @@ Success indicators:
 Error detection:
 - Log entries with `ERROR` level
 
+## Authentication
+
+The dashboard requires login when exposed to the internet. Access is session-based with long-lived sessions (effectively “stay logged in” until the user logs out).
+
+- **Passwords**: Only password hashes are stored (in `TC_dashboard/logs/users.json` when using Docker). Plaintext passwords are never persisted.
+- **Sessions**: Sessions are permanent and last a long time (~10 years) so users stay logged in indefinitely.
+- **Creating users**: Add users via the CLI so passwords are hashed before storage.
+
+### Creating the first user (Docker)
+
+Ensure the dashboard container is running and the `TC_dashboard/logs` volume is mounted, then:
+
+```bash
+docker exec -it tc-dashboard python -m src.auth adduser admin
+# Enter password when prompted (recommended), or:
+docker exec -it tc-dashboard python -m src.auth adduser admin YourSecurePassword
+```
+
+To add users when running locally, set `DASHBOARD_USERS_FILE` to the path of your users file (e.g. `./logs/users.json`) and run:
+
+```bash
+python -m src.auth adduser admin
+```
+
+### Auth-related environment variables
+
+- `DASHBOARD_SECRET_KEY`: Secret key for signing session cookies. **Set this to a strong random value in production** (e.g. when internet-accessible). Default is a dev-only value.
+- `DASHBOARD_USERS_FILE`: Path to the JSON file storing usernames and password hashes (default: `/app/logs/users.json`).
+
 ## Configuration
 
 ### Environment Variables
@@ -172,11 +201,11 @@ The dashboard requires access to:
 
 ## Security Considerations
 
-- Dashboard is read-only (no write operations)
-- Docker socket access requires appropriate permissions
-- All volumes are mounted read-only
-- No sensitive data is logged or displayed
-- Consider adding authentication if exposed externally
+- **Authentication**: Login is required for all pages and API routes (except `/login` and static assets). Use a strong `DASHBOARD_SECRET_KEY` when the app is internet-accessible.
+- Passwords are stored only as hashes (scrypt); never store or log plaintext passwords.
+- Dashboard has write access to `/app/logs` (config, section states, users file); other service log volumes are read-only.
+- Docker socket access requires appropriate permissions.
+- No sensitive data is logged or displayed beyond what is needed for operation.
 
 ## Troubleshooting
 
@@ -208,14 +237,17 @@ Container names must match exactly:
 TC_dashboard/
 ├── src/
 │   ├── app.py              # Flask application
+│   ├── auth.py             # User store and password hashing (no plaintext storage)
 │   ├── health_checker.py   # Health check orchestration
 │   ├── docker_client.py    # Docker API client
-│   └── log_parser.py       # Log file parser
+│   └── log_parser.py      # Log file parser
 ├── templates/
-│   └── index.html          # Dashboard HTML
+│   ├── index.html          # Dashboard HTML
+│   └── login.html          # Login page
 ├── static/
 │   ├── dashboard.js        # Frontend JavaScript
 │   └── dashboard.css       # Styles
+├── logs/                   # Persisted data (users.json, config, etc.)
 ├── Dockerfile
 ├── requirements.txt
 └── README.md

@@ -256,6 +256,7 @@
             <div style="display: flex; align-items: center; gap: 8px;">
                 <button id="pull-data-btn" onclick="triggerDataPull()" style="padding: 6px 12px; font-size: 12px; background-color: #2196F3; color: white; border: none; border-radius: 3px; cursor: pointer;">Pull Data from TC API</button>
                 <a href="/" style="text-decoration: none; font-size: 12px; color: #666; padding: 4px 8px; border: 1px solid #ccc; border-radius: 3px; background-color: #f5f5f5;">← Back to Dashboard</a>
+                <a href="{{ url_for('logout') }}" style="font-size: 12px; color: #666; margin-left: 8px;">Log out</a>
             </div>
         </div>
         <div id="data-pull-status" style="display: none; margin-bottom: 10px; padding: 8px; border-radius: 4px; font-size: 12px;"></div>

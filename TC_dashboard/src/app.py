@@ -3,13 +3,16 @@
 import json
 import logging
 import os
+from datetime import timedelta
 from pathlib import Path
 from typing import List
 
 from google.cloud.bigquery import ScalarQueryParameter
 
-from flask import Flask, jsonify, render_template, request, send_from_directory
+from flask import Flask, jsonify, redirect, render_template, request, send_from_directory, session, url_for
+from flask_login import LoginManager, current_user, login_required, login_user, logout_user
 
+from src.auth import get_user, user_count, verify_password
 from src.bigquery_client import BigQueryClient
 from src.docker_client import DockerClient
 from src.health_checker import HealthChecker
@@ -133,9 +136,67 @@ def save_oc_assignment_section_states(states: dict) -> dict:
 # Since app.py is in /app/src/, we need to go up one level to /app/
 import os
 base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-app = Flask(__name__, 
+app = Flask(__name__,
             template_folder=os.path.join(base_dir, 'templates'),
             static_folder=os.path.join(base_dir, 'static'))
+
+# Auth: secret key required for sessions; use env in production
+app.config["SECRET_KEY"] = os.getenv("DASHBOARD_SECRET_KEY") or "dev-secret-change-in-production"
+app.config["SESSION_PERMANENT"] = True
+app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=365 * 10)  # ~10 years (indefinite)
+
+login_manager = LoginManager(app)
+login_manager.login_view = "login"
+login_manager.login_message = None
+
+
+@login_manager.user_loader
+def load_user(user_id: str):
+    return get_user(user_id)
+
+
+@app.before_request
+def make_session_permanent_and_require_auth():
+    session.permanent = True
+    if request.endpoint is None:
+        return
+    if request.endpoint == "login":
+        return
+    if request.path.startswith("/static") or request.path == "/favicon.ico":
+        return
+    if not current_user.is_authenticated:
+        return redirect(url_for("login", next=request.url))
+
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    """Login page; POST with username/password to authenticate. Session is kept indefinitely."""
+    if current_user.is_authenticated:
+        return redirect(request.args.get("next") or url_for("index"))
+    error = None
+    if request.method == "POST":
+        username = (request.form.get("username") or "").strip()
+        password = request.form.get("password") or ""
+        if not username or not password:
+            error = "Username and password are required."
+        elif verify_password(username, password):
+            user = get_user(username)
+            if user:
+                login_user(user, remember=True)
+                next_url = request.args.get("next") or url_for("index")
+                return redirect(next_url)
+        if error is None:
+            error = "Invalid username or password."
+    return render_template("login.html", error=error, next=request.args.get("next"))
+
+
+@app.route("/logout", methods=["GET", "POST"])
+@login_required
+def logout():
+    """Log out the current user."""
+    logout_user()
+    return redirect(url_for("login"))
+
 
 # Initialize health checker
 # Get base path from environment or use default
