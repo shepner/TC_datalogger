@@ -158,13 +158,14 @@ def load_user(user_id: str):
 @app.before_request
 def make_session_permanent_and_require_auth():
     session.permanent = True
-    if request.endpoint is None:
-        return
     if request.endpoint == "login":
         return
     if request.path.startswith("/static") or request.path == "/favicon.ico":
         return
     if not current_user.is_authenticated:
+        # API calls: return 401 JSON so fetch() can redirect the browser to login
+        if request.path.startswith("/api/"):
+            return jsonify(login_required=True, login_url=url_for("login", next=request.url)), 401
         return redirect(url_for("login", next=request.url))
 
 
