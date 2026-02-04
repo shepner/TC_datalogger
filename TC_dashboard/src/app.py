@@ -805,6 +805,14 @@ def refresh_oc_insights():
     tables (v2_faction_40832_crimes-raw, v2_torn_items-raw) in BigQuery."""
     if not bigquery_client:
         return jsonify({"error": "BigQuery client not available"}), 500
+    
+    # Prevent destructive operations in test/local mode to avoid disrupting production
+    dashboard_mode = os.getenv("DASHBOARD_MODE", "production").lower()
+    if dashboard_mode in ("test", "local"):
+        return jsonify({
+            "error": f"OC insights refresh disabled in {dashboard_mode} mode to prevent disrupting production tables. Set DASHBOARD_MODE=production to enable."
+        }), 403
+    
     snap_path = _find_sql_path("oc_historical_insights_snapshot.sql")
     if not snap_path:
         return jsonify({"error": "oc_historical_insights_snapshot.sql not found"}), 500

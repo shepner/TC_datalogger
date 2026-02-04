@@ -191,6 +191,9 @@ python -m src.auth adduser admin
 - `DASHBOARD_PORT`: Port to run the dashboard on (default: 8080)
 - `DASHBOARD_BASE_PATH`: Base path for resolving log files (default: parent directory)
 - `DASHBOARD_DEBUG`: Enable Flask debug mode (default: false)
+- `DASHBOARD_MODE`: Instance mode - `production`, `test`, or `local` (default: `production`)
+  - **Important**: Set to `test` or `local` for local/test instances to prevent destructive BigQuery operations from disrupting production
+  - In `test`/`local` mode, OC insights refresh is disabled (uses `CREATE OR REPLACE TABLE` which could overwrite production data)
 
 ### Volume Mounts
 
@@ -198,6 +201,23 @@ The dashboard requires access to:
 - Log directories from all services (read-only)
 - Docker socket for container status checks (read-only)
 - Project root directory for log path resolution (read-only)
+
+## Running Multiple Instances
+
+**Important**: If running both production and local/test instances that share the same BigQuery tables:
+
+1. **Set `DASHBOARD_MODE`**: Use `DASHBOARD_MODE=test` or `DASHBOARD_MODE=local` for your local/test instance to prevent destructive operations from disrupting production.
+
+2. **Protected Operations**: The following operations are disabled in `test`/`local` mode:
+   - **OC Insights Refresh** (`/api/oc-insights/refresh`): Uses `CREATE OR REPLACE TABLE` which completely replaces tables. If both instances refresh simultaneously, one will overwrite the other's work.
+
+3. **Safe Operations**: These operations are safe to run from multiple instances:
+   - **Trading paid events**: Uses atomic MERGE operations, so concurrent writes are safe.
+   - **Read operations**: All queries are read-only and safe.
+
+4. **File Writes**: Local JSON config files (`/app/logs/*.json`) are separate per instance unless volumes are shared, so no conflicts.
+
+**Recommendation**: Always set `DASHBOARD_MODE=test` or `DASHBOARD_MODE=local` for local development/test instances.
 
 ## Security Considerations
 

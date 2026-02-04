@@ -80,6 +80,8 @@ services:
       - DASHBOARD_BASE_PATH=/app/data
       # Set DASHBOARD_SECRET_KEY in .env when internet-accessible (strong random value)
       - DASHBOARD_SECRET_KEY=${DASHBOARD_SECRET_KEY:-}
+      # Set DASHBOARD_MODE=test or local for test instances to prevent disrupting production BigQuery tables
+      - DASHBOARD_MODE=${DASHBOARD_MODE:-production}
     ports:
       - "8080:8080"
     volumes:
