@@ -75,6 +75,24 @@ def user_count() -> int:
     return len(_load_users())
 
 
+def list_users() -> list[str]:
+    """List all usernames."""
+    return list(_load_users().keys())
+
+
+def delete_user(username: str) -> bool:
+    """Delete a user. Returns True if deleted, False if not found."""
+    username = (username or "").strip()
+    if not username:
+        return False
+    users = _load_users()
+    if username not in users:
+        return False
+    del users[username]
+    _save_users(users)
+    return True
+
+
 def _cli_adduser(username: str, password: str) -> None:
     """CLI: add or update a user (password hashed before storage)."""
     if not username or not password:

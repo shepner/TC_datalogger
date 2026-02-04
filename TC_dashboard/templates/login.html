@@ -52,7 +52,12 @@
 </head>
 <body>
     <div class="login-box">
+        {% if setup_mode %}
+        <h1>Create First Account</h1>
+        <p style="font-size: 13px; color: #666; margin-bottom: 20px;">No accounts exist yet. Create the first administrator account to get started.</p>
+        {% else %}
         <h1>Sign in</h1>
+        {% endif %}
         {% if error %}
         <p class="login-error">{{ error }}</p>
         {% endif %}
@@ -60,8 +65,12 @@
             <label for="username">Username</label>
             <input type="text" id="username" name="username" autocomplete="username" required autofocus>
             <label for="password">Password</label>
-            <input type="password" id="password" name="password" autocomplete="current-password" required>
-            <button type="submit" class="btn btn-primary">Sign in</button>
+            <input type="password" id="password" name="password" autocomplete="{{ 'new-password' if setup_mode else 'current-password' }}" required>
+            {% if setup_mode %}
+            <label for="password_confirm">Confirm Password</label>
+            <input type="password" id="password_confirm" name="password_confirm" autocomplete="new-password" required>
+            {% endif %}
+            <button type="submit" class="btn btn-primary">{{ 'Create Account' if setup_mode else 'Sign in' }}</button>
         </form>
     </div>
 </body>

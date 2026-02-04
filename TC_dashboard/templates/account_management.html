@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Account Management - Torn City Faction Management</title>
+    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='dashboard.css') }}">
+    <script src="{{ url_for('static', filename='auth-redirect.js') }}"></script>
+    <style>
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #ddd;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 20px;
+            color: #333;
+        }
+        .section {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .section h2 {
+            margin-top: 0;
+            font-size: 16px;
+            color: #333;
+        }
+        .user-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        .user-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px;
+            border-bottom: 1px solid #eee;
+        }
+        .user-item:last-child {
+            border-bottom: none;
+        }
+        .user-name {
+            font-weight: 500;
+            color: #333;
+        }
+        .user-actions {
+            display: flex;
+            gap: 8px;
+        }
+        .btn {
+            padding: 6px 12px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+        }
+        .btn-primary {
+            background: #3498db;
+            color: white;
+        }
+        .btn-primary:hover {
+            background: #2980b9;
+        }
+        .btn-danger {
+            background: #e74c3c;
+            color: white;
+        }
+        .btn-danger:hover {
+            background: #c0392b;
+        }
+        .btn-secondary {
+            background: #95a5a6;
+            color: white;
+        }
+        .btn-secondary:hover {
+            background: #7f8c8d;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+            color: #333;
+        }
+        .form-group input {
+            width: 100%;
+            padding: 8px 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        .form-group input:focus {
+            outline: none;
+            border-color: #3498db;
+        }
+        .error {
+            color: #c0392b;
+            font-size: 13px;
+            margin-top: 5px;
+        }
+        .success {
+            color: #27ae60;
+            font-size: 13px;
+            margin-top: 5px;
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal.active {
+            display: flex;
+        }
+        .modal-content {
+            background: white;
+            padding: 25px;
+            border-radius: 8px;
+            max-width: 400px;
+            width: 90%;
+        }
+        .modal-header {
+            margin-bottom: 15px;
+        }
+        .modal-header h3 {
+            margin: 0;
+            font-size: 18px;
+        }
+        .modal-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Account Management</h1>
+            <div>
+                <a href="/" style="font-size: 13px; color: #666; margin-right: 15px;">← Back to Dashboard</a>
+                <a href="{{ url_for('logout') }}" style="font-size: 13px; color: #666;">Log out</a>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>Create New User</h2>
+            <form id="createUserForm">
+                <div class="form-group">
+                    <label for="new_username">Username</label>
+                    <input type="text" id="new_username" name="username" required>
+                </div>
+                <div class="form-group">
+                    <label for="new_password">Password</label>
+                    <input type="password" id="new_password" name="password" required minlength="6">
+                </div>
+                <div class="form-group">
+                    <label for="new_password_confirm">Confirm Password</label>
+                    <input type="password" id="new_password_confirm" name="password_confirm" required minlength="6">
+                </div>
+                <div id="createError" class="error"></div>
+                <div id="createSuccess" class="success"></div>
+                <button type="submit" class="btn btn-primary">Create User</button>
+            </form>
+        </div>
+
+        <div class="section">
+            <h2>Users</h2>
+            <ul id="userList" class="user-list">
+                <li>Loading...</li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- Change Password Modal -->
+    <div id="changePasswordModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Change Password</h3>
+            </div>
+            <form id="changePasswordForm">
+                <input type="hidden" id="changePasswordUsername">
+                <div class="form-group">
+                    <label for="change_password">New Password</label>
+                    <input type="password" id="change_password" required minlength="6">
+                </div>
+                <div class="form-group">
+                    <label for="change_password_confirm">Confirm Password</label>
+                    <input type="password" id="change_password_confirm" required minlength="6">
+                </div>
+                <div id="changePasswordError" class="error"></div>
+                <div id="changePasswordSuccess" class="success"></div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeChangePasswordModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Update Password</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        let users = [];
+
+        async function loadUsers() {
+            try {
+                const response = await fetch('/api/users');
+                if (!response.ok) throw new Error('Failed to load users');
+                const data = await response.json();
+                users = data.users || [];
+                renderUsers();
+            } catch (error) {
+                document.getElementById('userList').innerHTML = `<li class="error">Error loading users: ${error.message}</li>`;
+            }
+        }
+
+        function renderUsers() {
+            const list = document.getElementById('userList');
+            if (users.length === 0) {
+                list.innerHTML = '<li style="color: #666; padding: 20px; text-align: center;">No users found</li>';
+                return;
+            }
+            list.innerHTML = users.map(username => `
+                <li class="user-item">
+                    <span class="user-name">${escapeHtml(username)}</span>
+                    <div class="user-actions">
+                        <button class="btn btn-secondary" onclick="openChangePasswordModal('${escapeHtml(username)}')">Change Password</button>
+                        <button class="btn btn-danger" onclick="deleteUser('${escapeHtml(username)}')" ${users.length <= 1 ? 'disabled title="Cannot delete the last user"' : ''}>Delete</button>
+                    </div>
+                </li>
+            `).join('');
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        document.getElementById('createUserForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const errorDiv = document.getElementById('createError');
+            const successDiv = document.getElementById('createSuccess');
+            errorDiv.textContent = '';
+            successDiv.textContent = '';
+
+            const username = document.getElementById('new_username').value.trim();
+            const password = document.getElementById('new_password').value;
+            const passwordConfirm = document.getElementById('new_password_confirm').value;
+
+            if (password !== passwordConfirm) {
+                errorDiv.textContent = 'Passwords do not match';
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/users', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password, password_confirm: passwordConfirm })
+                });
+                const data = await response.json();
+                if (!response.ok) {
+                    errorDiv.textContent = data.error || 'Failed to create user';
+                    return;
+                }
+                successDiv.textContent = data.message || 'User created successfully';
+                document.getElementById('createUserForm').reset();
+                await loadUsers();
+            } catch (error) {
+                errorDiv.textContent = `Error: ${error.message}`;
+            }
+        });
+
+        async function deleteUser(username) {
+            if (!confirm(`Are you sure you want to delete user "${username}"? This action cannot be undone.`)) {
+                return;
+            }
+            try {
+                const response = await fetch(`/api/users/${encodeURIComponent(username)}`, {
+                    method: 'DELETE'
+                });
+                const data = await response.json();
+                if (!response.ok) {
+                    alert(data.error || 'Failed to delete user');
+                    return;
+                }
+                await loadUsers();
+            } catch (error) {
+                alert(`Error: ${error.message}`);
+            }
+        }
+
+        function openChangePasswordModal(username) {
+            document.getElementById('changePasswordUsername').value = username;
+            document.getElementById('changePasswordModal').classList.add('active');
+            document.getElementById('changePasswordForm').reset();
+            document.getElementById('changePasswordError').textContent = '';
+            document.getElementById('changePasswordSuccess').textContent = '';
+        }
+
+        function closeChangePasswordModal() {
+            document.getElementById('changePasswordModal').classList.remove('active');
+        }
+
+        document.getElementById('changePasswordForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const errorDiv = document.getElementById('changePasswordError');
+            const successDiv = document.getElementById('changePasswordSuccess');
+            errorDiv.textContent = '';
+            successDiv.textContent = '';
+
+            const username = document.getElementById('changePasswordUsername').value;
+            const password = document.getElementById('change_password').value;
+            const passwordConfirm = document.getElementById('change_password_confirm').value;
+
+            if (password !== passwordConfirm) {
+                errorDiv.textContent = 'Passwords do not match';
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/users/${encodeURIComponent(username)}/password`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ password, password_confirm: passwordConfirm })
+                });
+                const data = await response.json();
+                if (!response.ok) {
+                    errorDiv.textContent = data.error || 'Failed to update password';
+                    return;
+                }
+                successDiv.textContent = data.message || 'Password updated successfully';
+                setTimeout(() => {
+                    closeChangePasswordModal();
+                }, 1500);
+            } catch (error) {
+                errorDiv.textContent = `Error: ${error.message}`;
+            }
+        });
+
+        // Close modal on background click
+        document.getElementById('changePasswordModal').addEventListener('click', (e) => {
+            if (e.target.id === 'changePasswordModal') {
+                closeChangePasswordModal();
+            }
+        });
+
+        // Load users on page load
+        loadUsers();
+    </script>
+</body>
+</html>

@@ -12,7 +12,7 @@ from google.cloud.bigquery import ScalarQueryParameter
 from flask import Flask, jsonify, redirect, render_template, request, send_from_directory, session, url_for
 from flask_login import LoginManager, current_user, login_required, login_user, logout_user
 
-from src.auth import get_user, user_count, verify_password
+from src.auth import add_user, delete_user, get_user, list_users, user_count, verify_password
 from src.bigquery_client import BigQueryClient
 from src.docker_client import DockerClient
 from src.health_checker import HealthChecker
@@ -171,9 +171,36 @@ def make_session_permanent_and_require_auth():
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
-    """Login page; POST with username/password to authenticate. Session is kept indefinitely."""
+    """Login page; POST with username/password to authenticate. Session is kept indefinitely.
+    If no users exist, shows account creation form for first-time setup."""
     if current_user.is_authenticated:
         return redirect(request.args.get("next") or url_for("index"))
+    
+    # First-time setup: if no users exist, show account creation form
+    if user_count() == 0:
+        setup_error = None
+        if request.method == "POST":
+            username = (request.form.get("username") or "").strip()
+            password = request.form.get("password") or ""
+            password_confirm = request.form.get("password_confirm") or ""
+            if not username or not password:
+                setup_error = "Username and password are required."
+            elif password != password_confirm:
+                setup_error = "Passwords do not match."
+            elif len(password) < 6:
+                setup_error = "Password must be at least 6 characters."
+            else:
+                if add_user(username, password):
+                    # Auto-login the newly created user
+                    user = get_user(username)
+                    if user:
+                        login_user(user, remember=True)
+                        return redirect(url_for("index"))
+                else:
+                    setup_error = "Failed to create account. Please try again."
+        return render_template("login.html", setup_mode=True, error=setup_error)
+    
+    # Normal login flow
     error = None
     if request.method == "POST":
         username = (request.form.get("username") or "").strip()
@@ -197,6 +224,103 @@ def logout():
     """Log out the current user."""
     logout_user()
     return redirect(url_for("login"))
+
+
+@app.route("/account-management")
+@login_required
+def account_management():
+    """Account management page."""
+    return render_template("account_management.html")
+
+
+@app.route("/api/users", methods=["GET"])
+@login_required
+def get_users():
+    """Get list of all users."""
+    users = list_users()
+    return jsonify({"users": users})
+
+
+@app.route("/api/users", methods=["POST"])
+@login_required
+def create_user():
+    """Create a new user."""
+    try:
+        data = request.get_json() or {}
+        username = (data.get("username") or "").strip()
+        password = data.get("password") or ""
+        password_confirm = data.get("password_confirm") or ""
+        
+        if not username:
+            return jsonify({"error": "Username is required"}), 400
+        if not password:
+            return jsonify({"error": "Password is required"}), 400
+        if password != password_confirm:
+            return jsonify({"error": "Passwords do not match"}), 400
+        if len(password) < 6:
+            return jsonify({"error": "Password must be at least 6 characters"}), 400
+        
+        if add_user(username, password):
+            return jsonify({"success": True, "message": f"User {username!r} created successfully"})
+        else:
+            return jsonify({"error": "Failed to create user"}), 500
+    except Exception as e:
+        logger.error(f"Error creating user: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/users/<username>", methods=["DELETE"])
+@login_required
+def delete_user_route(username: str):
+    """Delete a user."""
+    try:
+        username = username.strip()
+        if not username:
+            return jsonify({"error": "Username is required"}), 400
+        
+        # Prevent deleting the last user
+        if user_count() <= 1:
+            return jsonify({"error": "Cannot delete the last user"}), 400
+        
+        if delete_user(username):
+            return jsonify({"success": True, "message": f"User {username!r} deleted successfully"})
+        else:
+            return jsonify({"error": "User not found"}), 404
+    except Exception as e:
+        logger.error(f"Error deleting user: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/users/<username>/password", methods=["POST"])
+@login_required
+def change_password(username: str):
+    """Change a user's password."""
+    try:
+        data = request.get_json() or {}
+        password = data.get("password") or ""
+        password_confirm = data.get("password_confirm") or ""
+        
+        username = username.strip()
+        if not username:
+            return jsonify({"error": "Username is required"}), 400
+        if not password:
+            return jsonify({"error": "Password is required"}), 400
+        if password != password_confirm:
+            return jsonify({"error": "Passwords do not match"}), 400
+        if len(password) < 6:
+            return jsonify({"error": "Password must be at least 6 characters"}), 400
+        
+        # Check if user exists
+        if get_user(username) is None:
+            return jsonify({"error": "User not found"}), 404
+        
+        if add_user(username, password):  # add_user updates existing users
+            return jsonify({"success": True, "message": f"Password updated for {username!r}"})
+        else:
+            return jsonify({"error": "Failed to update password"}), 500
+    except Exception as e:
+        logger.error(f"Error changing password: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
 
 
 # Initialize health checker
