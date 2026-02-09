@@ -334,6 +334,30 @@ class OCEmailGenerator:
             else:
                 raise
 
+    def get_all_faction_members(self) -> List[Dict[str, Any]]:
+        """
+        Get all faction members with their basic information.
+
+        Returns:
+            List of dictionaries with member_id, member_name, is_in_oc, days_in_faction
+        """
+        query = """
+        SELECT
+          id AS member_id,
+          name AS member_name,
+          COALESCE(is_in_oc, FALSE) AS is_in_oc,
+          COALESCE(days_in_faction, 0) AS days_in_faction
+        FROM
+          `torncity-402423.torn_data.v2_faction_40832_members-raw`
+        ORDER BY
+          name ASC
+        """
+        try:
+            return self.bq.execute_query(query)
+        except Exception as e:
+            logger.warning(f"Error getting all faction members: {e}")
+            return []
+
     def get_member_checkpoint_rates(self, days_back: int = 90) -> Dict[str, Dict[str, float]]:
         """
         Get MAX checkpoint_pass_rate for each member by OC name and position_id.

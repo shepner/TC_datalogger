@@ -523,6 +523,10 @@ def get_oc_performance():
         
         performance = oc_email_generator.get_oc_performance_by_role(days_back=days_back)
         
+        # Get all faction members to ensure all members appear in the list
+        all_members = oc_email_generator.get_all_faction_members()
+        all_members_map = {m['member_id']: m for m in all_members}
+        
         # Get OC participation counts (30d and 7d)
         oc_counts_30d = oc_email_generator.get_oc_participation_counts_30d()
         oc_counts_7d = oc_email_generator.get_oc_participation_counts_7d()
@@ -543,6 +547,32 @@ def get_oc_performance():
                 if member_id not in counts_map:
                     counts_map[member_id] = {'oc_count_30d': 0, 'oc_count_7d': 0}
                 counts_map[member_id]['oc_count_7d'] = row.get('oc_count_7d', 0)
+        
+        # Create a set of member_ids that have performance data
+        members_with_performance = {record.get('member_id') for record in performance if record.get('member_id')}
+        
+        # Add placeholder records for members without OC history so they appear in the list
+        for member_id, member_info in all_members_map.items():
+            if member_id not in members_with_performance:
+                # Create a placeholder record so the member appears in the list
+                placeholder_record = {
+                    'member_id': member_id,
+                    'member_name': member_info.get('member_name', 'Unknown'),
+                    'is_in_oc': member_info.get('is_in_oc', False),
+                    'days_in_faction': member_info.get('days_in_faction', 0),
+                    'difficulty': None,
+                    'oc_name': None,
+                    'position': None,
+                    'position_id': None,
+                    'checkpoint_pass_rate': None,
+                    'status': None,
+                    'crime_id': None,
+                    'executed_at': None,
+                    'oc_count_30d': counts_map.get(member_id, {}).get('oc_count_30d', 0),
+                    'oc_count_7d': counts_map.get(member_id, {}).get('oc_count_7d', 0),
+                    'max_recommended_oc': 1  # Default to Level 1 for members with no OC history
+                }
+                performance.append(placeholder_record)
         
         # Calculate max recommended OC level for each member
         # Max recommended = highest difficulty where member has checkpoint_pass_rate between 80-90

@@ -1926,11 +1926,16 @@
             
             let filteredData = data;
             // If at least one checkbox is checked, filter by checked levels
+            // BUT always include members without OC history (null difficulty)
             if (checkedLevels.size > 0) {
                 filteredData = data.filter(r => {
                     const diff = r.difficulty !== undefined ? r.difficulty : r.oc_level;
                     // Handle both string and number types
                     const diffNum = typeof diff === 'string' ? parseInt(diff, 10) : diff;
+                    // Always include records with null/undefined difficulty (members without OC history)
+                    if (diffNum === null || diffNum === undefined || isNaN(diffNum)) {
+                        return true; // Keep members without OC history
+                    }
                     return checkedLevels.has(diffNum);
                 });
             }
@@ -1955,50 +1960,7 @@
             const members = new Map(); // key: member_name, value: {member_name, data: Map of "difficulty_oc_name_position_id" -> max checkpoint_pass_rate}
 
             filteredData.forEach(record => {
-                // Get difficulty - check both 'difficulty' and 'oc_level' field names
-                let difficulty = record.difficulty !== undefined ? record.difficulty : record.oc_level;
-                
-                // Skip records with null/undefined difficulty
-                if (difficulty === undefined || difficulty === null) {
-                    console.warn('Skipping record with missing difficulty:', record);
-                    return; // Skip this record
-                }
-                
-                // Convert to number if it's a string
-                if (typeof difficulty === 'string') {
-                    difficulty = parseInt(difficulty, 10);
-                    if (isNaN(difficulty)) {
-                        console.warn('Skipping record with invalid difficulty value:', record.difficulty, 'in record:', record);
-                        return; // Skip this record
-                    }
-                }
-                
-                // Ensure it's a valid number (1-6, or higher if needed)
-                if (typeof difficulty !== 'number' || difficulty < 1) {
-                    console.warn('Skipping record with invalid difficulty:', difficulty, 'in record:', record);
-                    return; // Skip this record
-                }
-                
-                // Build column key for member data
-                const columnKey = `${difficulty}_${record.oc_name}_${record.position_id}`;
-                
-                // Build hierarchical column structure
-                if (!columnGroups.has(difficulty)) {
-                    columnGroups.set(difficulty, new Map());
-                }
-                const difficultyGroup = columnGroups.get(difficulty);
-                if (!difficultyGroup.has(record.oc_name)) {
-                    difficultyGroup.set(record.oc_name, new Map());
-                }
-                const ocGroup = difficultyGroup.get(record.oc_name);
-                if (!ocGroup.has(record.position_id)) {
-                    ocGroup.set(record.position_id, {
-                        position: record.position,
-                        position_id: record.position_id
-                    });
-                }
-
-                // Store member data - keep MAX checkpoint_pass_rate and OC counts
+                // Store member data FIRST - this ensures all members appear even if they have no OC history
                 if (!members.has(record.member_name)) {
                     members.set(record.member_name, {
                         member_name: record.member_name,
@@ -2013,7 +1975,8 @@
                     });
                 }
                 const memberData = members.get(record.member_name);
-                // Update OC counts if present (use max to handle multiple records)
+                
+                // Update member data from this record
                 if (record.oc_count_30d !== undefined) {
                     memberData.oc_count_30d = record.oc_count_30d;
                 }
@@ -2045,6 +2008,46 @@
                             console.warn(`Invalid max_recommended_oc value for ${record.member_name}: ${maxOcValue} (expected 1-10)`);
                         }
                     }
+                }
+                
+                // Get difficulty - check both 'difficulty' and 'oc_level' field names
+                let difficulty = record.difficulty !== undefined ? record.difficulty : record.oc_level;
+                
+                // If difficulty is null/undefined, skip column building but keep member in list
+                if (difficulty === undefined || difficulty === null) {
+                    return; // Skip column building, but member is already in members map
+                }
+                
+                // Convert to number if it's a string
+                if (typeof difficulty === 'string') {
+                    difficulty = parseInt(difficulty, 10);
+                    if (isNaN(difficulty)) {
+                        return; // Skip column building, but member is already in members map
+                    }
+                }
+                
+                // Ensure it's a valid number (1-6, or higher if needed)
+                if (typeof difficulty !== 'number' || difficulty < 1) {
+                    return; // Skip column building, but member is already in members map
+                }
+                
+                // Build column key for member data
+                const columnKey = `${difficulty}_${record.oc_name}_${record.position_id}`;
+                
+                // Build hierarchical column structure
+                if (!columnGroups.has(difficulty)) {
+                    columnGroups.set(difficulty, new Map());
+                }
+                const difficultyGroup = columnGroups.get(difficulty);
+                if (!difficultyGroup.has(record.oc_name)) {
+                    difficultyGroup.set(record.oc_name, new Map());
+                }
+                const ocGroup = difficultyGroup.get(record.oc_name);
+                if (!ocGroup.has(record.position_id)) {
+                    ocGroup.set(record.position_id, {
+                        position: record.position,
+                        position_id: record.position_id
+                    });
                 }
                 // Store MAX checkpoint_pass_rate for display
                 const currentMax = memberData.data.get(columnKey);
