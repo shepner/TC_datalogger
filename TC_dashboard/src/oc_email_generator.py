@@ -1219,6 +1219,9 @@ class OCEmailGenerator:
                                     best_rate_source = f"highest level rate"
                                 except (ValueError, TypeError):
                                     pass
+                            # Level 1 rule: for ALL Level 1 OCs the requirement is no higher than 90%.
+                            if oc_difficulty == 1 and best_rate is not None and 0 <= best_rate <= 90:
+                                return True
                             # Use drop_from_prev from Historical DB for "move up" calculation
                             # IMPORTANT: Drop is ACCUMULATIVE - sum actual drop values for each rank step
                             oc_name_normalized = (oc.get('oc_name') or '').strip().lower()
@@ -1616,57 +1619,65 @@ class OCEmailGenerator:
                                     best_rate_source = f"highest level rate"
                                 except (ValueError, TypeError):
                                     pass
-                            # Use drop_from_prev from Historical DB for "move up" calculation
-                            # IMPORTANT: Drop is ACCUMULATIVE - sum actual drop values for each rank step
-                            oc_name_normalized = (oc_name or '').strip().lower()
-                            oc_rank_for_check = oc_rank_map.get(oc_name_normalized)
-                            highest_oc_rank = highest_historical.get('oc_rank')
-                            
-                            if best_rate is not None and highest_oc_rank is not None and oc_rank_for_check is not None and oc_rank_for_check > highest_oc_rank:
-                                # Calculate cumulative drop by summing drops for each rank step
-                                cumulative_drop = calculate_cumulative_drop(highest_oc_rank, oc_rank_for_check)
-                                if cumulative_drop is not None and cumulative_drop > 0:
-                                    threshold = 0 if oc_difficulty == 1 else 80
-                                    calculated_rate = best_rate - cumulative_drop
-                                    if calculated_rate >= threshold:
-                                        rank_diff = oc_rank_for_check - highest_oc_rank
-                                        drops_list = [f"{rank_to_drop_map.get(r, 0):.1f}%" for r in range(highest_oc_rank + 1, oc_rank_for_check + 1) if r in rank_to_drop_map]
-                                        drops_sum_str = ' + '.join(drops_list)
-                                        assignment_reasons[member_name]['warnings'].append(
-                                            f"Overcome the drop: assigning to Level {oc_difficulty} OC '{oc_name}' "
-                                            f"using {best_rate_source} ({best_rate:.1f}% - ({drops_sum_str}) = {best_rate:.1f}% - {cumulative_drop:.1f}% = {calculated_rate:.1f}% >= {threshold})"
-                                        )
-                                        logger.info(
-                                            f"Member {member_name} can overcome drop to {oc_name} (Level {oc_difficulty}): "
-                                            f"{best_rate_source} rate {best_rate:.1f}% - ({drops_sum_str}) = "
-                                            f"{best_rate:.1f}% - {cumulative_drop:.1f}% = {calculated_rate:.1f}% >= {threshold}%"
-                                        )
-                                        # fall through to "Check if OC has space"
-                                    else:
-                                        drops_list = [f"{rank_to_drop_map.get(r, 0):.1f}%" for r in range(highest_oc_rank + 1, oc_rank_for_check + 1) if r in rank_to_drop_map]
-                                        drops_sum_str = ' + '.join(drops_list)
-                                        extra = f"; {best_rate_source} {best_rate:.1f}% - ({drops_sum_str}) = {best_rate:.1f}% - {cumulative_drop:.1f}% = {calculated_rate:.1f}% < {threshold}"
-                                        logger.debug(f"Skipping {member_name} for Level {oc_difficulty} OC {oc_name}: no level-based rate data for this level{extra}")
-                                        oc_entry = {
-                                            'oc_id': oc_id, 'oc_name': oc_name, 'level': oc_difficulty,
-                                            'reason_skipped': f'No level-based rate data for this level{extra}'
-                                        }
-                                        enrich_oc_entry(oc_entry, oc_name)
-                                        assignment_reasons[member_name]['considered_ocs'].append(oc_entry)
-                                        continue
-                                else:
-                                    logger.debug(f"Cannot calculate cumulative drop from rank {highest_oc_rank} to {oc_rank_for_check} for OC {oc_name}")
-                            elif oc_rank_for_check is None or highest_oc_rank is None:
-                                logger.debug(f"No rank data for drop calculation: OC rank={oc_rank_for_check}, member highest rank={highest_oc_rank}")
+                            # Level 1 rule: for ALL Level 1 OCs the requirement is no higher than 90%.
+                            # If member has any historical rate in 0-90%, they qualify for any Level 1 OC.
+                            if oc_difficulty == 1 and best_rate is not None and 0 <= best_rate <= 90:
+                                assignment_reasons[member_name]['warnings'].append(
+                                    f"Level 1 OC: assigning using {best_rate_source} ({best_rate:.1f}% in 0-90% range)"
+                                )
+                                # fall through to "Check if OC has space"
                             else:
-                                logger.debug(f"Skipping {member_name} for Level {oc_difficulty} OC {oc_name}: no level-based rate data for this level")
-                                oc_entry = {
-                                    'oc_id': oc_id, 'oc_name': oc_name, 'level': oc_difficulty,
-                                    'reason_skipped': 'No level-based rate data for this level'
-                                }
-                                enrich_oc_entry(oc_entry, oc_name)
-                                assignment_reasons[member_name]['considered_ocs'].append(oc_entry)
-                                continue
+                                # Use drop_from_prev from Historical DB for "move up" calculation
+                                # IMPORTANT: Drop is ACCUMULATIVE - sum actual drop values for each rank step
+                                oc_name_normalized = (oc_name or '').strip().lower()
+                                oc_rank_for_check = oc_rank_map.get(oc_name_normalized)
+                                highest_oc_rank = highest_historical.get('oc_rank')
+                                
+                                if best_rate is not None and highest_oc_rank is not None and oc_rank_for_check is not None and oc_rank_for_check > highest_oc_rank:
+                                    # Calculate cumulative drop by summing drops for each rank step
+                                    cumulative_drop = calculate_cumulative_drop(highest_oc_rank, oc_rank_for_check)
+                                    if cumulative_drop is not None and cumulative_drop > 0:
+                                        threshold = 0 if oc_difficulty == 1 else 80
+                                        calculated_rate = best_rate - cumulative_drop
+                                        if calculated_rate >= threshold:
+                                            rank_diff = oc_rank_for_check - highest_oc_rank
+                                            drops_list = [f"{rank_to_drop_map.get(r, 0):.1f}%" for r in range(highest_oc_rank + 1, oc_rank_for_check + 1) if r in rank_to_drop_map]
+                                            drops_sum_str = ' + '.join(drops_list)
+                                            assignment_reasons[member_name]['warnings'].append(
+                                                f"Overcome the drop: assigning to Level {oc_difficulty} OC '{oc_name}' "
+                                                f"using {best_rate_source} ({best_rate:.1f}% - ({drops_sum_str}) = {best_rate:.1f}% - {cumulative_drop:.1f}% = {calculated_rate:.1f}% >= {threshold})"
+                                            )
+                                            logger.info(
+                                                f"Member {member_name} can overcome drop to {oc_name} (Level {oc_difficulty}): "
+                                                f"{best_rate_source} rate {best_rate:.1f}% - ({drops_sum_str}) = "
+                                                f"{best_rate:.1f}% - {cumulative_drop:.1f}% = {calculated_rate:.1f}% >= {threshold}%"
+                                            )
+                                            # fall through to "Check if OC has space"
+                                        else:
+                                            drops_list = [f"{rank_to_drop_map.get(r, 0):.1f}%" for r in range(highest_oc_rank + 1, oc_rank_for_check + 1) if r in rank_to_drop_map]
+                                            drops_sum_str = ' + '.join(drops_list)
+                                            extra = f"; {best_rate_source} {best_rate:.1f}% - ({drops_sum_str}) = {best_rate:.1f}% - {cumulative_drop:.1f}% = {calculated_rate:.1f}% < {threshold}"
+                                            logger.debug(f"Skipping {member_name} for Level {oc_difficulty} OC {oc_name}: no level-based rate data for this level{extra}")
+                                            oc_entry = {
+                                                'oc_id': oc_id, 'oc_name': oc_name, 'level': oc_difficulty,
+                                                'reason_skipped': f'No level-based rate data for this level{extra}'
+                                            }
+                                            enrich_oc_entry(oc_entry, oc_name)
+                                            assignment_reasons[member_name]['considered_ocs'].append(oc_entry)
+                                            continue
+                                    else:
+                                        logger.debug(f"Cannot calculate cumulative drop from rank {highest_oc_rank} to {oc_rank_for_check} for OC {oc_name}")
+                                elif oc_rank_for_check is None or highest_oc_rank is None:
+                                    logger.debug(f"No rank data for drop calculation: OC rank={oc_rank_for_check}, member highest rank={highest_oc_rank}")
+                                else:
+                                    logger.debug(f"Skipping {member_name} for Level {oc_difficulty} OC {oc_name}: no level-based rate data for this level")
+                                    oc_entry = {
+                                        'oc_id': oc_id, 'oc_name': oc_name, 'level': oc_difficulty,
+                                        'reason_skipped': 'No level-based rate data for this level'
+                                    }
+                                    enrich_oc_entry(oc_entry, oc_name)
+                                    assignment_reasons[member_name]['considered_ocs'].append(oc_entry)
+                                    continue
                     
                     # When level_rate is not None: ensure percentage format and strict check
                     # (when level_rate is None we fell through from jump or overcome and skip to "Check if OC has space")
@@ -2400,7 +2411,40 @@ class OCEmailGenerator:
                     if not has_oc_specific_data:
                         level_rate = member_level_rates.get(oc_difficulty)
                         if level_rate is None:
-                            continue
+                            # Level 1 rule: for ALL Level 1 OCs the requirement is no higher than 90%.
+                            # If member has any historical rate in 0-90%, they qualify for any Level 1 OC.
+                            if oc_difficulty == 1:
+                                highest_historical_fb = member_highest_historical.get(member_name, {})
+                                best_rate_fb = None
+                                if highest_historical_fb.get('checkpoint_rate') is not None:
+                                    try:
+                                        best_rate_fb = float(highest_historical_fb.get('checkpoint_rate'))
+                                        if 0 <= best_rate_fb <= 1:
+                                            best_rate_fb = best_rate_fb * 100
+                                    except (ValueError, TypeError):
+                                        pass
+                                if best_rate_fb is None and member_max_oc is not None:
+                                    cr = member_level_rates.get(member_max_oc)
+                                    if cr is not None:
+                                        try:
+                                            best_rate_fb = float(cr)
+                                            if 0 <= best_rate_fb <= 1:
+                                                best_rate_fb = best_rate_fb * 100
+                                        except (ValueError, TypeError):
+                                            pass
+                                if best_rate_fb is None and member_perf.get('highest_level_rate') is not None:
+                                    try:
+                                        best_rate_fb = float(member_perf.get('highest_level_rate'))
+                                        if 0 <= best_rate_fb <= 1:
+                                            best_rate_fb = best_rate_fb * 100
+                                    except (ValueError, TypeError):
+                                        pass
+                                if best_rate_fb is not None and 0 <= best_rate_fb <= 90:
+                                    pass  # qualify for Level 1; fall through to slot check
+                                else:
+                                    continue
+                            else:
+                                continue
                         
                         # Ensure rate is in percentage format
                         try:
