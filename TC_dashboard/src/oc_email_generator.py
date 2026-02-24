@@ -505,13 +505,13 @@ class OCEmailGenerator:
         FROM
           `torncity-402423.torn_data.v2_faction_40832_crimes-raw`
         WHERE
-          status IN ('Recruiting', 'Planning')
+          LOWER(TRIM(SAFE_CAST(status AS STRING))) IN ('recruiting', 'planning')
           AND expired_at IS NOT NULL
           AND TIMESTAMP_SECONDS(SAFE_CAST(expired_at AS INT64)) > CURRENT_TIMESTAMP()
         ORDER BY
-          CASE status
-            WHEN 'Planning' THEN 1
-            WHEN 'Recruiting' THEN 2
+          CASE LOWER(TRIM(SAFE_CAST(status AS STRING)))
+            WHEN 'planning' THEN 1
+            WHEN 'recruiting' THEN 2
             ELSE 3
           END,
           TIMESTAMP_SECONDS(SAFE_CAST(expired_at AS INT64)) ASC
@@ -549,13 +549,13 @@ class OCEmailGenerator:
                 FROM
                   `torncity-402423.torn_data.v2_faction_40832_crimes-raw`
                 WHERE
-                  status IN ('Recruiting', 'Planning')
+                  LOWER(TRIM(SAFE_CAST(status AS STRING))) IN ('recruiting', 'planning')
                   AND expired_at IS NOT NULL
                   AND TIMESTAMP_SECONDS(SAFE_CAST(expired_at AS INT64)) > CURRENT_TIMESTAMP()
                 ORDER BY
-                  CASE status
-                    WHEN 'Planning' THEN 1
-                    WHEN 'Recruiting' THEN 2
+                  CASE LOWER(TRIM(SAFE_CAST(status AS STRING)))
+                    WHEN 'planning' THEN 1
+                    WHEN 'recruiting' THEN 2
                     ELSE 3
                   END,
                   TIMESTAMP_SECONDS(SAFE_CAST(expired_at AS INT64)) ASC
@@ -867,12 +867,12 @@ class OCEmailGenerator:
                 FROM
                   `torncity-402423.torn_data.v2_faction_40832_crimes-raw`
                 WHERE
-                  status IN ('Recruiting', 'Planning')
+                  LOWER(TRIM(SAFE_CAST(status AS STRING))) IN ('recruiting', 'planning')
                   AND expired_at IS NOT NULL
                 ORDER BY
-                  CASE status
-                    WHEN 'Planning' THEN 1
-                    WHEN 'Recruiting' THEN 2
+                  CASE LOWER(TRIM(SAFE_CAST(status AS STRING)))
+                    WHEN 'planning' THEN 1
+                    WHEN 'recruiting' THEN 2
                     ELSE 3
                   END
                 LIMIT 50
@@ -888,11 +888,12 @@ class OCEmailGenerator:
             if not ocs:
                 return "No available OCs found. Please create new OCs first."
 
-        # Only consider OCs that are Recruiting (accepting members); exclude Planning
-        ocs = [o for o in ocs if (o.get("status") or "").strip().lower() == "recruiting"]
+        # Consider OCs that are Recruiting or Planning (both can have open slots for assignment)
+        status_ok = ("recruiting", "planning")
+        ocs = [o for o in ocs if (o.get("status") or "").strip().lower() in status_ok]
         if not ocs:
-            return "No available OCs found. Only Planning OCs exist; Recruiting OCs are required for assignment."
-        logger.info(f"Using {len(ocs)} Recruiting OCs for assignment (Planning excluded)")
+            return "No available OCs found. No Recruiting or Planning OCs in the database."
+        logger.info(f"Using {len(ocs)} OCs for assignment (Recruiting + Planning)")
 
         # Helper function to calculate cumulative drop by summing actual drop values for each rank step
         def calculate_cumulative_drop(from_rank, to_rank):
@@ -2822,6 +2823,22 @@ class OCEmailGenerator:
                         'warnings': ['Member was not assigned to any OC'],
                         'highest_historical_oc': highest_historical_final  # Store for display
                     }
+                else:
+                    # Member was considered but not assigned - set a descriptive reason
+                    entry = assignment_reasons[member_name]
+                    if entry.get('assigned_oc_id') is None and entry.get('reason') is None:
+                        max_oc = entry.get('max_recommended_oc')
+                        considered = entry.get('considered_ocs', [])
+                        level_1_no_slots = [
+                            c for c in considered
+                            if c.get('level') == 1 and c.get('reason_skipped', '').find('No available slots') >= 0
+                        ]
+                        if max_oc == 1 and level_1_no_slots and len(level_1_no_slots) >= 1:
+                            entry['reason'] = 'No Level 1 OCs with available slots'
+                        elif considered:
+                            entry['reason'] = 'No suitable OC (see considered OCs below)'
+                        else:
+                            entry['reason'] = 'Not assigned'
         
         if spawn_suggestions:
             logger.info(f"OC spawn suggestions: {spawn_suggestions}")

@@ -41,3 +41,20 @@ Project docs (e.g. `INFORMATION_NEEDED.md`) describe the crimes table as **`v2_f
   - `torncity-402423.torn_data.v2_faction_40832_crimes-new`
   - `torncity-402423.torn_data.v2_faction_40832_crimes-raw`  
   If only `-new` is updating after a pull, that confirms the mismatch; switching the config to `-raw` fixes it.
+
+## Specific crime IDs not appearing (e.g. from Torn URL)
+
+If you have a specific OC that you know exists with open slots (e.g. from a Torn URL like `...&crimeId=1341482`) but it does not appear in the dashboard or in “Considered OCs”:
+
+1. **Pipeline table**: Ensure the pipeline writes to **`v2_faction_40832_crimes-raw`** (see above). Then run **Pull Data from TC API** so that table is updated.
+
+2. **Check the table**: In BigQuery, query the **raw** table for that crime ID:
+   ```sql
+   SELECT id, name, difficulty, status, expired_at
+   FROM `torncity-402423.torn_data.v2_faction_40832_crimes-raw`
+   WHERE id = 1341482
+   ```
+   - If the row is missing, the OC has not been written to the table the dashboard reads (fix the pipeline table and pull again).
+   - If the row exists, check that **status** is `Recruiting` or `Planning` (case-insensitive) and that **expired_at** is in the future (the dashboard only uses OCs that are not expired). If status is something else (e.g. `Active`), the dashboard will not use it for assignment.
+
+3. **Assignment now includes Planning**: The dashboard uses both Recruiting and Planning OCs for assignment, so OCs in either status with future expiry and open slots will be considered.

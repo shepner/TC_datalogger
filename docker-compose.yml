@@ -10,6 +10,7 @@ services:
     volumes:
       - ./TC_faction_crimes/config/credentials.json:/app/config/credentials.json:ro
       - ./TC_faction_crimes/config/TC_API_config.json:/app/config/TC_API_config.json:ro
+      - ./TC_faction_crimes/config/oc_records_schema.json:/app/config/oc_records_schema.json:ro
       - ./TC_faction_crimes/logs:/app/logs
 
   tc-faction-members:

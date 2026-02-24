@@ -125,6 +125,19 @@ class TornCityAPIClient:
                     time.sleep(wait_time)
                     last_exception = e
                     continue
+                if status_code == 409:
+                    # Conflict - often temporary (e.g. concurrent request); retry many times with short delay
+                    max_409_attempts = max(self.max_retries + 1, 12)  # at least 12 tries for 409
+                    wait_time = 3  # 3s between retries
+                    if attempt + 1 >= max_409_attempts:
+                        logger.error(f"HTTP 409 Conflict after {max_409_attempts} attempts")
+                        raise
+                    logger.warning(
+                        f"HTTP 409 Conflict. Retrying in {wait_time}s (attempt {attempt + 1}/{max_409_attempts})"
+                    )
+                    time.sleep(wait_time)
+                    last_exception = e
+                    continue
 
                 # Other HTTP errors - retry with exponential backoff
                 if attempt < self.max_retries:

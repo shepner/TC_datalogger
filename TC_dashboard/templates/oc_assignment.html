@@ -608,7 +608,11 @@
                     statusDiv.style.color = '#721c24';
                     statusDiv.style.border = '1px solid #f5c6cb';
                     
-                    let errorMsg = `⚠️ Data pull completed with issues\n\n`;
+                    let errorMsg = '';
+                    if (data.error && Object.keys(results).length === 0) {
+                        errorMsg = `❌ ${data.error}\n\n`;
+                    }
+                    errorMsg += `⚠️ Data pull completed with issues\n\n`;
                     errorMsg += `Completed in ${minutes}m ${seconds}s\n\n`;
                     
                     if (successful.length > 0) {

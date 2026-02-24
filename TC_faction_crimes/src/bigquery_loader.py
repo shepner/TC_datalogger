@@ -2,6 +2,7 @@
 
 import json
 import logging
+import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
@@ -206,6 +207,45 @@ class BigQueryLoader:
         else:
             return bigquery.SchemaField(field_name, field_type, mode=mode)
 
+    def _merge_schema_into_existing(
+        self,
+        desired: List[bigquery.SchemaField],
+        existing: List[bigquery.SchemaField],
+    ) -> List[bigquery.SchemaField]:
+        """Merge desired into existing: keep existing columns, add missing from desired (including nested)."""
+        desired_by_name = {f.name: f for f in desired}
+        out = []
+        for existing_field in existing:
+            if existing_field.name not in desired_by_name:
+                out.append(existing_field)
+                continue
+            field = desired_by_name[existing_field.name]
+            if (
+                field.field_type == "RECORD"
+                and field.fields
+                and existing_field.field_type == "RECORD"
+                and existing_field.fields
+            ):
+                merged_nested = self._merge_schema_into_existing(
+                    field.fields, existing_field.fields
+                )
+                out.append(
+                    bigquery.SchemaField(
+                        field.name,
+                        field.field_type,
+                        mode=field.mode,
+                        fields=merged_nested,
+                        description=field.description,
+                    )
+                )
+            else:
+                out.append(existing_field)
+        out_names = {f.name for f in out}
+        for field in desired:
+            if field.name not in out_names:
+                out.append(field)
+        return out
+
     def _update_table_schema(
         self,
         table: bigquery.Table,
@@ -338,24 +378,11 @@ class BigQueryLoader:
                     "Skipping - will not modify pre-existing tables."
                 )
             
-            # For the allowed table, check if we need to add new fields
-            # First check if all expected fields exist
-            expected_field_names = {field.name for field in schema}
-            actual_field_names = {field.name for field in table.schema}
-            
-            # Find new fields that need to be added
-            new_fields = [
-                field for field in schema 
-                if field.name not in actual_field_names
-            ]
-            
-            if new_fields:
-                # Update schema to include new fields
-                logger.info(
-                    f"Detected {len(new_fields)} new field(s) in schema that need to be added to table: "
-                    f"{[f.name for f in new_fields]}"
-                )
-                table = self._update_table_schema(table, new_fields)
+            # Merge desired schema into existing (adds top-level and nested new fields)
+            merged_schema = self._merge_schema_into_existing(schema, table.schema)
+            logger.info("Ensuring table schema includes all desired fields (including nested)")
+            table.schema = merged_schema
+            table = self.client.update_table(table, ["schema"])
             
             # Validate that critical fields match
             if not self._validate_table_schema(table, schema):
@@ -416,6 +443,38 @@ class BigQueryLoader:
             f"Successfully loaded {job.output_rows} rows to {table_id}"
         )
 
+    def _filter_record_to_schema(
+        self,
+        record: Dict[str, Any],
+        schema: List[bigquery.SchemaField],
+    ) -> Dict[str, Any]:
+        """Return a copy of record with only keys that exist in schema (recursive)."""
+        if not isinstance(record, dict):
+            return record
+        out = {}
+        for field in schema:
+            if field.name not in record:
+                continue
+            val = record[field.name]
+            if val is None:
+                out[field.name] = None
+                continue
+            if field.field_type == "RECORD" and field.fields:
+                if field.mode == "REPEATED" and isinstance(val, list):
+                    out[field.name] = [
+                        self._filter_record_to_schema(item, field.fields)
+                        for item in val
+                    ]
+                elif isinstance(val, dict):
+                    out[field.name] = self._filter_record_to_schema(
+                        val, field.fields
+                    )
+                else:
+                    out[field.name] = val
+            else:
+                out[field.name] = val
+        return out
+
     def load_data_append_merge(
         self,
         table_id: str,
@@ -440,32 +499,48 @@ class BigQueryLoader:
             return {"inserted": 0, "updated": 0, "total": 0}
 
         project_id, dataset_id, table_name = self._parse_table_id(table_id)
+        table_ref = self.client.dataset(dataset_id).table(table_name)
 
-        # Ensure table exists
+        # Ensure table exists (may add new columns)
         self.ensure_table_exists(table_id, schema)
 
-        # Create staging table
-        staging_table_name = f"{table_name}_staging"
+        # Use the table's actual schema for load so staging matches target (BigQuery
+        # may not add new nested RECORD fields to existing tables)
+        table = self.client.get_table(table_ref)
+        load_schema = table.schema
+        try:
+            dataset = self.client.get_dataset(self.client.dataset(dataset_id))
+            query_location = dataset.location or "US"
+        except Exception:
+            query_location = "US"
+
+        # Strip keys not in load_schema so BigQuery does not reject unknown fields
+        records = [self._filter_record_to_schema(r, load_schema) for r in records]
+
+        # Create staging table (unique name per run to avoid races with concurrent runs)
+        staging_table_name = f"{table_name}_staging_{int(time.time() * 1000)}"
         staging_table_id = f"{project_id}.{dataset_id}.{staging_table_name}"
         staging_table_ref = self.client.dataset(dataset_id).table(
             staging_table_name
         )
 
         try:
-            # Create staging table if it doesn't exist
+            # Create staging table if it doesn't exist (reuse existing so load isn't racing delete)
             try:
-                staging_table = self.client.get_table(staging_table_ref)
+                self.client.get_table(staging_table_ref)
             except Exception:
                 logger.debug(f"Creating staging table {staging_table_id}")
-                staging_table = bigquery.Table(staging_table_ref, schema=schema)
-                staging_table = self.client.create_table(staging_table)
+                staging_table = bigquery.Table(
+                    staging_table_ref, schema=load_schema
+                )
+                self.client.create_table(staging_table)
 
             # Load data to staging table
             logger.info(
                 f"Loading {len(records)} records to staging table {staging_table_id}"
             )
             job_config = bigquery.LoadJobConfig(
-                schema=schema,
+                schema=load_schema,
                 write_disposition=bigquery.WriteDisposition.WRITE_TRUNCATE,
                 source_format=bigquery.SourceFormat.NEWLINE_DELIMITED_JSON,
             )
@@ -488,7 +563,9 @@ class BigQueryLoader:
                 INNER JOIN `{table_id}` t
                 ON s.{deduplication_key} = t.{deduplication_key}
                 """
-                check_job = self.client.query(check_query)
+                check_job = self.client.query(
+                    check_query, location=query_location
+                )
                 check_result = list(check_job.result())[0]
                 existing_count = check_result.existing_count
                 # Records that exist are "updates", new ones are "inserts"
@@ -503,13 +580,13 @@ class BigQueryLoader:
 
             # Build MERGE statement
             merge_sql = self._build_merge_statement(
-                table_id, staging_table_id, deduplication_key, schema
+                table_id, staging_table_id, deduplication_key, load_schema
             )
 
             # Execute MERGE
             logger.info(f"Executing MERGE statement for {table_id}")
             logger.info(f"MERGE SQL: {merge_sql}")
-            query_job = self.client.query(merge_sql)
+            query_job = self.client.query(merge_sql, location=query_location)
             query_job.result()  # Wait for completion
 
             logger.info(

@@ -110,6 +110,38 @@
         ]
       },
       {
+        "name": "position_info",
+        "type": "RECORD",
+        "mode": "NULLABLE",
+        "description": "Position info (e.g. level requirement) from API",
+        "fields": [
+          {
+            "name": "id",
+            "type": "STRING",
+            "mode": "NULLABLE",
+            "description": "Position info ID (e.g. P1, P2)"
+          },
+          {
+            "name": "level_requirement",
+            "type": "INTEGER",
+            "mode": "NULLABLE",
+            "description": "Level requirement for the position"
+          },
+          {
+            "name": "description",
+            "type": "STRING",
+            "mode": "NULLABLE",
+            "description": "Description or other text"
+          },
+          {
+            "name": "label",
+            "type": "STRING",
+            "mode": "NULLABLE",
+            "description": "Position label"
+          }
+        ]
+      },
+      {
         "name": "user",
         "type": "RECORD",
         "mode": "NULLABLE",

@@ -1308,7 +1308,11 @@ def save_role_hierarchy():
 def trigger_data_pull():
     """Trigger data pull from TC API for specified services."""
     if not docker_client.is_available():
-        return jsonify({"error": "Docker client not available"}), 500
+        return jsonify({
+            "success": False,
+            "results": {},
+            "error": "Docker client not available. Ensure the dashboard can reach the Docker socket and pipeline containers exist."
+        }), 200
     
     from datetime import datetime, timedelta
     from pathlib import Path
@@ -1449,11 +1453,12 @@ def trigger_data_pull():
     except Exception as e:
         logger.warning(f"Could not save last pull timestamps: {e}")
     
+    # Always return 200 so the frontend can show detailed results; use success flag for outcome
     return jsonify({
         "success": all_success,
         "results": results,
         "skipped": skipped_services if skipped_services else None
-    }), 200 if all_success else 500
+    }), 200
 
 
 if __name__ == "__main__":
