@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Purchase Price Stats - Torn City Faction Management</title>
+    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='dashboard.css') }}">
+    <script src="{{ url_for('static', filename='auth-redirect.js') }}"></script>
+    <style>
+        .container { max-width: 1200px; margin: 0 auto; padding: 10px; }
+        .toolbar {
+            margin-bottom: 12px; padding: 8px 12px;
+            background-color: #f5f5f5; border-radius: 4px;
+            display: flex; align-items: center; gap: 12px; flex-wrap: wrap; border: 1px solid #ddd;
+        }
+        .toolbar label { margin: 0; font-size: 12px; font-weight: 500; white-space: nowrap; }
+        .toolbar input { padding: 4px 8px; border: 1px solid #ddd; border-radius: 3px; font-size: 12px; }
+        button {
+            padding: 6px 12px; background-color: #4CAF50; color: white; border: none; border-radius: 4px;
+            cursor: pointer; font-size: 13px;
+        }
+        button:hover { background-color: #45a049; }
+        table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 13px; }
+        th, td { padding: 8px 10px; text-align: left; border-bottom: 1px solid #ddd; }
+        th {
+            background-color: #2196F3; color: white; font-size: 12px; font-weight: 600;
+        }
+        tr:hover { background-color: #f5f5f5; }
+        .error { color: red; margin-top: 8px; font-size: 13px; }
+        .progress {
+            background-color: #e3f2fd; color: #1976d2; border: 1px solid #90caf9;
+            padding: 12px 16px; margin-top: 8px; font-size: 13px; border-radius: 4px;
+        }
+        .candlestick-bar {
+            display: flex; align-items: center; height: 20px; gap: 0;
+            min-width: 140px; max-width: 220px;
+        }
+        .candlestick-whisker { width: 4px; background: #666; height: 100%; border-radius: 1px; flex-shrink: 0; }
+        .candlestick-box {
+            flex: 1; min-width: 20px; background: linear-gradient(90deg, #4CAF50, #8BC34A);
+            height: 14px; border-radius: 2px;
+        }
+        .num { text-align: right; font-variant-numeric: tabular-nums; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #ddd;">
+            <h1 style="margin: 0; font-size: 18px; font-weight: 600; color: #333;">Purchase Price Stats</h1>
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <a href="/trading" style="text-decoration: none; font-size: 12px; color: #666; padding: 4px 8px; border: 1px solid #ccc; border-radius: 3px; background-color: #f5f5f5;">Trading</a>
+                <a href="/" style="text-decoration: none; font-size: 12px; color: #666; padding: 4px 8px; border: 1px solid #ccc; border-radius: 3px; background-color: #f5f5f5;">← Dashboard</a>
+                <a href="{{ url_for('logout') }}" style="font-size: 12px; color: #666; margin-left: 8px;">Log out</a>
+            </div>
+        </div>
+
+        <div class="toolbar">
+            <label>Timeframe (days back):</label>
+            <input type="number" id="days_back" value="30" min="1" max="365" style="width: 70px;" onchange="loadStats();">
+            <button onclick="loadStats()">Refresh</button>
+        </div>
+
+        <div id="error" class="error" style="display: none;"></div>
+        <div id="progress" class="progress" style="display: none;">Loading…</div>
+
+        <p id="summary" style="font-size: 12px; color: #666; margin-bottom: 8px;"></p>
+
+        <table id="stats-table" style="display: none;">
+            <thead>
+                <tr>
+                    <th>Item</th>
+                    <th class="num">Min</th>
+                    <th class="num">Q1</th>
+                    <th class="num">Median</th>
+                    <th class="num">Q3</th>
+                    <th class="num">Max</th>
+                    <th class="num">Trades</th>
+                    <th>Range</th>
+                </tr>
+            </thead>
+            <tbody id="stats-body"></tbody>
+        </table>
+        <div id="empty-message" style="display: none; padding: 20px; color: #666; font-size: 13px;">
+            No paid purchases in the selected timeframe. Try increasing "days back" or mark some trades as paid on the Trading dashboard.
+        </div>
+    </div>
+
+    <script>
+        function showError(msg) {
+            document.getElementById('error').textContent = msg;
+            document.getElementById('error').style.display = 'block';
+        }
+        function hideError() {
+            document.getElementById('error').style.display = 'none';
+        }
+        function showProgress(msg) {
+            document.getElementById('progress').textContent = msg || 'Loading…';
+            document.getElementById('progress').style.display = 'block';
+        }
+        function hideProgress() {
+            document.getElementById('progress').style.display = 'none';
+        }
+
+        function formatMoney(n) {
+            if (n == null || n === undefined || isNaN(n)) return '—';
+            return '$' + Math.round(n).toLocaleString();
+        }
+
+        function buildCandlestickHtml(minVal, q1, median, q3, maxVal) {
+            if (minVal == null || maxVal == null || maxVal <= minVal) {
+                return '<span>—</span>';
+            }
+            const range = maxVal - minVal;
+            const pct = (v) => Math.max(0, Math.min(100, ((v - minVal) / range) * 100));
+            const lowPct = pct(q1 != null ? q1 : minVal);
+            const highPct = pct(q3 != null ? q3 : maxVal);
+            const boxW = Math.max(5, highPct - lowPct);
+            const leftW = Math.max(1, lowPct * 0.15);
+            const rightW = Math.max(1, (100 - highPct) * 0.15);
+            const title = 'Min: ' + formatMoney(minVal) + ' | Q1: ' + formatMoney(q1) + ' | Median: ' + formatMoney(median) + ' | Q3: ' + formatMoney(q3) + ' | Max: ' + formatMoney(maxVal);
+            return '<div class="candlestick-bar" title="' + title.replace(/"/g, '&quot;') + '">' +
+                '<span class="candlestick-whisker" style="width:' + leftW + '%"></span>' +
+                '<span class="candlestick-box" style="width:' + boxW + '%"></span>' +
+                '<span class="candlestick-whisker" style="width:' + rightW + '%"></span>' +
+                '</div>';
+        }
+
+        async function loadStats() {
+            hideError();
+            showProgress('Loading purchase stats…');
+            const daysBack = document.getElementById('days_back').value;
+            const tbody = document.getElementById('stats-body');
+            const tableEl = document.getElementById('stats-table');
+            const emptyEl = document.getElementById('empty-message');
+            const summaryEl = document.getElementById('summary');
+
+            try {
+                const response = await fetch('/api/trading/purchase-stats?days_back=' + encodeURIComponent(daysBack));
+                const data = await response.json();
+                hideProgress();
+
+                if (!response.ok) {
+                    throw new Error(data.error || 'Failed to load purchase stats');
+                }
+
+                const items = data.items || [];
+                const days = data.days_back || daysBack;
+
+                summaryEl.textContent = items.length === 0
+                    ? 'No items.'
+                    : 'Showing ' + items.length + ' item(s) — price per unit (min / Q1 / median / Q3 / max) for the last ' + days + ' days. Items in ascending order.';
+
+                if (items.length === 0) {
+                    tableEl.style.display = 'none';
+                    emptyEl.style.display = 'block';
+                    return;
+                }
+
+                emptyEl.style.display = 'none';
+                tbody.innerHTML = '';
+
+                items.forEach(function(row) {
+                    const itemName = row.item_name || 'Unknown';
+                    const minP = row.min_price != null ? Number(row.min_price) : null;
+                    const maxP = row.max_price != null ? Number(row.max_price) : null;
+                    const q1P = row.q1_price != null ? Number(row.q1_price) : null;
+                    const medP = row.median_price != null ? Number(row.median_price) : null;
+                    const q3P = row.q3_price != null ? Number(row.q3_price) : null;
+                    const tradeCount = row.trade_count != null ? Number(row.trade_count) : 0;
+                    const barHtml = buildCandlestickHtml(minP, q1P, medP, q3P, maxP);
+
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = '<td>' + itemName + '</td>' +
+                        '<td class="num">' + formatMoney(minP) + '</td>' +
+                        '<td class="num">' + formatMoney(q1P) + '</td>' +
+                        '<td class="num">' + formatMoney(medP) + '</td>' +
+                        '<td class="num">' + formatMoney(q3P) + '</td>' +
+                        '<td class="num">' + formatMoney(maxP) + '</td>' +
+                        '<td class="num">' + tradeCount + '</td>' +
+                        '<td>' + barHtml + '</td>';
+                    tbody.appendChild(tr);
+                });
+
+                tableEl.style.display = 'table';
+            } catch (err) {
+                hideProgress();
+                showError(err.message);
+            }
+        }
+
+        window.addEventListener('DOMContentLoaded', function() {
+            loadStats();
+        });
+    </script>
+</body>
+</html>

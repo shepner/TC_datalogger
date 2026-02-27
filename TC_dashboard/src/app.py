@@ -1163,6 +1163,32 @@ def get_max_days_back():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/api/trading/purchase-stats", methods=["GET"])
+def get_purchase_stats():
+    """Get purchase price stats (min, max, median, q1, q3) per item for a selectable timeframe."""
+    if not trading_dashboard:
+        return jsonify({"error": "BigQuery client not available"}), 500
+    
+    try:
+        days_back = int(request.args.get("days_back", 30))
+        if days_back < 1:
+            days_back = 1
+        elif days_back > 365:
+            days_back = 365
+        items = trading_dashboard.get_purchase_price_stats(days_back=days_back)
+        return jsonify({"items": items, "days_back": days_back})
+    except Exception as e:
+        logger.error(f"Error getting purchase stats: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/purchases")
+@login_required
+def purchases():
+    """Purchases page: list all purchased items with price range (candlestick) stats."""
+    return render_template("purchases.html")
+
+
 @app.route("/api/trading/member-names", methods=["GET"])
 def get_member_names():
     """Get list of unique member names who have trades available for viewing."""

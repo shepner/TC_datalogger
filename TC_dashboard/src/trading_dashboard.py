@@ -908,6 +908,59 @@ class TradingDashboard:
         
         return self.bq.execute_query(query)
 
+    def get_purchase_price_stats(self, days_back: int = 30) -> List[Dict[str, Any]]:
+        """
+        Get per-item price stats (min, max, median, q1, q3) for paid purchases in a timeframe.
+        Uses unit price (payment_amount / quantity) per trade. Items ordered by name ascending.
+
+        Args:
+            days_back: Number of days to look back (paid_at filter)
+
+        Returns:
+            List of dicts: item_name, min_price, max_price, median_price, q1_price, q3_price, trade_count
+        """
+        query = """
+        WITH paid_in_window AS (
+          SELECT
+            item_name,
+            quantity,
+            payment_amount,
+            SAFE_DIVIDE(CAST(payment_amount AS FLOAT64), CAST(quantity AS FLOAT64)) AS unit_price
+          FROM
+            `torncity-402423.torn_data.trading_paid_events`
+          WHERE
+            paid_at >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL @days_back DAY)
+            AND quantity > 0
+            AND payment_amount IS NOT NULL
+        ),
+        quartiles AS (
+          SELECT
+            item_name,
+            MIN(unit_price) AS min_price,
+            MAX(unit_price) AS max_price,
+            APPROX_QUANTILES(unit_price, 4) AS quants,
+            COUNT(*) AS trade_count
+          FROM
+            paid_in_window
+          GROUP BY
+            item_name
+        )
+        SELECT
+          item_name,
+          min_price,
+          max_price,
+          quants[OFFSET(1)] AS q1_price,
+          quants[OFFSET(2)] AS median_price,
+          quants[OFFSET(3)] AS q3_price,
+          trade_count
+        FROM
+          quartiles
+        ORDER BY
+          item_name ASC
+        """
+        query = query.replace("@days_back", str(days_back))
+        return self.bq.execute_query(query)
+
     def get_raw_events_for_user(
         self,
         user_name: str,
