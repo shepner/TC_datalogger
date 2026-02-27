@@ -141,42 +141,42 @@
 
         .range-container {
             position: relative;
-            width: 32px;
-            height: 46px;
+            width: 120px;
+            height: 26px;
             margin: 0 auto;
         }
         .range-bar {
             position: absolute;
-            left: 50%;
-            top: 4px;
-            bottom: 4px;
-            width: 2px;
+            left: 4px;
+            right: 4px;
+            top: 50%;
+            height: 2px;
             background: #666;
-            transform: translateX(-50%);
+            transform: translateY(-50%);
         }
         .candle-body {
             position: absolute;
-            left: 50%;
-            width: 12px;
-            min-height: 4px;
+            top: 50%;
+            height: 12px;
+            min-width: 4px;
             background: #b2ebf2;
             border: 1px solid #26a69a;
             box-sizing: border-box;
-            transform: translateX(-50%);
+            transform: translateY(-50%);
         }
         .candle-median {
             position: absolute;
-            left: 50%;
-            width: 16px;
-            height: 2px;
+            top: 50%;
+            width: 2px;
+            height: 16px;
             background: #4CAF50;
             transform: translate(-50%, -50%);
         }
         .candle-shadow {
             position: absolute;
-            left: 50%;
-            width: 14px;
-            height: 2px;
+            top: 50%;
+            width: 2px;
+            height: 12px;
             background: #666;
             transform: translate(-50%, -50%);
         }
@@ -346,7 +346,7 @@
                 return '<span>—</span>';
             }
             const range = maxVal - minVal;
-            const pct = (v) => Math.max(0, Math.min(100, ((v - minVal) / range) * 100)); // 0 = min (bottom), 100 = max (top)
+            const pct = (v) => Math.max(0, Math.min(100, ((v - minVal) / range) * 100)); // 0 = min (left), 100 = max (right)
             const minPct = 0;
             const maxPct = 100;
             const q1Pct = q1 != null ? pct(q1) : minPct;
@@ -361,10 +361,10 @@
             return '' +
                 '<div class="range-container" title="' + title.replace(/"/g, '&quot;') + '">' +
                   '<div class="range-bar"></div>' +
-                  '<span class="candle-shadow" style="bottom:' + minPct + '%;" title="Min: ' + formatMoney(minVal) + '"></span>' +
-                  '<span class="candle-shadow" style="bottom:' + maxPct + '%;" title="Max: ' + formatMoney(maxVal) + '"></span>' +
-                  '<div class="candle-body" style="bottom:' + q1Pct + '%; height:' + bodyHeight + '%;" title="Q1: ' + formatMoney(q1) + ' | Q3: ' + formatMoney(q3) + '"></div>' +
-                  '<span class="candle-median" style="bottom:' + medPct + '%;" title="Median: ' + formatMoney(median) + '"></span>' +
+                  '<span class="candle-shadow" style="left:' + minPct + '%;" title="Min: ' + formatMoney(minVal) + '"></span>' +
+                  '<span class="candle-shadow" style="left:' + maxPct + '%;" title="Max: ' + formatMoney(maxVal) + '"></span>' +
+                  '<div class="candle-body" style="left:' + q1Pct + '%; width:' + bodyHeight + '%;" title="Q1: ' + formatMoney(q1) + ' | Q3: ' + formatMoney(q3) + '"></div>' +
+                  '<span class="candle-median" style="left:' + medPct + '%;" title="Median: ' + formatMoney(median) + '"></span>' +
                 '</div>';
         }
 
