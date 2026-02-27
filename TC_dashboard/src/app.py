@@ -1189,6 +1189,89 @@ def purchases():
     return render_template("purchases.html")
 
 
+# Purchases page state (sticky settings)
+PURCHASES_PAGE_STATE_FILE = Path("/app/logs/purchases_page_state.json")
+DEFAULT_PURCHASES_PAGE_STATE = {
+    "days_back": 30,
+    "selected_items": [],
+    "item_filter_query": "",
+    "sort_column": "item_name",
+    "sort_direction": "asc",
+    "filter_section_expanded": True,
+}
+
+
+def load_purchases_page_state() -> dict:
+    """Load purchases page state from disk; fall back to defaults."""
+    try:
+        if PURCHASES_PAGE_STATE_FILE.exists():
+            with open(PURCHASES_PAGE_STATE_FILE, "r") as f:
+                data = json.load(f)
+            if isinstance(data, dict):
+                out = dict(DEFAULT_PURCHASES_PAGE_STATE)
+                if "days_back" in data and isinstance(data["days_back"], (int, float)):
+                    out["days_back"] = max(1, min(365, int(data["days_back"])))
+                if "selected_items" in data and isinstance(data["selected_items"], list):
+                    out["selected_items"] = [str(x) for x in data["selected_items"] if x]
+                if "item_filter_query" in data and isinstance(data["item_filter_query"], str):
+                    out["item_filter_query"] = data["item_filter_query"][:200]
+                if "sort_column" in data and isinstance(data["sort_column"], str):
+                    out["sort_column"] = data["sort_column"]
+                if "sort_direction" in data and data["sort_direction"] in ("asc", "desc"):
+                    out["sort_direction"] = data["sort_direction"]
+                if "filter_section_expanded" in data and isinstance(data["filter_section_expanded"], bool):
+                    out["filter_section_expanded"] = data["filter_section_expanded"]
+                return out
+    except Exception as e:
+        logger.warning(f"Error reading purchases page state: {e}", exc_info=True)
+    return dict(DEFAULT_PURCHASES_PAGE_STATE)
+
+
+def save_purchases_page_state(state: dict) -> dict:
+    """Validate and persist purchases page state to disk."""
+    if not isinstance(state, dict):
+        raise ValueError("state must be a dict")
+    out = dict(DEFAULT_PURCHASES_PAGE_STATE)
+    if "days_back" in state and state["days_back"] is not None:
+        out["days_back"] = max(1, min(365, int(state["days_back"])))
+    if "selected_items" in state and isinstance(state["selected_items"], list):
+        out["selected_items"] = [str(x) for x in state["selected_items"] if x]
+    if "item_filter_query" in state and isinstance(state["item_filter_query"], str):
+        out["item_filter_query"] = state["item_filter_query"][:200]
+    if "sort_column" in state and isinstance(state["sort_column"], str):
+        out["sort_column"] = state["sort_column"]
+    if "sort_direction" in state and state["sort_direction"] in ("asc", "desc"):
+        out["sort_direction"] = state["sort_direction"]
+    if "filter_section_expanded" in state and isinstance(state["filter_section_expanded"], bool):
+        out["filter_section_expanded"] = state["filter_section_expanded"]
+    PURCHASES_PAGE_STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+    with open(PURCHASES_PAGE_STATE_FILE, "w") as f:
+        json.dump(out, f, indent=2)
+    return out
+
+
+@app.route("/api/purchases/page-state", methods=["GET"])
+@login_required
+def get_purchases_page_state():
+    """Get saved purchases page state (sticky settings)."""
+    return jsonify(load_purchases_page_state())
+
+
+@app.route("/api/purchases/page-state", methods=["POST"])
+@login_required
+def set_purchases_page_state():
+    """Save purchases page state (sticky settings)."""
+    try:
+        data = request.get_json() or {}
+        out = save_purchases_page_state(data)
+        return jsonify(out)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        logger.error(f"Error saving purchases page state: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/api/trading/member-names", methods=["GET"])
 def get_member_names():
     """Get list of unique member names who have trades available for viewing."""

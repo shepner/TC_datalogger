@@ -24,10 +24,37 @@
 
         .item-filter-panel {
             margin-bottom: 8px;
-            padding: 6px 10px;
+            padding: 0;
             background-color: #fafafa;
             border-radius: 4px;
             border: 1px solid #ddd;
+        }
+        .purchases-section-header {
+            margin: 0;
+            padding: 8px 10px;
+            font-size: 14px;
+            font-weight: 600;
+            color: #333;
+            cursor: pointer;
+            user-select: none;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            border-radius: 4px;
+        }
+        .purchases-section-header:hover {
+            background-color: #eee;
+            color: #2196F3;
+        }
+        .purchases-section-chevron {
+            display: inline-block;
+            width: 14px;
+            font-size: 12px;
+        }
+        .item-filter-content {
+            margin-top: 0;
+            padding: 6px 10px 10px 10px;
+            border-top: 1px solid #eee;
         }
         .item-filter-header {
             display: flex;
@@ -113,31 +140,45 @@
         }
 
         .range-container {
-            min-width: 160px;
+            position: relative;
+            width: 32px;
+            height: 46px;
+            margin: 0 auto;
         }
         .range-bar {
-            position: relative;
-            height: 4px;
-            background: #ddd;
-            border-radius: 2px;
-            margin-top: 4px;
-        }
-        .range-marker {
             position: absolute;
-            top: -4px;
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
+            left: 50%;
+            top: 4px;
+            bottom: 4px;
+            width: 2px;
+            background: #666;
             transform: translateX(-50%);
         }
-        .marker-minmax {
-            background: #666;
+        .candle-body {
+            position: absolute;
+            left: 50%;
+            width: 12px;
+            min-height: 4px;
+            background: #b2ebf2;
+            border: 1px solid #26a69a;
+            box-sizing: border-box;
+            transform: translateX(-50%);
         }
-        .marker-median {
+        .candle-median {
+            position: absolute;
+            left: 50%;
+            width: 16px;
+            height: 2px;
             background: #4CAF50;
+            transform: translate(-50%, -50%);
         }
-        .marker-quartile {
-            background: #2196F3;
+        .candle-shadow {
+            position: absolute;
+            left: 50%;
+            width: 14px;
+            height: 2px;
+            background: #666;
+            transform: translate(-50%, -50%);
         }
         .num { text-align: right; font-variant-numeric: tabular-nums; }
     </style>
@@ -155,21 +196,24 @@
 
         <div class="toolbar">
             <label>Timeframe (days back):</label>
-            <input type="number" id="days_back" value="30" min="1" max="365" style="width: 70px;" onchange="loadStats();">
+            <input type="number" id="days_back" value="30" min="1" max="365" style="width: 70px;" onchange="loadStats(); savePageState();">
             <button onclick="loadStats()">Refresh</button>
             <label style="margin-left: 8px;">Items:</label>
-            <input type="text" id="item-filter-input" placeholder="Type to search items…" oninput="updateItemFilterList()" style="min-width: 220px;">
+            <input type="text" id="item-filter-input" placeholder="Type to search items…" oninput="updateItemFilterList(); savePageState();" style="min-width: 220px;">
         </div>
 
         <div id="item-filter-panel" class="item-filter-panel" style="display: none;">
-            <div class="item-filter-header">
-                <span style="font-weight: 500;">Filter items to display</span>
+            <div class="purchases-section-header" id="filter-section-header" onclick="toggleFilterSection()" title="Click to expand/collapse">
+                <span id="filter-section-chevron" class="purchases-section-chevron">▶</span>
+                <span>Filter items to display</span>
             </div>
-            <div class="item-filter-actions">
-                <button type="button" onclick="selectAllItems()">All</button>
-                <button type="button" onclick="clearItemSelection()">None</button>
+            <div id="filter-section-content" class="item-filter-content" style="display: none;">
+                <div class="item-filter-actions">
+                    <button type="button" onclick="selectAllItems()">All</button>
+                    <button type="button" onclick="clearItemSelection()">None</button>
+                </div>
+                <div id="item-filter-list" class="item-filter-list"></div>
             </div>
-            <div id="item-filter-list" class="item-filter-list"></div>
         </div>
 
         <div id="active-filters" class="active-filters"></div>
@@ -216,6 +260,9 @@
         let filteredItems = [];
         let activeItemNames = new Set();
         let currentSort = { column: 'item_name', direction: 'asc' };
+        let filterSectionExpanded = true;
+        let saveStateTimer = null;
+        let stateHadSelectedItems = false;
 
         function showProgress(msg) {
             document.getElementById('progress').textContent = msg || 'Loading…';
@@ -223,6 +270,68 @@
         }
         function hideProgress() {
             document.getElementById('progress').style.display = 'none';
+        }
+
+        function applyFilterSectionState() {
+            const content = document.getElementById('filter-section-content');
+            const chevron = document.getElementById('filter-section-chevron');
+            if (content) content.style.display = filterSectionExpanded ? 'block' : 'none';
+            if (chevron) chevron.textContent = filterSectionExpanded ? '▼' : '▶';
+        }
+
+        function toggleFilterSection() {
+            filterSectionExpanded = !filterSectionExpanded;
+            applyFilterSectionState();
+            savePageState();
+        }
+
+        function getPageState() {
+            const distinct = getDistinctItemNames();
+            const selected = Array.from(activeItemNames);
+            return {
+                days_back: parseInt(document.getElementById('days_back').value, 10) || 30,
+                selected_items: selected,
+                item_filter_query: (document.getElementById('item-filter-input') && document.getElementById('item-filter-input').value) || '',
+                sort_column: currentSort.column,
+                sort_direction: currentSort.direction,
+                filter_section_expanded: filterSectionExpanded
+            };
+        }
+
+        function savePageState() {
+            if (saveStateTimer) clearTimeout(saveStateTimer);
+            saveStateTimer = setTimeout(function() {
+                saveStateTimer = null;
+                fetch('/api/purchases/page-state', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(getPageState())
+                }).catch(function(e) { console.warn('savePageState', e); });
+            }, 150);
+        }
+
+        async function loadPageState() {
+            try {
+                const r = await fetch('/api/purchases/page-state');
+                const data = await r.json();
+                if (data && typeof data === 'object') {
+                    if (typeof data.days_back === 'number' && data.days_back >= 1 && data.days_back <= 365) {
+                        document.getElementById('days_back').value = data.days_back;
+                    }
+                    if (Array.isArray(data.selected_items)) {
+                        stateHadSelectedItems = true;
+                        activeItemNames = new Set(data.selected_items);
+                    }
+                    if (typeof data.item_filter_query === 'string') {
+                        const input = document.getElementById('item-filter-input');
+                        if (input) input.value = data.item_filter_query;
+                    }
+                    if (typeof data.sort_column === 'string') currentSort.column = data.sort_column;
+                    if (data.sort_direction === 'asc' || data.sort_direction === 'desc') currentSort.direction = data.sort_direction;
+                    if (typeof data.filter_section_expanded === 'boolean') filterSectionExpanded = data.filter_section_expanded;
+                }
+            } catch (e) { console.warn('loadPageState', e); }
+            applyFilterSectionState();
         }
 
         function formatMoney(n) {
@@ -235,12 +344,13 @@
                 return '<span>—</span>';
             }
             const range = maxVal - minVal;
-            const pct = (v) => Math.max(0, Math.min(100, ((v - minVal) / range) * 100));
+            const pct = (v) => Math.max(0, Math.min(100, ((v - minVal) / range) * 100)); // 0 = min (bottom), 100 = max (top)
             const minPct = 0;
             const maxPct = 100;
             const q1Pct = q1 != null ? pct(q1) : minPct;
             const medPct = median != null ? pct(median) : (minPct + maxPct) / 2;
             const q3Pct = q3 != null ? pct(q3) : maxPct;
+            const bodyHeight = Math.max(4, q3Pct - q1Pct);
             const title = 'Min: ' + formatMoney(minVal) +
                 ' | Q1: ' + formatMoney(q1) +
                 ' | Median: ' + formatMoney(median) +
@@ -248,13 +358,11 @@
                 ' | Max: ' + formatMoney(maxVal);
             return '' +
                 '<div class="range-container" title="' + title.replace(/"/g, '&quot;') + '">' +
-                  '<div class="range-bar">' +
-                    '<span class="range-marker marker-minmax" style="left:' + minPct + '%"></span>' +
-                    '<span class="range-marker marker-quartile" style="left:' + q1Pct + '%"></span>' +
-                    '<span class="range-marker marker-median" style="left:' + medPct + '%"></span>' +
-                    '<span class="range-marker marker-quartile" style="left:' + q3Pct + '%"></span>' +
-                    '<span class="range-marker marker-minmax" style="left:' + maxPct + '%"></span>' +
-                  '</div>' +
+                  '<div class="range-bar"></div>' +
+                  '<span class="candle-shadow" style="bottom:' + minPct + '%;" title="Min: ' + formatMoney(minVal) + '"></span>' +
+                  '<span class="candle-shadow" style="bottom:' + maxPct + '%;" title="Max: ' + formatMoney(maxVal) + '"></span>' +
+                  '<div class="candle-body" style="bottom:' + q1Pct + '%; height:' + bodyHeight + '%;" title="Q1: ' + formatMoney(q1) + ' | Q3: ' + formatMoney(q3) + '"></div>' +
+                  '<span class="candle-median" style="bottom:' + medPct + '%;" title="Median: ' + formatMoney(median) + '"></span>' +
                 '</div>';
         }
 
@@ -302,8 +410,8 @@
                 return;
             }
 
-            // On first load, default to all items selected
-            if (activeItemNames.size === 0) {
+            // On first load (no saved state), default to all items selected
+            if (activeItemNames.size === 0 && !stateHadSelectedItems) {
                 names.forEach(function(name) { activeItemNames.add(name); });
             }
 
@@ -324,6 +432,7 @@
                     applyFilters();
                     renderTable();
                     updateActiveFiltersSummary();
+                    savePageState();
                 });
                 const label = document.createElement('label');
                 label.textContent = name;
@@ -333,6 +442,7 @@
             });
 
             panel.style.display = 'block';
+            applyFilterSectionState();
             updateItemFilterList();
             updateActiveFiltersSummary();
         }
@@ -357,6 +467,7 @@
             applyFilters();
             renderTable();
             updateActiveFiltersSummary();
+            savePageState();
         }
 
         function clearItemSelection() {
@@ -366,6 +477,7 @@
             applyFilters();
             renderTable();
             updateActiveFiltersSummary();
+            savePageState();
         }
 
         function applyFilters() {
@@ -421,6 +533,7 @@
                         currentSort.direction = 'asc';
                     }
                     renderTable();
+                    savePageState();
                 });
             });
         }
@@ -513,8 +626,10 @@
         }
 
         window.addEventListener('DOMContentLoaded', function() {
-            loadStats();
-            attachSortHandlers();
+            loadPageState().then(function() {
+                loadStats();
+                attachSortHandlers();
+            });
         });
     </script>
 </body>
