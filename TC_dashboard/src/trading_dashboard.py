@@ -918,7 +918,7 @@ class TradingDashboard:
 
         Returns:
             List of dicts: item_name, min_price, max_price, median_price, q1_price, q3_price,
-            trade_count, item_count
+            trade_count, item_count, current_market_price, max_price_markup_5
         """
         query = """
         WITH paid_in_window AS (
@@ -948,18 +948,24 @@ class TradingDashboard:
             item_name
         )
         SELECT
-          item_name,
-          min_price,
-          max_price,
-          quants[OFFSET(1)] AS q1_price,
-          quants[OFFSET(2)] AS median_price,
-          quants[OFFSET(3)] AS q3_price,
-          trade_count,
-          item_count
+          q.item_name,
+          q.min_price,
+          q.max_price,
+          q.quants[OFFSET(1)] AS q1_price,
+          q.quants[OFFSET(2)] AS median_price,
+          q.quants[OFFSET(3)] AS q3_price,
+          q.trade_count,
+          q.item_count,
+          SAFE_CAST(items.value.market_price AS INT64) AS current_market_price,
+          SAFE_CAST(ROUND(q.max_price * 1.05)) AS max_price_markup_5
         FROM
-          quartiles
+          quartiles AS q
+        LEFT JOIN
+          `torncity-402423.torn_data.v2_torn_items-raw` AS items
+        ON
+          LOWER(TRIM(q.item_name)) = LOWER(TRIM(items.name))
         ORDER BY
-          item_name ASC
+          q.item_name ASC
         """
         query = query.replace("@days_back", str(days_back))
         return self.bq.execute_query(query)

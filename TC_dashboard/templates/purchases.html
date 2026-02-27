@@ -233,6 +233,7 @@
                 <thead>
                     <tr>
                         <th class="sortable" data-sort-column="item_name">Item</th>
+                        <th class="num sortable" data-sort-column="current_market_price">Market</th>
                         <th class="num sortable" data-sort-column="min_price">Min</th>
                         <th class="num sortable" data-sort-column="q1_price">Q1</th>
                         <th class="num sortable" data-sort-column="median_price">Median</th>
@@ -564,11 +565,17 @@
                     const medP = row.median_price != null ? Number(row.median_price) : null;
                     const q3P = row.q3_price != null ? Number(row.q3_price) : null;
                     const itemCount = row.item_count != null ? Number(row.item_count) : 0;
+                    const marketP = row.current_market_price != null ? Number(row.current_market_price) : null;
+                    const markupP = row.max_price_markup_5 != null ? Number(row.max_price_markup_5) : (maxP != null ? maxP * 1.05 : null);
                     const barHtml = buildCandlestickHtml(minP, q1P, medP, q3P, maxP);
 
                     const tr = document.createElement('tr');
                     tr.innerHTML = '' +
-                        '<td>' + itemName + '</td>' +
+                        '<td>' +
+                            '<div>' + itemName + '</div>' +
+                            '<div style="font-size: 11px; color: #555;">Max + 5%: ' + formatMoney(markupP) + '</div>' +
+                        '</td>' +
+                        '<td class="num">' + formatMoney(marketP) + '</td>' +
                         '<td class="num">' + formatMoney(minP) + '</td>' +
                         '<td class="num">' + formatMoney(q1P) + '</td>' +
                         '<td class="num">' + formatMoney(medP) + '</td>' +
