@@ -236,7 +236,7 @@
                         <th class="num sortable" data-sort-column="median_price">Median</th>
                         <th class="num sortable" data-sort-column="q3_price">Q3</th>
                         <th class="num sortable" data-sort-column="max_price">Max</th>
-                        <th class="num sortable" data-sort-column="trade_count">Trades</th>
+                        <th class="num sortable" data-sort-column="item_count">Items</th>
                         <th>Range</th>
                     </tr>
                 </thead>
@@ -561,7 +561,7 @@
                     const q1P = row.q1_price != null ? Number(row.q1_price) : null;
                     const medP = row.median_price != null ? Number(row.median_price) : null;
                     const q3P = row.q3_price != null ? Number(row.q3_price) : null;
-                    const tradeCount = row.trade_count != null ? Number(row.trade_count) : 0;
+                    const itemCount = row.item_count != null ? Number(row.item_count) : 0;
                     const barHtml = buildCandlestickHtml(minP, q1P, medP, q3P, maxP);
 
                     const tr = document.createElement('tr');
@@ -572,7 +572,7 @@
                         '<td class="num">' + formatMoney(medP) + '</td>' +
                         '<td class="num">' + formatMoney(q3P) + '</td>' +
                         '<td class="num">' + formatMoney(maxP) + '</td>' +
-                        '<td class="num">' + tradeCount + '</td>' +
+                        '<td class="num">' + itemCount + '</td>' +
                         '<td>' + barHtml + '</td>';
                     tbody.appendChild(tr);
                 });

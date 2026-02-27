@@ -917,7 +917,8 @@ class TradingDashboard:
             days_back: Number of days to look back (paid_at filter)
 
         Returns:
-            List of dicts: item_name, min_price, max_price, median_price, q1_price, q3_price, trade_count
+            List of dicts: item_name, min_price, max_price, median_price, q1_price, q3_price,
+            trade_count, item_count
         """
         query = """
         WITH paid_in_window AS (
@@ -939,7 +940,8 @@ class TradingDashboard:
             MIN(unit_price) AS min_price,
             MAX(unit_price) AS max_price,
             APPROX_QUANTILES(unit_price, 4) AS quants,
-            COUNT(*) AS trade_count
+            COUNT(*) AS trade_count,
+            SUM(quantity) AS item_count
           FROM
             paid_in_window
           GROUP BY
@@ -952,7 +954,8 @@ class TradingDashboard:
           quants[OFFSET(1)] AS q1_price,
           quants[OFFSET(2)] AS median_price,
           quants[OFFSET(3)] AS q3_price,
-          trade_count
+          trade_count,
+          item_count
         FROM
           quartiles
         ORDER BY
