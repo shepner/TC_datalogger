@@ -180,6 +180,9 @@
             background: #666;
             transform: translate(-50%, -50%);
         }
+        .sale-price-good { color: #2e7d32; font-weight: 600; }
+        .sale-price-bad { color: #c62828; font-weight: 600; }
+        .sale-price-equal { color: #f9a825; font-weight: 600; }
         .num { text-align: right; font-variant-numeric: tabular-nums; }
     </style>
 </head>
@@ -233,6 +236,7 @@
                 <thead>
                     <tr>
                         <th class="sortable" data-sort-column="item_name">Item</th>
+                        <th class="num sortable" data-sort-column="max_price_markup_5">Sale Price</th>
                         <th class="num sortable" data-sort-column="current_market_price">Market</th>
                         <th class="num sortable" data-sort-column="min_price">Min</th>
                         <th class="num sortable" data-sort-column="q1_price">Q1</th>
@@ -566,15 +570,23 @@
                     const q3P = row.q3_price != null ? Number(row.q3_price) : null;
                     const itemCount = row.item_count != null ? Number(row.item_count) : 0;
                     const marketP = row.current_market_price != null ? Number(row.current_market_price) : null;
-                    const markupP = row.max_price_markup_5 != null ? Number(row.max_price_markup_5) : (maxP != null ? maxP * 1.05 : null);
+                    const saleP = row.max_price_markup_5 != null ? Number(row.max_price_markup_5) : (maxP != null ? maxP * 1.05 : null);
                     const barHtml = buildCandlestickHtml(minP, q1P, medP, q3P, maxP);
+                    let saleClass = 'sale-price-equal';
+                    if (saleP != null && marketP != null && !isNaN(saleP) && !isNaN(marketP)) {
+                        if (saleP > marketP) {
+                            saleClass = 'sale-price-good';
+                        } else if (saleP < marketP) {
+                            saleClass = 'sale-price-bad';
+                        } else {
+                            saleClass = 'sale-price-equal';
+                        }
+                    }
 
                     const tr = document.createElement('tr');
                     tr.innerHTML = '' +
-                        '<td>' +
-                            '<div>' + itemName + '</div>' +
-                            '<div style="font-size: 11px; color: #555;">Max + 5%: ' + formatMoney(markupP) + '</div>' +
-                        '</td>' +
+                        '<td>' + itemName + '</td>' +
+                        '<td class="num ' + saleClass + '">' + formatMoney(saleP) + '</td>' +
                         '<td class="num">' + formatMoney(marketP) + '</td>' +
                         '<td class="num">' + formatMoney(minP) + '</td>' +
                         '<td class="num">' + formatMoney(q1P) + '</td>' +
