@@ -18,16 +18,16 @@ SELECT
   chain.id AS chain_id,
   TIMESTAMP_SECONDS(SAFE_CAST(chain.start AS INT64)) AS chain_start,
   TIMESTAMP_SECONDS(SAFE_CAST(chain.end AS INT64)) AS chain_end,
-  participant.id AS member_id,
-  participant.name AS member_name,
-  participant.respect AS respect_gained,
-  participant.attacks AS attacks
+  CAST(member_id AS INT64) AS member_id,
+  JSON_EXTRACT_SCALAR(chain.members, CONCAT('$.', member_id, '.userID')) AS member_name,
+  SAFE_CAST(JSON_EXTRACT_SCALAR(chain.members, CONCAT('$.', member_id, '.respect')) AS FLOAT64) AS respect_gained,
+  SAFE_CAST(JSON_EXTRACT_SCALAR(chain.members, CONCAT('$.', member_id, '.attacks')) AS INT64) AS attacks
 FROM
   `torncity-402423.torn_data.v2_faction_40832_chains-raw` AS chain,
-  UNNEST(chain.participants) AS participant
+  UNNEST(REGEXP_EXTRACT_ALL(chain.members, r'"(\d+)"\s*:\s*\{')) AS member_id
 WHERE
-  participant.id IS NOT NULL
+  chain.members IS NOT NULL
 ORDER BY
   chain_start DESC,
-  member_name ASC;
+  member_id ASC;
 

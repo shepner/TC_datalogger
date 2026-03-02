@@ -77,37 +77,17 @@ trading_items AS (
     user_name
 ),
 chain_participation AS (
-  -- Attackers: array of objects with id field
+  -- Extract member IDs from the 'members' JSON object (keys are member IDs)
   SELECT DISTINCT
-    CAST(JSON_EXTRACT_SCALAR(participant_json, '$.id') AS INT64) AS member_id
+    CAST(member_id AS INT64) AS member_id
   FROM
     `torncity-402423.torn_data.v2_faction_40832_chains-raw` AS chain,
-    UNNEST(JSON_EXTRACT_ARRAY(chain.attackers)) AS participant_json
+    UNNEST(REGEXP_EXTRACT_ALL(chain.members, r'"(\d+)"\s*:\s*\{')) AS member_id
   WHERE
-    JSON_EXTRACT_SCALAR(participant_json, '$.id') IS NOT NULL
+    chain.members IS NOT NULL
     AND chain.end IS NOT NULL
     AND TIMESTAMP_SECONDS(
-      COALESCE(
-        CAST(EXTRACT(EPOCH FROM TIMESTAMP(chain.end)) AS INT64),
-        SAFE_CAST(chain.end AS INT64)
-      )
-    ) >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 30 DAY)
-  UNION DISTINCT
-  -- Non-attackers: array of integers (member IDs directly)
-  SELECT DISTINCT
-    CAST(participant_id AS INT64) AS member_id
-  FROM
-    `torncity-402423.torn_data.v2_faction_40832_chains-raw` AS chain,
-    UNNEST(JSON_EXTRACT_ARRAY(chain.non_attackers)) AS participant_id
-  WHERE
-    participant_id IS NOT NULL
-    AND participant_id != ''
-    AND chain.end IS NOT NULL
-    AND TIMESTAMP_SECONDS(
-      COALESCE(
-        CAST(EXTRACT(EPOCH FROM TIMESTAMP(chain.end)) AS INT64),
-        SAFE_CAST(chain.end AS INT64)
-      )
+      SAFE_CAST(chain.end AS INT64)
     ) >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 30 DAY)
 )
 SELECT
