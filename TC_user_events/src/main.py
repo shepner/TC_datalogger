@@ -182,12 +182,40 @@ class Pipeline:
                         )
                 else:
                     logger.warning("Time window enabled but no table_id configured")
+            
+            no_pagination = endpoint.get("no_pagination", False)
 
-            records = api_client.fetch_all(
-                endpoint_path, 
-                params=params,
-                stop_before_timestamp=stop_before_timestamp
-            )
+            if no_pagination:
+                # Single-call endpoint (e.g., user bazaar) – just fetch once, no pagination
+                logger.info(f"Fetching single snapshot (no pagination) for endpoint {endpoint_name}")
+                response = api_client.fetch_page(endpoint_path, params=params)
+                records: list[dict[str, Any]] = []
+                if isinstance(response, dict):
+                    # Prefer 'bazaar' key if present
+                    if "bazaar" in response and isinstance(response["bazaar"], list):
+                        records = response["bazaar"]
+                    else:
+                        # Fallbacks: any list value, then single-object wrap
+                        for key, value in response.items():
+                            if key not in ["_metadata", "error", "code"] and isinstance(value, list):
+                                records = value
+                                break
+                        if not records:
+                            for key, value in response.items():
+                                if key not in ["_metadata", "error", "code"] and isinstance(value, dict):
+                                    records = [value]
+                                    break
+                elif isinstance(response, list):
+                    records = response
+                else:
+                    logger.warning("Unexpected response format for no_pagination endpoint; wrapping as single record")
+                    records = [response]  # type: ignore[arg-type]
+            else:
+                records = api_client.fetch_all(
+                    endpoint_path, 
+                    params=params,
+                    stop_before_timestamp=stop_before_timestamp
+                )
             logger.info(f"Fetched {len(records)} records from API")
 
             # Get table info before processing
