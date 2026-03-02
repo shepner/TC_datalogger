@@ -957,7 +957,7 @@ class TradingDashboard:
           q.trade_count,
           q.item_count,
           SAFE_CAST(items.value.market_price AS INT64) AS current_market_price,
-          SAFE_CAST(ROUND(q.max_price * 1.05)) AS max_price_markup_5
+          SAFE_CAST(ROUND(q.max_price * 1.05) AS INT64) AS max_price_markup_5
         FROM
           quartiles AS q
         LEFT JOIN
