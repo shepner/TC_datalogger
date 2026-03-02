@@ -921,7 +921,7 @@ class TradingDashboard:
             trade_count, item_count, current_market_price, min_sale_price, last_sale_price,
             recommended_sale_price
         """
-        query = """
+        query_with_bazaar = """
         WITH paid_in_window AS (
           SELECT
             item_name,
@@ -986,8 +986,75 @@ class TradingDashboard:
         ORDER BY
           q.item_name ASC
         """
-        query = query.replace("@days_back", str(days_back))
-        return self.bq.execute_query(query)
+        query_with_bazaar = query_with_bazaar.replace("@days_back", str(days_back))
+
+        # Fallback query that does not depend on the bazaar table (e.g. before it exists)
+        query_without_bazaar = """
+        WITH paid_in_window AS (
+          SELECT
+            item_name,
+            quantity,
+            payment_amount,
+            SAFE_DIVIDE(CAST(payment_amount AS FLOAT64), CAST(quantity AS FLOAT64)) AS unit_price
+          FROM
+            `torncity-402423.torn_data.trading_paid_events`
+          WHERE
+            paid_at >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL @days_back DAY)
+            AND quantity > 0
+            AND payment_amount IS NOT NULL
+        ),
+        quartiles AS (
+          SELECT
+            item_name,
+            MIN(unit_price) AS min_price,
+            MAX(unit_price) AS max_price,
+            APPROX_QUANTILES(unit_price, 4) AS quants,
+            COUNT(*) AS trade_count,
+            SUM(quantity) AS item_count
+          FROM
+            paid_in_window
+          GROUP BY
+            item_name
+        )
+        SELECT
+          q.item_name,
+          q.min_price,
+          q.max_price,
+          q.quants[OFFSET(1)] AS q1_price,
+          q.quants[OFFSET(2)] AS median_price,
+          q.quants[OFFSET(3)] AS q3_price,
+          q.trade_count,
+          q.item_count,
+          SAFE_CAST(items.value.market_price AS INT64) AS current_market_price,
+          SAFE_CAST(ROUND(q.max_price * 1.05) AS INT64) AS min_sale_price,
+          NULL AS last_sale_price,
+          GREATEST(
+            SAFE_CAST(ROUND(q.max_price * 1.05) AS INT64),
+            SAFE_CAST(items.value.market_price AS INT64)
+          ) AS recommended_sale_price
+        FROM
+          quartiles AS q
+        LEFT JOIN
+          `torncity-402423.torn_data.v2_torn_items-raw` AS items
+        ON
+          LOWER(TRIM(q.item_name)) = LOWER(TRIM(items.name))
+        ORDER BY
+          q.item_name ASC
+        """
+        query_without_bazaar = query_without_bazaar.replace("@days_back", str(days_back))
+
+        # Try the full query first; if the bazaar table doesn't exist yet, fall back gracefully.
+        try:
+            return self.bq.execute_query(query_with_bazaar)
+        except Exception as e:
+            msg = str(e)
+            if "v1_user_bazaar-raw" in msg and "Not found" in msg:
+                logger.warning(
+                    "Bazaar table v1_user_bazaar-raw not found; falling back to purchase stats "
+                    "without last_sale_price (run user_events pipeline to populate bazaar data)."
+                )
+                return self.bq.execute_query(query_without_bazaar)
+            raise
 
     def get_raw_events_for_user(
         self,
