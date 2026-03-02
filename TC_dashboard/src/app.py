@@ -1198,6 +1198,7 @@ DEFAULT_PURCHASES_PAGE_STATE = {
     "sort_column": "item_name",
     "sort_direction": "asc",
     "filter_section_expanded": True,
+    "show_detail_columns": True,
 }
 
 
@@ -1221,6 +1222,8 @@ def load_purchases_page_state() -> dict:
                     out["sort_direction"] = data["sort_direction"]
                 if "filter_section_expanded" in data and isinstance(data["filter_section_expanded"], bool):
                     out["filter_section_expanded"] = data["filter_section_expanded"]
+                if "show_detail_columns" in data and isinstance(data["show_detail_columns"], bool):
+                    out["show_detail_columns"] = data["show_detail_columns"]
                 return out
     except Exception as e:
         logger.warning(f"Error reading purchases page state: {e}", exc_info=True)
@@ -1244,6 +1247,8 @@ def save_purchases_page_state(state: dict) -> dict:
         out["sort_direction"] = state["sort_direction"]
     if "filter_section_expanded" in state and isinstance(state["filter_section_expanded"], bool):
         out["filter_section_expanded"] = state["filter_section_expanded"]
+    if "show_detail_columns" in state and isinstance(state["show_detail_columns"], bool):
+        out["show_detail_columns"] = state["show_detail_columns"]
     PURCHASES_PAGE_STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
     with open(PURCHASES_PAGE_STATE_FILE, "w") as f:
         json.dump(out, f, indent=2)

@@ -183,6 +183,9 @@
         .sale-price-good { color: #2e7d32; font-weight: 600; }
         .sale-price-bad { color: #c62828; font-weight: 600; }
         .sale-price-equal { color: #f9a825; font-weight: 600; }
+        #stats-table.hide-detail-cols .detail-col {
+            display: none;
+        }
         .num { text-align: right; font-variant-numeric: tabular-nums; }
     </style>
 </head>
@@ -231,19 +234,26 @@
             Range bar: grey dots = min/max, blue dots = 1st and 3rd quartiles, green dot = median.
         </p>
 
+        <div style="margin-bottom: 4px; font-size: 11px; color: #555;">
+            <label style="cursor: pointer; user-select: none;">
+                <input type="checkbox" id="toggle-detail-cols" checked onchange="toggleDetailColumns()" style="margin-right: 4px;">
+                Show detailed price columns (Min → Items)
+            </label>
+        </div>
+
         <div class="table-container">
             <table id="stats-table" style="display: none;">
                 <thead>
                     <tr>
                         <th class="sortable" data-sort-column="item_name">Item</th>
-                        <th class="num sortable" data-sort-column="max_price_markup_5">Sale Price</th>
+                        <th class="num sortable" data-sort-column="max_price_markup_5">Min Sale Price</th>
                         <th class="num sortable" data-sort-column="current_market_price">Market</th>
-                        <th class="num sortable" data-sort-column="min_price">Min</th>
-                        <th class="num sortable" data-sort-column="q1_price">Q1</th>
-                        <th class="num sortable" data-sort-column="median_price">Median</th>
-                        <th class="num sortable" data-sort-column="q3_price">Q3</th>
-                        <th class="num sortable" data-sort-column="max_price">Max</th>
-                        <th class="num sortable" data-sort-column="item_count">Items</th>
+                        <th class="num sortable detail-col" data-sort-column="min_price">Min</th>
+                        <th class="num sortable detail-col" data-sort-column="q1_price">Q1</th>
+                        <th class="num sortable detail-col" data-sort-column="median_price">Median</th>
+                        <th class="num sortable detail-col" data-sort-column="q3_price">Q3</th>
+                        <th class="num sortable detail-col" data-sort-column="max_price">Max</th>
+                        <th class="num sortable detail-col" data-sort-column="item_count">Items</th>
                         <th>Range</th>
                     </tr>
                 </thead>
@@ -268,6 +278,7 @@
         let activeItemNames = new Set();
         let currentSort = { column: 'item_name', direction: 'asc' };
         let filterSectionExpanded = true;
+        let showDetailColumns = true;
         let saveStateTimer = null;
         let stateHadSelectedItems = false;
 
@@ -286,6 +297,22 @@
             if (chevron) chevron.textContent = filterSectionExpanded ? '▼' : '▶';
         }
 
+        function applyDetailColumnsState() {
+            const table = document.getElementById('stats-table');
+            const cb = document.getElementById('toggle-detail-cols');
+            if (table) {
+                if (showDetailColumns) table.classList.remove('hide-detail-cols');
+                else table.classList.add('hide-detail-cols');
+            }
+            if (cb) cb.checked = showDetailColumns;
+        }
+
+        function toggleDetailColumns() {
+            showDetailColumns = !showDetailColumns;
+            applyDetailColumnsState();
+            savePageState();
+        }
+
         function toggleFilterSection() {
             filterSectionExpanded = !filterSectionExpanded;
             applyFilterSectionState();
@@ -301,7 +328,8 @@
                 item_filter_query: (document.getElementById('item-filter-input') && document.getElementById('item-filter-input').value) || '',
                 sort_column: currentSort.column,
                 sort_direction: currentSort.direction,
-                filter_section_expanded: filterSectionExpanded
+                filter_section_expanded: filterSectionExpanded,
+                show_detail_columns: showDetailColumns
             };
         }
 
@@ -335,10 +363,12 @@
                     }
                     if (typeof data.sort_column === 'string') currentSort.column = data.sort_column;
                     if (data.sort_direction === 'asc' || data.sort_direction === 'desc') currentSort.direction = data.sort_direction;
-                    if (typeof data.filter_section_expanded === 'boolean') filterSectionExpanded = data.filter_section_expanded;
+                if (typeof data.filter_section_expanded === 'boolean') filterSectionExpanded = data.filter_section_expanded;
+                if (typeof data.show_detail_columns === 'boolean') showDetailColumns = data.show_detail_columns;
                 }
             } catch (e) { console.warn('loadPageState', e); }
             applyFilterSectionState();
+            applyDetailColumnsState();
         }
 
         function formatMoney(n) {
@@ -588,12 +618,12 @@
                         '<td>' + itemName + '</td>' +
                         '<td class="num ' + saleClass + '">' + formatMoney(saleP) + '</td>' +
                         '<td class="num">' + formatMoney(marketP) + '</td>' +
-                        '<td class="num">' + formatMoney(minP) + '</td>' +
-                        '<td class="num">' + formatMoney(q1P) + '</td>' +
-                        '<td class="num">' + formatMoney(medP) + '</td>' +
-                        '<td class="num">' + formatMoney(q3P) + '</td>' +
-                        '<td class="num">' + formatMoney(maxP) + '</td>' +
-                        '<td class="num">' + itemCount + '</td>' +
+                        '<td class="num detail-col">' + formatMoney(minP) + '</td>' +
+                        '<td class="num detail-col">' + formatMoney(q1P) + '</td>' +
+                        '<td class="num detail-col">' + formatMoney(medP) + '</td>' +
+                        '<td class="num detail-col">' + formatMoney(q3P) + '</td>' +
+                        '<td class="num detail-col">' + formatMoney(maxP) + '</td>' +
+                        '<td class="num detail-col">' + itemCount + '</td>' +
                         '<td>' + barHtml + '</td>';
                     tbody.appendChild(tr);
                 });
