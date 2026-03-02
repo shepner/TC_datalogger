@@ -115,18 +115,16 @@ class RequirementsReport:
               COALESCE(t.trading_count_30d, 0) AS trading_count_30d,
               COALESCE(t.trading_count_30d, 0) > 460 AS trading_requirement_met,
               cp.member_id IS NOT NULL AS chain_participation,
-              -- Requirements met if: (OC >= 3 OR trading > 460) AND chains participation
+              -- Requirements met if: OC >= 3 OR trading > 460
               -- But if days_in_faction < 30, return NULL (N/A)
               CASE
                 WHEN m.days_in_faction < 30 THEN NULL
                 ELSE (COALESCE(oc.oc_count_30d, 0) >= 3 OR COALESCE(t.trading_count_30d, 0) > 460)
-                     AND cp.member_id IS NOT NULL
               END AS all_requirements_met,
               -- Can promote if requirements met AND active within 2 days
               CASE
                 WHEN m.days_in_faction < 30 THEN NULL
                 ELSE (COALESCE(oc.oc_count_30d, 0) >= 3 OR COALESCE(t.trading_count_30d, 0) > 460)
-                     AND cp.member_id IS NOT NULL
                      AND m.days_inactive <= 2
               END AS can_promote,
               CASE
@@ -134,19 +132,16 @@ class RequirementsReport:
                 WHEN m.days_in_faction < 30 THEN 'none'
                 -- Level 1: remove if requirements not met
                 WHEN m.level = 1 AND NOT (
-                  (COALESCE(oc.oc_count_30d, 0) >= 3 OR COALESCE(t.trading_count_30d, 0) > 460)
-                  AND cp.member_id IS NOT NULL
+                  COALESCE(oc.oc_count_30d, 0) >= 3 OR COALESCE(t.trading_count_30d, 0) > 460
                 ) THEN 'remove'
                 -- Level > 1: promote if requirements met and active
                 WHEN m.level > 1 AND (
                   (COALESCE(oc.oc_count_30d, 0) >= 3 OR COALESCE(t.trading_count_30d, 0) > 460)
-                  AND cp.member_id IS NOT NULL
                   AND m.days_inactive <= 2
                 ) THEN 'promote'
                 -- Level > 1: demote if requirements not met
                 WHEN m.level > 1 AND NOT (
-                  (COALESCE(oc.oc_count_30d, 0) >= 3 OR COALESCE(t.trading_count_30d, 0) > 460)
-                  AND cp.member_id IS NOT NULL
+                  COALESCE(oc.oc_count_30d, 0) >= 3 OR COALESCE(t.trading_count_30d, 0) > 460
                 ) THEN 'demote'
                 ELSE 'none'
               END AS action

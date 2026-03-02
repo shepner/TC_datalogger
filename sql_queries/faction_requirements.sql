@@ -5,7 +5,7 @@
 -- Requirements (matching spreadsheet formula):
 --   - If days_in_faction < 30: "N/A"
 --   - Otherwise: (OC count >= 3 OR trading count > 460 in 30 days) = requirements met
---   - Chains participation (requirement)
+--   - Chains participation (tracked, informational only)
 --   - If offline 2+ days: don't promote
 --
 -- Outputs:
@@ -19,8 +19,8 @@
 --   - oc_requirement_met: Whether OC requirement is met (3+ per month)
 --   - trading_count_30d: Trading items sent in last 30 days
 --   - trading_requirement_met: Whether trading requirement is met (460+ in 30 days)
---   - chain_participation: Whether member participated in chains (requirement)
---   - all_requirements_met: Whether all requirements are met (OC OR trading, AND chains)
+--   - chain_participation: Whether member participated in chains (informational)
+--   - all_requirements_met: Whether all requirements are met (OC OR trading)
 --   - can_promote: Whether member can be promoted (requirements met AND active within 2 days)
 --   - action: Recommended action (promote, demote, remove, none)
 --
@@ -104,18 +104,16 @@ SELECT
   COALESCE(t.trading_count_30d, 0) AS trading_count_30d,
   COALESCE(t.trading_count_30d, 0) > 460 AS trading_requirement_met,
   cp.member_id IS NOT NULL AS chain_participation,
-  -- Requirements met if: (OC >= 3 OR trading > 460) AND chains participation
+  -- Requirements met if: OC >= 3 OR trading > 460
   -- But if days_in_faction < 30, return NULL (N/A)
   CASE
     WHEN m.days_in_faction < 30 THEN NULL
     ELSE (COALESCE(oc.oc_count_30d, 0) >= 3 OR COALESCE(t.trading_count_30d, 0) > 460)
-         AND cp.member_id IS NOT NULL
   END AS all_requirements_met,
   -- Can promote if requirements met AND active within 2 days
   CASE
     WHEN m.days_in_faction < 30 THEN NULL
     ELSE (COALESCE(oc.oc_count_30d, 0) >= 3 OR COALESCE(t.trading_count_30d, 0) > 460)
-         AND cp.member_id IS NOT NULL
          AND m.days_inactive <= 2
   END AS can_promote,
   CASE
@@ -123,19 +121,16 @@ SELECT
     WHEN m.days_in_faction < 30 THEN 'none'
     -- Level 1: remove if requirements not met
     WHEN m.level = 1 AND NOT (
-      (COALESCE(oc.oc_count_30d, 0) >= 3 OR COALESCE(t.trading_count_30d, 0) > 460)
-      AND cp.member_id IS NOT NULL
+      COALESCE(oc.oc_count_30d, 0) >= 3 OR COALESCE(t.trading_count_30d, 0) > 460
     ) THEN 'remove'
     -- Level > 1: promote if requirements met and active
     WHEN m.level > 1 AND (
       (COALESCE(oc.oc_count_30d, 0) >= 3 OR COALESCE(t.trading_count_30d, 0) > 460)
-      AND cp.member_id IS NOT NULL
       AND m.days_inactive <= 2
     ) THEN 'promote'
     -- Level > 1: demote if requirements not met
     WHEN m.level > 1 AND NOT (
-      (COALESCE(oc.oc_count_30d, 0) >= 3 OR COALESCE(t.trading_count_30d, 0) > 460)
-      AND cp.member_id IS NOT NULL
+      COALESCE(oc.oc_count_30d, 0) >= 3 OR COALESCE(t.trading_count_30d, 0) > 460
     ) THEN 'demote'
     ELSE 'none'
   END AS action

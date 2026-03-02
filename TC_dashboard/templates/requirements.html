@@ -524,8 +524,8 @@
 
             if (isAtTopRole(member.position) && allMet) {
                 const topReasons = ['At top role - maintain current rank'];
-                topReasons.push(ocMet ? `✓ OC requirement met (${member.oc_count_30d || 0} ≥ 3 OCs in 30d)` : `✓ Trading requirement met (${member.trading_count_30d || 0} > 460 items in 30d)`);
-                topReasons.push('✓ Chain participation');
+                if (ocMet) topReasons.push(`✓ OC requirement met (${member.oc_count_30d || 0} ≥ 3 OCs in 30d)`);
+                if (tradingMet) topReasons.push(`✓ Trading requirement met (${member.trading_count_30d || 0} > 460 items in 30d)`);
                 topReasons.push(`✓ Active (${daysInactive} days inactive)`);
                 return topReasons.join('\\n');
             }
@@ -534,30 +534,16 @@
                 reasons.push('✓ All requirements met');
                 if (ocMet) {
                     reasons.push(`✓ OC requirement met (${ocCount} OCs in 30d)`);
-                } else if (tradingMet) {
+                }
+                if (tradingMet) {
                     reasons.push(`✓ Trading requirement met (${tradingCount} items in 30d)`);
                 }
-                if (hasChains) {
-                    reasons.push('✓ Chain participation');
-                }
-                if (daysInactive <= 2) {
-                    reasons.push(`✓ Active (${daysInactive} days inactive)`);
-                }
+                reasons.push(`✓ Active (${daysInactive} days inactive)`);
                 return reasons.join('\\n');
             } else {
-                // Show why they can't be promoted
                 if (!allMet) {
-                    if (!ocMet && !tradingMet) {
-                        reasons.push(`✗ OC requirement not met (${ocCount} < 3)`);
-                        reasons.push(`✗ Trading requirement not met (${tradingCount} ≤ 460)`);
-                    } else if (!ocMet) {
-                        reasons.push(`✗ OC requirement not met (${ocCount} < 3)`);
-                    } else if (!tradingMet) {
-                        reasons.push(`✗ Trading requirement not met (${tradingCount} ≤ 460)`);
-                    }
-                    if (!hasChains) {
-                        reasons.push('✗ No chain participation');
-                    }
+                    reasons.push(`✗ OC requirement not met (${ocCount} < 3)`);
+                    reasons.push(`✗ Trading requirement not met (${tradingCount} ≤ 460)`);
                 }
                 if (daysInactive > 2) {
                     reasons.push(`✗ Inactive (${daysInactive} days inactive, need ≤ 2)`);
@@ -601,22 +587,19 @@
                 const parts = ['All requirements met:'];
                 if (member.oc_requirement_met) {
                     parts.push(`✓ OC (${member.oc_count_30d || 0} ≥ 3 in 30d)`);
-                } else {
+                }
+                if (member.trading_requirement_met) {
                     parts.push(`✓ Trading (${member.trading_count_30d || 0} > 460 in 30d)`);
                 }
-                parts.push('✓ Chain participation');
                 return parts.join('\\n');
             }
-            const parts = ['Requirements not met:'];
-            if (!member.oc_requirement_met) {
-                parts.push(`✗ OC (${member.oc_count_30d || 0} < 3 in 30d)`);
-            }
-            if (!member.trading_requirement_met) {
-                parts.push(`✗ Trading (${member.trading_count_30d || 0} ≤ 460 in 30d)`);
-            }
-            if (!member.chain_participation) {
-                parts.push('✗ No chain participation');
-            }
+            const parts = ['Requirements not met (need OC ≥ 3 OR Trading > 460):'];
+            parts.push(member.oc_requirement_met
+                ? `✓ OC (${member.oc_count_30d || 0} ≥ 3 in 30d)`
+                : `✗ OC (${member.oc_count_30d || 0} < 3 in 30d)`);
+            parts.push(member.trading_requirement_met
+                ? `✓ Trading (${member.trading_count_30d || 0} > 460 in 30d)`
+                : `✗ Trading (${member.trading_count_30d || 0} ≤ 460 in 30d)`);
             return parts.join('\\n');
         }
 
