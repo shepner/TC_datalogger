@@ -918,7 +918,8 @@ class TradingDashboard:
 
         Returns:
             List of dicts: item_name, min_price, max_price, median_price, q1_price, q3_price,
-            trade_count, item_count, current_market_price, max_price_markup_5
+            trade_count, item_count, current_market_price, min_sale_price, last_sale_price,
+            recommended_sale_price
         """
         query = """
         WITH paid_in_window AS (
@@ -946,6 +947,15 @@ class TradingDashboard:
             paid_in_window
           GROUP BY
             item_name
+        ),
+        latest_bazaar AS (
+          SELECT
+            LOWER(TRIM(name)) AS item_name_key,
+            ARRAY_AGG(price ORDER BY fetched_at DESC LIMIT 1)[OFFSET(0)] AS last_sale_price
+          FROM
+            `torncity-402423.torn_data.v1_user_bazaar-raw`
+          GROUP BY
+            LOWER(TRIM(name))
         )
         SELECT
           q.item_name,
@@ -957,13 +967,22 @@ class TradingDashboard:
           q.trade_count,
           q.item_count,
           SAFE_CAST(items.value.market_price AS INT64) AS current_market_price,
-          SAFE_CAST(ROUND(q.max_price * 1.05) AS INT64) AS max_price_markup_5
+          SAFE_CAST(ROUND(q.max_price * 1.05) AS INT64) AS min_sale_price,
+          lb.last_sale_price AS last_sale_price,
+          GREATEST(
+            SAFE_CAST(ROUND(q.max_price * 1.05) AS INT64),
+            SAFE_CAST(items.value.market_price AS INT64)
+          ) AS recommended_sale_price
         FROM
           quartiles AS q
         LEFT JOIN
           `torncity-402423.torn_data.v2_torn_items-raw` AS items
         ON
           LOWER(TRIM(q.item_name)) = LOWER(TRIM(items.name))
+        LEFT JOIN
+          latest_bazaar AS lb
+        ON
+          LOWER(TRIM(q.item_name)) = lb.item_name_key
         ORDER BY
           q.item_name ASC
         """

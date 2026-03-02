@@ -2,6 +2,7 @@
 
 import logging
 from datetime import datetime
+import uuid
 from typing import Any, Dict, List, Set
 
 logger = logging.getLogger(__name__)
@@ -87,10 +88,16 @@ class DataProcessor:
         Returns:
             Processed record compatible with BigQuery schema
         """
-        # Validate required field
-        # Note: The 'id' field represents the user's event ID (not a faction ID)
+        # Ensure we have an 'id' field for deduplication.
+        # For user events this is the event ID; for other endpoints (e.g. bazaar)
+        # we synthesise one if missing.
         if "id" not in record:
-            raise ValueError("Record missing required 'id' field (user event ID)")
+            # Common Torn API pattern: capital 'ID'
+            if "ID" in record:
+                record["id"] = record["ID"]
+            else:
+                # Fallback: generate a synthetic UUID-based id
+                record["id"] = uuid.uuid4().hex
 
         # Create a copy of the record to avoid modifying the original
         processed = record.copy()

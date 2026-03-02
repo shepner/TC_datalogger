@@ -246,8 +246,10 @@
                 <thead>
                     <tr>
                         <th class="sortable" data-sort-column="item_name">Item</th>
-                        <th class="num sortable" data-sort-column="max_price_markup_5">Min Sale Price</th>
+                        <th class="num sortable" data-sort-column="min_sale_price">Min Sale Price</th>
                         <th class="num sortable" data-sort-column="current_market_price">Market</th>
+                        <th class="num sortable" data-sort-column="recommended_sale_price">Recommended</th>
+                        <th class="num sortable" data-sort-column="last_sale_price">Last Sale</th>
                         <th class="num sortable detail-col" data-sort-column="min_price">Min</th>
                         <th class="num sortable detail-col" data-sort-column="q1_price">Q1</th>
                         <th class="num sortable detail-col" data-sort-column="median_price">Median</th>
@@ -600,7 +602,13 @@
                     const q3P = row.q3_price != null ? Number(row.q3_price) : null;
                     const itemCount = row.item_count != null ? Number(row.item_count) : 0;
                     const marketP = row.current_market_price != null ? Number(row.current_market_price) : null;
-                    const saleP = row.max_price_markup_5 != null ? Number(row.max_price_markup_5) : (maxP != null ? maxP * 1.05 : null);
+                    const saleP = row.min_sale_price != null ? Number(row.min_sale_price) : (maxP != null ? maxP * 1.05 : null);
+                    const recommendedP = row.recommended_sale_price != null ? Number(row.recommended_sale_price) : (
+                        saleP != null && marketP != null
+                            ? Math.max(saleP, marketP)
+                            : (saleP != null ? saleP : marketP)
+                    );
+                    const lastSaleP = row.last_sale_price != null ? Number(row.last_sale_price) : null;
                     const barHtml = buildCandlestickHtml(minP, q1P, medP, q3P, maxP);
                     let saleClass = 'sale-price-equal';
                     if (saleP != null && marketP != null && !isNaN(saleP) && !isNaN(marketP)) {
@@ -618,6 +626,8 @@
                         '<td>' + itemName + '</td>' +
                         '<td class="num ' + saleClass + '">' + formatMoney(saleP) + '</td>' +
                         '<td class="num">' + formatMoney(marketP) + '</td>' +
+                        '<td class="num">' + formatMoney(recommendedP) + '</td>' +
+                        '<td class="num">' + formatMoney(lastSaleP) + '</td>' +
                         '<td class="num detail-col">' + formatMoney(minP) + '</td>' +
                         '<td class="num detail-col">' + formatMoney(q1P) + '</td>' +
                         '<td class="num detail-col">' + formatMoney(medP) + '</td>' +
