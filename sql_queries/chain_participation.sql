@@ -19,14 +19,14 @@ SELECT
   TIMESTAMP_SECONDS(SAFE_CAST(chain.start AS INT64)) AS chain_start,
   TIMESTAMP_SECONDS(SAFE_CAST(chain.end AS INT64)) AS chain_end,
   CAST(member_id AS INT64) AS member_id,
-  JSON_EXTRACT_SCALAR(chain.members, CONCAT('$.', member_id, '.userID')) AS member_name,
-  SAFE_CAST(JSON_EXTRACT_SCALAR(chain.members, CONCAT('$.', member_id, '.respect')) AS FLOAT64) AS respect_gained,
-  SAFE_CAST(JSON_EXTRACT_SCALAR(chain.members, CONCAT('$.', member_id, '.attacks')) AS INT64) AS attacks
+  JSON_EXTRACT_SCALAR(chain.attackers, CONCAT('$.', member_id, '.userID')) AS member_name,
+  SAFE_CAST(JSON_EXTRACT_SCALAR(chain.attackers, CONCAT('$.', member_id, '.respect')) AS FLOAT64) AS respect_gained,
+  SAFE_CAST(JSON_EXTRACT_SCALAR(chain.attackers, CONCAT('$.', member_id, '.attacks')) AS INT64) AS attacks
 FROM
   `torncity-402423.torn_data.v2_faction_40832_chains-raw` AS chain,
-  UNNEST(REGEXP_EXTRACT_ALL(chain.members, r'"(\d+)"\s*:\s*\{')) AS member_id
+  UNNEST(REGEXP_EXTRACT_ALL(chain.attackers, r'"(\d+)"\s*:\s*\{')) AS member_id
 WHERE
-  chain.members IS NOT NULL
+  chain.attackers IS NOT NULL
 ORDER BY
   chain_start DESC,
   member_id ASC;

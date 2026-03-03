@@ -90,14 +90,25 @@ class RequirementsReport:
                 user_name
             ),
             chain_participation AS (
-              -- Extract member IDs from the 'members' JSON object (keys are member IDs)
+              -- Extract member IDs from attackers JSON object (keys are member IDs)
               SELECT DISTINCT
                 CAST(member_id AS INT64) AS member_id
               FROM
                 `torncity-402423.torn_data.v2_faction_40832_chains-raw` AS chain,
-                UNNEST(REGEXP_EXTRACT_ALL(chain.members, r'"(\d+)"\s*:\s*\{')) AS member_id
+                UNNEST(REGEXP_EXTRACT_ALL(chain.attackers, r'"(\d+)"\s*:\s*\{')) AS member_id
               WHERE
-                chain.members IS NOT NULL
+                chain.attackers IS NOT NULL
+                AND chain.end IS NOT NULL
+                AND TIMESTAMP_SECONDS(SAFE_CAST(chain.end AS INT64)) >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 30 DAY)
+              UNION DISTINCT
+              -- Extract member IDs from non_attackers JSON object (keys are member IDs)
+              SELECT DISTINCT
+                CAST(member_id AS INT64) AS member_id
+              FROM
+                `torncity-402423.torn_data.v2_faction_40832_chains-raw` AS chain,
+                UNNEST(REGEXP_EXTRACT_ALL(chain.non_attackers, r'"(\d+)"\s*:\s*\{')) AS member_id
+              WHERE
+                chain.non_attackers IS NOT NULL
                 AND chain.end IS NOT NULL
                 AND TIMESTAMP_SECONDS(SAFE_CAST(chain.end AS INT64)) >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 30 DAY)
             )
