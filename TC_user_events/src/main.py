@@ -28,6 +28,20 @@ class Pipeline:
     """Main pipeline class that orchestrates the ETL process."""
 
     @staticmethod
+    def _normalize_bazaar_record(record: dict[str, Any]) -> dict[str, Any]:
+        """
+        Normalize a bazaar item record to lowercase keys so BigQuery schema has name, price, id.
+        Dashboard purchase-stats query expects v1_user_bazaar-raw to have columns name and price.
+        Torn API may return ID, Name, Price, etc.; we normalize so the table has consistent columns.
+        """
+        out: dict[str, Any] = {}
+        key_map = {"ID": "id", "Name": "name", "Price": "price", "Quantity": "quantity", "Type": "type", "market_price": "market_price"}
+        for key, value in record.items():
+            normalized = key_map.get(key, key.lower() if isinstance(key, str) else key)
+            out[normalized] = value
+        return out
+
+    @staticmethod
     def _is_schema_mismatch_error(err: ValueError) -> bool:
         """
         Determine whether a ValueError is a BigQuery schema/pre-existing-table skip condition.
@@ -159,6 +173,13 @@ class Pipeline:
                 endpoint_path = endpoint_url.replace(base_url, "")
                 params = {}
 
+            # Log exact URL that will be requested (key redacted)
+            params_with_key_redacted = {**params, "key": api_key[:4] + "…" + api_key[-4:] if len(api_key) >= 8 else "***"}
+            exact_url = f"{base_url}{endpoint_path}"
+            if params_with_key_redacted:
+                exact_url += "?" + urllib.parse.urlencode(params_with_key_redacted)
+            logger.info(f"Exact request URL (key redacted): {exact_url}")
+
             # Handle time windows if configured
             # Query BigQuery for the latest timestamp we already have, then stop pagination when we hit it
             use_time_windows = endpoint.get("use_time_windows", False)
@@ -193,7 +214,11 @@ class Pipeline:
                 if isinstance(response, dict):
                     # Prefer 'bazaar' key if present
                     if "bazaar" in response and isinstance(response["bazaar"], list):
-                        records = response["bazaar"]
+                        raw_bazaar = response["bazaar"]
+                        # Normalize keys to lowercase so BigQuery schema has name, price, id (dashboard expects these)
+                        records = [
+                            Pipeline._normalize_bazaar_record(r) for r in raw_bazaar
+                        ]
                     else:
                         # Fallbacks: any list value, then single-object wrap
                         for key, value in response.items():
@@ -211,6 +236,7 @@ class Pipeline:
                     logger.warning("Unexpected response format for no_pagination endpoint; wrapping as single record")
                     records = [response]  # type: ignore[arg-type]
             else:
+                response = None
                 records = api_client.fetch_all(
                     endpoint_path, 
                     params=params,
@@ -218,9 +244,24 @@ class Pipeline:
                 )
             logger.info(f"Fetched {len(records)} records from API")
 
+            # Bazaar: when closed or empty, skip load so we preserve existing history
+            if no_pagination and isinstance(response, dict) and not records:
+                bazaar_is_open = response.get("bazaar_is_open")
+                if bazaar_is_open is False:
+                    logger.info(
+                        "Bazaar is closed (bazaar_is_open=false) or empty; "
+                        "skipping load to preserve existing data. Older entries remain in the table."
+                    )
+
             # Get table info before processing
             table_id = endpoint.get("table", "")
             storage_mode = endpoint.get("storage_mode", "replace")
+
+            # Bazaar table: always use append so we update/add to previous data, never replace.
+            # This preserves older entries that are no longer currently stocked.
+            if "bazaar" in (table_id or "").lower():
+                storage_mode = "append"
+                logger.info("Using append mode for bazaar table to preserve history (update previous, never delete).")
 
             # If no records and no schema, we can't create table yet
             if not records and not self.schema:

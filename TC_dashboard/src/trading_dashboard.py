@@ -1043,15 +1043,24 @@ class TradingDashboard:
         """
         query_without_bazaar = query_without_bazaar.replace("@days_back", str(days_back))
 
-        # Try the full query first; if the bazaar table doesn't exist yet, fall back gracefully.
+        # Try the full query first so that when the bazaar is closed (no new data fetched),
+        # we still display any existing data in the bazaar table. Only fall back if the
+        # table doesn't exist or uses a different schema (e.g. no "name" column).
         try:
             return self.bq.execute_query(query_with_bazaar)
         except Exception as e:
             msg = str(e)
-            if "v1_user_bazaar-raw" in msg and "Not found" in msg:
+            table_missing = "v1_user_bazaar-raw" in msg and "Not found" in msg
+            # Bazaar table may exist but have different columns (e.g. no top-level "name")
+            # BigQuery can report "Unrecognized name: name" or "invalidQuery" with position [30:24]
+            name_unknown = (
+                ("Unrecognized name" in msg and "name" in msg)
+                or ("invalidQuery" in msg and "name" in msg and "[30:" in msg)
+            )
+            if table_missing or name_unknown:
                 logger.warning(
-                    "Bazaar table v1_user_bazaar-raw not found; falling back to purchase stats "
-                    "without last_sale_price (run user_events pipeline to populate bazaar data)."
+                    "Bazaar table missing or incompatible schema (name column); "
+                    "falling back to purchase stats without last_sale_price."
                 )
                 return self.bq.execute_query(query_without_bazaar)
             raise
