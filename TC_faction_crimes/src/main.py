@@ -89,7 +89,7 @@ class Pipeline:
             return
         project_id = self.bigquery_loader.project_id
         dataset_id = self.bigquery_loader.dataset_id
-        repo_root = Path(__file__).resolve().parent.parent.parent
+        repo_root = Path(__file__).resolve().parent.parent
         snapshot_table = f"`{project_id}.{dataset_id}.oc_historical_insights_snapshot`"
         try:
             rows = self.bigquery_loader.run_query(

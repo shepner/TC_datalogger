@@ -637,15 +637,19 @@ class BigQueryLoader:
         update_fields = [f for f in field_names if f != key_field and f != "fetched_at"]
         insert_fields = field_names
 
+        # Backtick-quote all field names to handle reserved keywords (e.g. 'end', 'start', 'name')
+        def q(f: str) -> str:
+            return f"`{f}`"
+
         # Build UPDATE SET clause (use target. prefix for clarity)
-        update_set = ", ".join([f"target.{f} = source.{f}" for f in update_fields])
+        update_set = ", ".join([f"target.{q(f)} = source.{q(f)}" for f in update_fields])
 
         # Build INSERT VALUES clause
-        insert_values = ", ".join([f"source.{f}" for f in insert_fields])
+        insert_values = ", ".join([f"source.{q(f)}" for f in insert_fields])
 
         # Use direct comparison for id field (now INTEGER type)
-        key_compare = f"target.{key_field} = source.{key_field}"
-        
+        key_compare = f"target.{q(key_field)} = source.{q(key_field)}"
+
         merge_sql = f"""
         MERGE `{target_table}` AS target
         USING `{source_table}` AS source
@@ -654,7 +658,7 @@ class BigQueryLoader:
           UPDATE SET
             {update_set}
         WHEN NOT MATCHED THEN
-          INSERT ({', '.join(insert_fields)})
+          INSERT ({', '.join(q(f) for f in insert_fields)})
           VALUES ({insert_values})
         """
 
